@@ -1491,13 +1491,129 @@ private theorem sLocalTrace_mult_eq_withDensity :
   rw [he.map_apply, withDensity_apply _ (he.measurable ht), withDensity_apply _ ht,
     ← setLIntegral_map ht hd he.measurable, he.map_comap]
 
+/-- A normed field with a nonzero element of norm less than one has no isolated zero. -/
+private theorem sLocalTrace_neBot_of_norm_lt_one {K : Type*} [NormedField K] (a : K)
+    (ha0 : a ≠ 0) (ha : ‖a‖ < 1) : (𝓝[≠] (0 : K)).NeBot :=
+  mem_closure_iff_nhdsWithin_neBot.mp (mem_closure_of_tendsto
+    (tendsto_pow_atTop_nhds_zero_of_norm_lt_one ha) (Eventually.of_forall fun n ↦ pow_ne_zero n ha0))
+
+/-- Zero is not isolated in a finite completion: the powers of a uniformizer tend to it. -/
+private theorem sLocalTrace_finite_neBot (v : V) : (𝓝[≠] (0 : v.adicCompletion F)).NeBot := by
+  let val : Valuation (v.adicCompletion F) (WithZero (Multiplicative ℤ)) := Valued.v
+  obtain ⟨π, hπ⟩ := val.exists_isUniformizer_of_isCyclic_of_nontrivial
+  exact sLocalTrace_neBot_of_norm_lt_one (π : v.adicCompletion F) hπ.ne_zero
+    (Valued.toNormedField.norm_lt_one_iff.mpr hπ.val_lt_one)
+
+/-- Zero is not isolated in an infinite completion: the powers of one half tend to it. -/
+private theorem sLocalTrace_infinite_neBot (w : InfinitePlace F) :
+    (𝓝[≠] (0 : w.Completion)).NeBot := by
+  let a : w.Completion := ((WithAbs.equiv w.1).symm (2⁻¹ : F) : WithAbs w.1)
+  have h2 : w (2 : F) = 2 := by simpa using w.map_natCast 2
+  have hval : ‖a‖ = 2⁻¹ := by
+    rw [InfinitePlace.Completion.norm_coe, RingEquiv.apply_symm_apply, map_inv₀, h2]
+  refine sLocalTrace_neBot_of_norm_lt_one a (fun h ↦ ?_) (by rw [hval]; norm_num)
+  rw [h, norm_zero] at hval
+  norm_num at hval
+
+/-- The S-adeles with a zero coordinate form a null set for additive Tamagawa measure. -/
+private theorem sLocalTrace_nonunits_null :
+    νₛ (range (Units.val : Iₛ → Aₛ))ᶜ = 0 := by
+  let (v : S) : ProperSpace (v.val.adicCompletion F) := properSpace_adicCompletion v.val
+  let (w : InfinitePlace F) : SecondCountableTopology w.Completion :=
+    (InfinitePlace.Completion.isometry_extensionEmbedding w).isEmbedding.secondCountableTopology
+  let (w : InfinitePlace F) : MeasurableSpace w.Completion := borel _
+  let (v : S) : MeasurableSpace (v.val.adicCompletion F) := borel _
+  let (w : InfinitePlace F) : BorelSpace w.Completion := ⟨rfl⟩
+  let (v : S) : BorelSpace (v.val.adicCompletion F) := ⟨rfl⟩
+  let (w : InfinitePlace F) : (infiniteLocalAdditiveTamagawaMeasure F w).IsAddHaarMeasure :=
+    infiniteLocalAdditiveTamagawaMeasure_haar F w
+  let (v : S) : (finiteLocalAdditiveTamagawaMeasure F v.val).IsAddHaarMeasure :=
+    finiteLocalAdditiveTamagawaMeasure_isAddHaar F v.val
+  let (w : InfinitePlace F) : (𝓝[≠] (0 : w.Completion)).NeBot := sLocalTrace_infinite_neBot w
+  let (v : S) : (𝓝[≠] (0 : v.val.adicCompletion F)).NeBot := sLocalTrace_finite_neBot v.val
+  have hw (w : InfinitePlace F) : infiniteLocalAdditiveTamagawaMeasure F w {0} = 0 :=
+    measure_singleton 0
+  have hv (v : S) : finiteLocalAdditiveTamagawaMeasure F v.val {0} = 0 :=
+    measure_singleton 0
+  have hsub : (range (Units.val : Iₛ → Aₛ))ᶜ ⊆
+      (⋃ w : InfinitePlace F, Prod.fst ⁻¹' (Function.eval w ⁻¹' {0})) ∪
+        ⋃ v : S, Prod.snd ⁻¹' (Function.eval v ⁻¹' {0}) := by
+    intro a ha
+    by_contra h
+    simp only [mem_union, mem_iUnion, not_or, not_exists, mem_preimage, Function.eval,
+      mem_singleton_iff] at h
+    have hu : IsUnit a := Prod.isUnit_iff.mpr
+      ⟨Pi.isUnit_iff.mpr fun w ↦ isUnit_iff_ne_zero.mpr (h.1 w),
+        Pi.isUnit_iff.mpr fun v ↦ isUnit_iff_ne_zero.mpr (h.2 v)⟩
+    exact ha ⟨hu.unit, rfl⟩
+  refine measure_mono_null hsub (measure_union_null (measure_iUnion_null fun w ↦ ?_)
+    (measure_iUnion_null fun v ↦ ?_))
+  · rw [← prod_univ]
+    change ((Measure.pi (infiniteLocalAdditiveTamagawaMeasure F)).prod
+      (Measure.pi (fun v : S ↦ finiteLocalAdditiveTamagawaMeasure F v.val))) (_ ×ˢ _) = 0
+    rw [Measure.prod_prod, Measure.pi_eval_preimage_null _ (hw w), zero_mul]
+  · rw [← univ_prod]
+    change ((Measure.pi (infiniteLocalAdditiveTamagawaMeasure F)).prod
+      (Measure.pi (fun v : S ↦ finiteLocalAdditiveTamagawaMeasure F v.val))) (_ ×ˢ _) = 0
+    rw [Measure.prod_prod, Measure.pi_eval_preimage_null
+      (fun v : S ↦ finiteLocalAdditiveTamagawaMeasure F v.val) (i := v) (hv v), mul_zero]
+
 /-- Paper: (12.4.1.22)–(12.4.1.23), p. 518. The change of variable w = xu by an S-idele
 scales additive Tamagawa measure by the S-idelic norm and the frequency band by the same
 factor. -/
 private theorem sLocalTrace_integral_band_dilate (g : Aₛ → ℂ) (x : Iₛ) (L' : ℝ) :
     ∫ u in band(L'), g (x.val * u) ∂νₛ =
       ((normS(x))⁻¹ : ℂ) * ∫ w in band(L' * normS(x)), g w ∂νₛ := by
-  sorry
+  have : BorelSpace Aₛ := sAdeleRing_borelSpace
+  have : BorelSpace Iₛ := sIdeleGroup_borelSpace
+  have : (μₛ).IsHaarMeasure := sMultiplicativeTamagawaMeasure_isHaarMeasure
+  have hm : Continuous fun t : Aₛ ↦ modS(t) :=
+    (continuous_finsetProd _ fun w _ ↦
+      (((continuous_apply w).comp continuous_fst).norm.pow _)).mul
+      (continuous_finsetProd _ fun v _ ↦ ((continuous_apply v).comp continuous_snd).norm)
+  have hband (r : ℝ) : MeasurableSet (band(r)) := (isClosed_le hm continuous_const).measurableSet
+  have hfull : ∀ᵐ u ∂νₛ, u ∈ range (Units.val : Iₛ → Aₛ) :=
+    measure_eq_zero_iff_ae_notMem.mp sLocalTrace_nonunits_null |>.mono fun _ h ↦ not_not.mp h
+  let c := sLocalTraceMeasureFactor (F := F) S
+  have hc : (c : ℂ) ≠ 0 := by
+    refine Complex.ofReal_ne_zero.mpr (Finset.prod_ne_zero_iff.mpr fun v _ ↦ ?_)
+    have hv : (1 : ℝ) < v.asIdeal.absNorm := by exact_mod_cast HeightOneSpectrum.one_lt_absNorm v
+    exact div_ne_zero (by linarith) (sub_pos.mpr hv).ne'
+  have hx : (normS(x) : ℂ) ≠ 0 :=
+    Complex.ofReal_ne_zero.mpr (NNReal.coe_pos.mpr (Units.zero_lt (sIdeleNorm F S x))).ne'
+  -- The integral over a band of a function vanishing off the units, through the units.
+  have key (r : ℝ) (k : Aₛ → ℂ) :
+      (∫ t : Iₛ, (normS(t) : ℂ) * (range (Units.val : Iₛ → Aₛ)).indicator
+          ((band(r)).indicator k) t.val ∂μₛ) = (c : ℂ) * ∫ u in band(r), k u ∂νₛ := by
+    have ho : Topology.IsOpenEmbedding (Units.val : Iₛ → Aₛ) := IsOpenUnits.isOpenEmbedding_unitsVal
+      (M := ((w : InfinitePlace F) → w.Completion) × ((v : S) → v.val.adicCompletion F))
+    rw [sLocalTrace_integral_units _ (fun t ht ↦ indicator_of_notMem ht _),
+      integral_indicator ho.isOpen_range.measurableSet,
+      Measure.restrict_eq_self_of_ae_mem hfull, integral_indicator (hband r)]
+  have hpt (t : Iₛ) : (normS(x⁻¹ * t) : ℂ) * (range (Units.val : Iₛ → Aₛ)).indicator
+        ((band(L')).indicator fun u ↦ g (x.val * u)) (x⁻¹ * t).val =
+      ((normS(x))⁻¹ : ℂ) * ((normS(t) : ℂ) * (range (Units.val : Iₛ → Aₛ)).indicator
+        ((band(L' * normS(x))).indicator g) t.val) := by
+    rw [indicator_of_mem (mem_range_self (x⁻¹ * t)), indicator_of_mem (mem_range_self t)]
+    have hn : normS(x⁻¹ * t) = (normS(x))⁻¹ * normS(t) := by simp [map_mul, map_inv]
+    have hpos : 0 < normS(x) := NNReal.coe_pos.mpr (Units.zero_lt (sIdeleNorm F S x))
+    have hmem : (x⁻¹ * t).val ∈ band(L') ↔ t.val ∈ band(L' * normS(x)) := by
+      rw [mem_sLocalPWProductRegion_units, mem_sLocalPWProductRegion_units, hn,
+        inv_mul_le_iff₀ hpos, mul_comm]
+    by_cases h : t.val ∈ band(L' * normS(x))
+    · rw [indicator_of_mem (hmem.2 h), indicator_of_mem h, hn]
+      simp only [Units.val_mul, ← mul_assoc, Units.mul_inv, one_mul]
+      push_cast
+      ring
+    · rw [indicator_of_notMem (mt hmem.1 h), indicator_of_notMem h]
+      simp
+  have h1 := key L' (fun u ↦ g (x.val * u))
+  rw [← integral_mul_left_eq_self _ x⁻¹] at h1
+  simp only [hpt, integral_const_mul] at h1
+  rw [key] at h1
+  apply mul_left_cancel₀ hc
+  rw [← h1]
+  ring
 
 /-- Additive Tamagawa measure pulled back to the S-ideles is s-finite. -/
 private theorem sLocalTrace_comap_sFinite :
