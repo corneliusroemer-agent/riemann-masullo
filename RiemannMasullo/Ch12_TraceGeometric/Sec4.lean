@@ -1990,13 +1990,130 @@ section FourierLogSection
 local instance instInfiniteCompletionMeasurableSpaceSec4 (w : InfinitePlace F) :
     MeasurableSpace w.Completion := borel _
 
+/-- On a real normed space of dimension one or two, the weight `(1 + ‖t‖)⁻⁴` is integrable
+for additive Haar measure, also after multiplication by `|log ‖t‖|`. -/
+private theorem sLocalTrace_weight_integrable_model {E : Type*} [NormedAddCommGroup E]
+    [NormedSpace ℝ E] [FiniteDimensional ℝ E] [MeasurableSpace E] [BorelSpace E]
+    (μ : Measure E) [μ.IsAddHaarMeasure] (h1 : 1 ≤ Module.finrank ℝ E)
+    (h2 : Module.finrank ℝ E ≤ 2) :
+    Integrable (fun t : E ↦ ((1 + ‖t‖) ^ 4)⁻¹) μ ∧
+      Integrable (fun t : E ↦ |Real.log ‖t‖| * ((1 + ‖t‖) ^ 4)⁻¹) μ := by
+  have hpow (t : E) : (1 + ‖t‖) ^ (Module.finrank ℝ E + 2) ≤ (1 + ‖t‖) ^ 4 :=
+    pow_le_pow_right₀ (by linarith [norm_nonneg t]) (by omega)
+  refine ⟨?_, ?_⟩
+  · have h2' : (Module.finrank ℝ E : ℝ) ≤ 2 := by exact_mod_cast h2
+    refine (integrable_one_add_norm (μ := μ) (r := 4) (by linarith)).congr
+      (ae_of_all _ fun t ↦ ?_)
+    change (1 + ‖t‖) ^ (-(4 : ℝ)) = ((1 + ‖t‖) ^ 4)⁻¹
+    rw [Real.rpow_neg (by positivity), show (4 : ℝ) = ((4 : ℕ) : ℝ) by norm_num,
+      Real.rpow_natCast]
+  · refine (integrable_abs_log_norm_div_one_add_norm_pow μ h1).mono'
+      (((continuous_abs.measurable.comp measurable_norm.log).mul
+        (by fun_prop)).aestronglyMeasurable) (ae_of_all _ fun t ↦ ?_)
+    have hp : 0 < (1 + ‖t‖) ^ (Module.finrank ℝ E + 2) := by positivity
+    rw [Real.norm_of_nonneg (by positivity), ← div_eq_mul_inv]
+    exact div_le_div_of_nonneg_left (abs_nonneg _) hp (hpow t)
+
+/-- At an infinite place the weight `(1 + ‖t‖)⁻⁴` is integrable for additive Tamagawa
+measure, also after multiplication by `|log ‖t‖|`. -/
+private theorem sLocalTrace_infinite_weight_integrable (w : InfinitePlace F) :
+    Integrable (fun t : w.Completion ↦ ((1 + ‖t‖) ^ 4)⁻¹)
+        (infiniteLocalAdditiveTamagawaMeasure F w) ∧
+      Integrable (fun t : w.Completion ↦ |Real.log ‖t‖| * ((1 + ‖t‖) ^ 4)⁻¹)
+        (infiniteLocalAdditiveTamagawaMeasure F w) := by
+  let : BorelSpace w.Completion := ⟨rfl⟩
+  by_cases hw : w.IsReal
+  · let e := InfinitePlace.Completion.ringEquivRealOfIsReal hw
+    let j := InfinitePlace.Completion.isometryEquivRealOfIsReal hw
+    let m := j.symm.toHomeomorph.toMeasurableEquiv
+    have hμ : infiniteLocalAdditiveTamagawaMeasure F w = (volume : Measure ℝ).map m :=
+      dite_eq_left hw
+    have hnorm (t : ℝ) : ‖m t‖ = ‖t‖ := by
+      change ‖j.symm t‖ = ‖t‖
+      rw [← dist_zero_right, ← dist_zero_right t, ← j.symm.dist_eq t 0,
+        show j.symm 0 = 0 from map_zero e.symm]
+    obtain ⟨h1, h2⟩ := sLocalTrace_weight_integrable_model (volume : Measure ℝ) (by simp) (by simp)
+    rw [hμ, integrable_map_equiv m, integrable_map_equiv m]
+    exact ⟨h1.congr (ae_of_all _ fun t ↦ by simp only [Function.comp_apply, hnorm]),
+      h2.congr (ae_of_all _ fun t ↦ by simp only [Function.comp_apply, hnorm])⟩
+  · have hc : w.IsComplex := InfinitePlace.not_isReal_iff_isComplex.mp hw
+    let e := InfinitePlace.Completion.ringEquivComplexOfIsComplex hc
+    let j := InfinitePlace.Completion.isometryEquivComplexOfIsComplex hc
+    let m := j.symm.toHomeomorph.toMeasurableEquiv
+    have hμ : infiniteLocalAdditiveTamagawaMeasure F w = (2 • (volume : Measure ℂ)).map m :=
+      dite_eq_right hw
+    have hnorm (t : ℂ) : ‖m t‖ = ‖t‖ := by
+      change ‖j.symm t‖ = ‖t‖
+      rw [← dist_zero_right, ← dist_zero_right t, ← j.symm.dist_eq t 0,
+        show j.symm 0 = 0 from map_zero e.symm]
+    obtain ⟨h1, h2⟩ := sLocalTrace_weight_integrable_model (volume : Measure ℂ) (by simp) (by simp)
+    rw [hμ, integrable_map_equiv m, integrable_map_equiv m, two_smul]
+    exact ⟨(h1.add_measure h1).congr (ae_of_all _ fun t ↦ by simp only [Function.comp_apply, hnorm]),
+      (h2.add_measure h2).congr (ae_of_all _ fun t ↦ by simp only [Function.comp_apply, hnorm])⟩
+
+/-- Additive Tamagawa measure at an infinite place is σ-finite. -/
+private theorem sLocalTrace_infinite_sigmaFinite (w : InfinitePlace F) :
+    SigmaFinite (infiniteLocalAdditiveTamagawaMeasure F w) := by
+  let : BorelSpace w.Completion := ⟨rfl⟩
+  by_cases hw : w.IsReal
+  · let j := InfinitePlace.Completion.isometryEquivRealOfIsReal hw
+    let m := j.symm.toHomeomorph.toMeasurableEquiv
+    have hμ : infiniteLocalAdditiveTamagawaMeasure F w = (volume : Measure ℝ).map m :=
+      dite_eq_left hw
+    rw [hμ]
+    exact m.sigmaFinite_map
+  · have hc : w.IsComplex := InfinitePlace.not_isReal_iff_isComplex.mp hw
+    let j := InfinitePlace.Completion.isometryEquivComplexOfIsComplex hc
+    let m := j.symm.toHomeomorph.toMeasurableEquiv
+    have hμ : infiniteLocalAdditiveTamagawaMeasure F w = (2 • (volume : Measure ℂ)).map m :=
+      dite_eq_right hw
+    rw [hμ, two_smul]
+    exact m.sigmaFinite_map
+
+/-- The product over the infinite places of the weights `(1 + ‖a_w‖)⁻⁴` is integrable,
+also after multiplication by `|log ‖a_u‖|` for one infinite place `u`. -/
+private theorem sLocalTrace_infinite_weight_prod_integrable :
+    Integrable (fun a : (w : InfinitePlace F) → w.Completion ↦ ∏ w, ((1 + ‖a w‖) ^ 4)⁻¹)
+        (Measure.pi (infiniteLocalAdditiveTamagawaMeasure F)) ∧
+      ∀ u : InfinitePlace F, Integrable
+        (fun a : (w : InfinitePlace F) → w.Completion ↦
+          (∏ w, ((1 + ‖a w‖) ^ 4)⁻¹) * |Real.log ‖a u‖|)
+        (Measure.pi (infiniteLocalAdditiveTamagawaMeasure F)) := by
+  classical
+  let (w : InfinitePlace F) : SigmaFinite (infiniteLocalAdditiveTamagawaMeasure F w) :=
+    sLocalTrace_infinite_sigmaFinite w
+  refine ⟨Integrable.fintype_prod_dep fun w ↦ (sLocalTrace_infinite_weight_integrable w).1,
+    fun u ↦ ?_⟩
+  let g (w : InfinitePlace F) : w.Completion → ℝ :=
+    fun t ↦ (if w = u then |Real.log ‖t‖| else 1) * ((1 + ‖t‖) ^ 4)⁻¹
+  have hg (w : InfinitePlace F) : Integrable (g w) (infiniteLocalAdditiveTamagawaMeasure F w) := by
+    by_cases h : w = u
+    · simp only [g, h, ↓reduceIte]
+      subst h
+      exact (sLocalTrace_infinite_weight_integrable w).2
+    · simp only [g, h, ↓reduceIte, one_mul]
+      exact (sLocalTrace_infinite_weight_integrable w).1
+  refine (Integrable.fintype_prod_dep hg).congr (ae_of_all _ fun a ↦ ?_)
+  simp only [g, Finset.prod_mul_distrib]
+  rw [Finset.prod_ite_eq' Finset.univ u]
+  simp [mul_comm]
+
 /-- Paper: (12.4.1.20)–(12.4.1.21), p. 518. The Fourier transform of the translated test
-is dominated by a function of the infinite coordinates, integrable also against the
-logarithm of each infinite absolute value, times the indicator of a ball at every finite
-place of `S`.
+is bounded by a multiple of the product of the weights `(1 + ‖y_w‖)⁻⁴` at the infinite
+places times the indicator of a ball at every finite place of `S`.
 Deviation: The translated test is a finite sum of archimedean tests tensored with ball
 indicators, whose Fourier transforms are archimedean Schwartz functions and scaled ball
 indicators; this records the resulting bound. -/
+private theorem sLocalTrace_fourier_decay_bound (f : BruhatCompactSupport Iₛ) (ξ : Hₛ) :
+    ∃ C R : ℝ, ∀ y : Aₛ, ‖fourierₛ (sLocalTraceEta f ξ) y‖ ≤
+      C * (∏ w, ((1 + ‖y.1 w‖) ^ 4)⁻¹) *
+        ∏ v : S, {b : v.val.adicCompletion F | ‖b‖ ≤ R}.indicator (fun _ ↦ (1 : ℝ)) (y.2 v) := by
+  sorry
+
+/-- Paper: (12.4.1.20)–(12.4.1.21), p. 518. The Fourier transform of the translated test
+is dominated by a function of the infinite coordinates, integrable also against the
+logarithm of each infinite absolute value, times the indicator of a ball at every finite
+place of `S`. -/
 private theorem sLocalTrace_fourier_product_bound (f : BruhatCompactSupport Iₛ) (ξ : Hₛ) :
     ∃ (Φ : ((w : InfinitePlace F) → w.Completion) → ℝ) (R : ℝ), (∀ a, 0 ≤ Φ a) ∧
       Integrable Φ (Measure.pi (infiniteLocalAdditiveTamagawaMeasure F)) ∧
@@ -2004,7 +2121,17 @@ private theorem sLocalTrace_fourier_product_bound (f : BruhatCompactSupport Iₛ
         (Measure.pi (infiniteLocalAdditiveTamagawaMeasure F))) ∧
       ∀ y : Aₛ, ‖fourierₛ (sLocalTraceEta f ξ) y‖ ≤
         Φ y.1 * ∏ v : S, {b : v.val.adicCompletion F | ‖b‖ ≤ R}.indicator (fun _ ↦ (1 : ℝ)) (y.2 v) := by
-  sorry
+  obtain ⟨C, R, hb⟩ := sLocalTrace_fourier_decay_bound f ξ
+  obtain ⟨hW, hWl⟩ := sLocalTrace_infinite_weight_prod_integrable (F := F)
+  refine ⟨fun a ↦ |C| * ∏ w, ((1 + ‖a w‖) ^ 4)⁻¹, R,
+    fun a ↦ mul_nonneg (abs_nonneg C) (Finset.prod_nonneg fun w _ ↦ by positivity),
+    hW.const_mul |C|, fun w ↦ (((hWl w).const_mul |C|).congr
+      (ae_of_all _ fun a ↦ by simp only [mul_assoc])), fun y ↦ (hb y).trans ?_⟩
+  have hP : 0 ≤ ∏ v : S, {b : v.val.adicCompletion F | ‖b‖ ≤ R}.indicator
+      (fun _ ↦ (1 : ℝ)) (y.2 v) :=
+    Finset.prod_nonneg fun v _ ↦ indicator_nonneg (fun _ _ ↦ zero_le_one) _
+  have hW0 : 0 ≤ ∏ w, ((1 + ‖y.1 w‖) ^ 4)⁻¹ := Finset.prod_nonneg fun w _ ↦ by positivity
+  exact mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_right (le_abs_self C) hW0) hP
 
 /-- Paper: (12.4.1.24), p. 518. The logarithm of the absolute value is integrable on a
 ball of a finite completion. -/
