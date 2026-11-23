@@ -2110,7 +2110,65 @@ private theorem sLocalGammaFiltration_coeff_independent_translate (g : B(S))
       c (QuotientGroup.mk u : J(S)) * ∑ i ∈ Finset.range ((arch(c)).card - k + 1),
         sLocalPrincipalPartCoeff c (k + i) (sAdelePrincipalValue F (Finset.Subset.refl S) g) *
           ((Real.log (((m(S) (QuotientGroup.mk u : J(S)) : ℝ≥0) : ℝ)) : ℝ) : ℂ) ^ i /
-            (i.factorial : ℂ) := by sorry
+            (i.factorial : ℂ) := by
+  classical
+  let P := sAdelePrincipalValue F (Finset.Subset.refl S)
+  let gu : J(S) := QuotientGroup.mk u
+  let L : ℂ := ((Real.log (((m(S) gu : ℝ≥0) : ℝ)) : ℝ) : ℂ)
+  have hZ := sLocalZ_centered (P g) c
+  have hbound := gammaFiltration_principalValue_bound g c
+  have hord : ((-((arch(c)).card : ℤ) : ℤ) : WithTop ℤ) ≤
+      meromorphicOrderAt (fun z ↦ sLocalIdelicZFunction (P g) (shift(c, z))) 0 := by
+    change (-(meromorphicOrderAt (fun z ↦ sLocalIdelicZFunction (P g) (shift(c, z))) 0).untop₀).toNat
+      ≤ _ at hbound
+    generalize meromorphicOrderAt (fun z ↦ sLocalIdelicZFunction (P g) (shift(c, z))) 0 = o
+      at hbound ⊢
+    induction o using WithTop.recTopCoe with
+    | top => exact le_top
+    | coe n =>
+      simp only [WithTop.untop₀_coe] at hbound
+      exact WithTop.coe_le_coe.mpr (by omega)
+  have hM : (((m(S) gu : ℝ≥0) : ℝ) : ℂ) ≠ 0 :=
+    Complex.ofReal_ne_zero.mpr (NNReal.coe_ne_zero.mpr (Units.ne_zero _))
+  have hval (b : Xₛ) (z : ℂ) : (shift(b, z)) gu = b gu * Complex.exp (L * z) := by
+    change b gu * (((m(S) gu : ℝ≥0) : ℝ) : ℂ) ^ z = _
+    rw [Complex.cpow_def_of_ne_zero hM, ← Complex.ofReal_log (NNReal.coe_nonneg _)]
+  -- The zeta functions of the two principal values differ by the character value at `u`.
+  have hgerm : (fun z ↦ sLocalIdelicZFunction (P (schwartzBruhatUnitTranslate u g)) (shift(c, z)))
+      =ᶠ[𝓝[≠] (0 : ℂ)]
+      fun z ↦ (shift(c, z)) gu * sLocalIdelicZFunction (P g) (shift(c, z)) := by
+    obtain ⟨χ, a, hc⟩ := exists_sLocalNormTwist (F := F) (S := S) c
+    let d : Xₛ := (⟨Circle.coeHom, continuous_subtype_val⟩ : Circle →ₜ* ℂ).comp χ
+    have e (H : Xₛ → ℂ) (z : ℂ) : H (shift(c, z)) = H (shift(d, z + a)) := by
+      rw [← hc, normTwist_normTwist]
+    have hPV (h : B(S)) := sLocalIdelicZFunction_principalValue (F := F) (S := S) S
+      (Finset.Subset.refl S) h χ
+    have hcod : (fun s ↦ sLocalIdelicZFunction (P (schwartzBruhatUnitTranslate u g)) (shift(d, s)))
+        =ᶠ[codiscrete ℂ] fun s ↦ (shift(d, s)) gu * sLocalIdelicZFunction (P g) (shift(d, s)) := by
+      filter_upwards [hPV (schwartzBruhatUnitTranslate u g), hPV g] with s h1 h2
+      dsimp only at h1 h2
+      change sLocalIdelicZFunction (P (schwartzBruhatUnitTranslate u g)) (shift(d, s)) = _
+      erw [h1, h2, sLocalPrincipalPartCoeff_translate_zeta, mul_div_assoc]
+    have hT : Tendsto (fun z : ℂ ↦ z + a) (𝓝[≠] 0) (𝓝[≠] a) := by
+      refine tendsto_nhdsWithin_iff.mpr ⟨tendsto_nhdsWithin_of_tendsto_nhds ?_, ?_⟩
+      · simpa using (Continuous.tendsto (f := fun z : ℂ ↦ z + a) (by fun_prop) 0)
+      · filter_upwards [self_mem_nhdsWithin] with z hz
+        simpa using hz
+    filter_upwards [(eventuallyEq_codiscrete_iff_forall_eventuallyEq_nhdsNE.mp hcod a).comp_tendsto hT]
+      with z hz
+    simp only [Function.comp_apply] at hz
+    rw [e (sLocalIdelicZFunction (P (schwartzBruhatUnitTranslate u g))) z,
+      e (sLocalIdelicZFunction (P g)) z, e (fun b ↦ b gu) z, hz]
+  rw [sLocalPrincipalPartCoeff_apply]
+  change complexResidue (fun z ↦ sLocalIdelicZFunction (P (schwartzBruhatUnitTranslate u g))
+    (shift(c, z)) / z ^ (-(k : ℤ) + 1)) 0 = _
+  rw [sLocalPrincipalPartCoeff_translate_congr (h := fun z ↦ c gu * (Complex.exp (L * z) *
+    sLocalIdelicZFunction (P g) (shift(c, z)) / z ^ (-(k : ℤ) + 1))) ?_]
+  · rw [sLocalPrincipalPartCoeff_translate_laurent hZ.1 hkc hord]
+    rfl
+  · filter_upwards [hgerm] with z hz
+    rw [hz, hval]
+    ring
 
 /-- Paper: Theorem 7.3.4.1(2), pp. 364–365.
 There is a family of S-ideles indexed by the logarithm of their norm on which every
