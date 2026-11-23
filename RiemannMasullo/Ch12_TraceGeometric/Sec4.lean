@@ -2011,7 +2011,29 @@ ball of a finite completion. -/
 private theorem sLocalTrace_finite_log_ball_integrable (v : V) (R : ℝ) :
     IntegrableOn (fun b : v.adicCompletion F ↦ |Real.log ‖b‖|) {b | ‖b‖ ≤ R}
       (finiteLocalAdditiveTamagawaMeasure F v) := by
-  sorry
+  let K := v.adicCompletion F
+  let : MeasurableSpace K := borel K
+  let : BorelSpace K := ⟨rfl⟩
+  let : ProperSpace K := properSpace_adicCompletion v
+  let r : ℝ := max R 1
+  have hr : (0 : ℝ) < r := lt_max_of_lt_right one_pos
+  let B : Set K := Metric.closedBall 0 r
+  obtain ⟨g, hg⟩ := finiteLogFourier_eq_neg_haar_clopenTest v B
+    (IsUltrametricDist.isClopen_closedBall 0 hr.ne') (isCompact_closedBall 0 r)
+  have hint := finiteLog_integrable_mul_test v g
+  have hq : (1 : ℝ) < (Ideal.absNorm v.asIdeal : ℝ) := by
+    exact_mod_cast NumberField.HeightOneSpectrum.one_lt_absNorm v
+  have hlq : 0 < Real.log (Ideal.absNorm v.asIdeal : ℝ) := Real.log_pos hq
+  have hsub : {b : K | ‖b‖ ≤ R} ⊆ B := fun b (hb : ‖b‖ ≤ R) ↦ by
+    simp only [B, Metric.mem_closedBall, dist_zero_right]; exact le_max_of_le_left hb
+  refine IntegrableOn.mono_set ?_ hsub
+  rw [← integrable_indicator_iff Metric.isClosed_closedBall.measurableSet]
+  refine (hint.norm.const_mul (Real.log (Ideal.absNorm v.asIdeal : ℝ))).congr
+    (ae_of_all _ fun y ↦ ?_)
+  simp only [hg, norm_mul, Complex.norm_real, Real.norm_eq_abs, abs_div, abs_of_pos hlq]
+  by_cases hy : y ∈ B
+  · rw [indicator_of_mem hy, indicator_of_mem hy, norm_one, mul_one, mul_div_cancel₀ _ hlq.ne']
+  · rw [indicator_of_notMem hy, indicator_of_notMem hy, norm_zero, mul_zero, mul_zero]
 
 /-- Paper: (12.4.1.24), p. 518. The Fourier transform of the translated test, weighted
 by the logarithm of the product norm, is integrable for additive Tamagawa measure.
