@@ -9331,6 +9331,108 @@ theorem idelicExplicitFormula_finite_support (f : 𝒟(C[F]))
     exact (mul_eq_zero.mp hgPV).resolve_left hscale
   rw [htest, map_smul, hPV, smul_zero]
 
+local notation "chartChars(" τ ")" => {χ : U[F] // ∀ t : ℝ≥0ˣ, χ (τ t) = 1}
+local notation "radialFlow(" τ ", " x ")" =>
+  τ (positiveRealLogEquiv.symm (Multiplicative.ofAdd x))
+local notation "explicitPrimeTerm(" χ ", " f ")" =>
+  (fun j : Primes(F) × ℕ ↦
+    if χ₀(χ).IsUnramifiedAt j.1 then
+      let x := ((j.2 + 1 : ℕ) : ℝ) * Real.log q(j.1)
+      (Real.log q(j.1) * Real.exp (-x / 2) : ℝ) *
+        ((χ₀(χ).localValue j.1) ^ (j.2 + 1) * f x +
+          (χ₀(χ⁻¹).localValue j.1) ^ (j.2 + 1) * f (-x))
+    else (0 : ℂ))
+local notation "explicitArchTerm(" χ ", " w ", " f ")" =>
+  (if hw : (w : InfinitePlace F).IsReal then
+    let p := (realHeckeCharacter_parameters χ w hw).exists.choose
+    (∫ t in Ioi (0 : ℝ), heckeArchimedeanDigammaKernel (1 / 2)
+      ((1 / 2 + p.1 + p.2.val) / 2) ((1 / 2 - p.1 + p.2.val) / 2) f t) -
+        (Real.log Real.pi : ℂ) * f 0
+  else
+    let p := (complexHeckeCharacter_parameters χ w
+      (InfinitePlace.not_isReal_iff_isComplex.mp hw)).exists.choose
+    (∫ t in Ioi (0 : ℝ), heckeArchimedeanDigammaKernel 1
+      (1 / 2 + p.1 + (p.2.natAbs : ℂ) / 2)
+      (1 / 2 - p.1 + (p.2.natAbs : ℂ) / 2) f t) -
+        2 * (Real.log (2 * Real.pi) : ℂ) * f 0)
+
+/-- Paper: Theorem B.4.4.7, pp. 623–624 (the decomposition `C[F] = C¹ × ℝ_{>0}` and the
+character expansion of the test). For a test `f` on the idele classes, a continuous section `τ`
+of the class norm and a unitary character `χ`, the radial profile
+`x ↦ c · ∫_{C¹} f(τ(eˣ) u) χ(u) du` (any constant `c`) is an exponentially decaying Schwartz
+function of the logarithmic variable `x`: it is smooth because `f` is smooth along the
+one-parameter subgroup `x ↦ τ(eˣ)`, and compactly supported because the class norm is proper. -/
+theorem idelicExplicitFormula_radialProfile (τ : ℝ≥0ˣ →ₜ* C[F])
+    (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F])) (χ : U[F]) (c : ℂ) :
+    ∃ Φ : 𝓢(ℝ, ℂ), ExponentialDecay Φ ∧ ∀ x : ℝ, Φ x = c *
+      ∫ u, f.val (radialFlow(τ, x) * (u : C[F])) * (χ (u : C[F]) : ℂ)
+        ∂normOneIdeleClassTamagawaMeasure F := by
+  sorry
+
+/-- Paper: Theorem B.4.4.7, pp. 623–624 (Fubini for `C[F] = C¹ × ℝ_{>0}`). For a character
+`χ` trivial on the image of the norm section `τ`, the idelic Mellin integral of a test `f`
+against `χ |·|^(s - 1/2)`, divided by the volume of `C¹`, is the Mellin transform at
+`s - 1/2` of the radial profile `x ↦ c · ∫_{C¹} f(τ(eˣ) u) χ(u) du`, for one constant `c`
+(fixed by the normalization of the Tamagawa measures) and all `s`. -/
+theorem idelicExplicitFormula_mellinMatching (τ : ℝ≥0ˣ →ₜ* C[F])
+    (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F])) (χ : U[F])
+    (_hχ : ∀ t : ℝ≥0ˣ, χ (τ t) = 1) :
+    ∃ c : ℂ, ∀ s : ℂ,
+      (∫ g, classMellinIntegrand(f, ideleClassNormTwist χ s, -1 / 2) g ∂classMeasure) /
+          (classVolume : ℂ) =
+        logMellin (fun x ↦ c * ∫ u, f.val (radialFlow(τ, x) * (u : C[F])) *
+          (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F) (s - 1 / 2) := by
+  sorry
+
+/-- Paper: Theorem B.4.4.7, p. 624, with Proposition 3.2.1.3, p. 123. For a character trivial
+on the image of the norm section `τ`, the continued completed Hecke L-function has a pole only
+when the character is trivial, and then only at `0` and `1`. -/
+theorem idelicExplicitFormula_chart_poles (τ : ℝ≥0ˣ →ₜ* C[F])
+    (_hτ : RightInverse τ (ideleClassNorm F)) (χ : U[F]) (_hχ : ∀ t : ℝ≥0ˣ, χ (τ t) = 1)
+    (ρ : ℂ) (_hρ : MeromorphicOn.divisor (explicitFormulaCompletedHeckeL χ) univ ρ < 0) :
+    χ = 1 ∧ (ρ = 0 ∨ ρ = 1) := by
+  sorry
+
+/-- Paper: Theorem B.4.4.7, p. 624, with Proposition 3.2.1.3, p. 123. The continued completed
+Dedekind zeta function has simple poles at `0` and `1`. -/
+theorem idelicExplicitFormula_trivial_poles :
+    MeromorphicOn.divisor (explicitFormulaCompletedHeckeL (1 : U[F])) univ 0 = -1 ∧
+      MeromorphicOn.divisor (explicitFormulaCompletedHeckeL (1 : U[F])) univ 1 = -1 := by
+  sorry
+
+/-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (finite places). Let `Φ_χ` be the
+radial profiles of a test `f` (Mellin transforms matching the idelic Mellin integrals, as in
+`idelicExplicitFormula_mellinMatching`). Summed over the characters trivial on the image of
+the norm section, the discriminant–conductor terms minus the prime-power terms of the
+explicit formula of Theorem B.4.2.2 for `Φ_χ` give minus the sum over the finite places of
+the scaled Connes–Weil principal values of the restrictions of `f`. -/
+theorem idelicExplicitFormula_finiteMatching (τ : ℝ≥0ˣ →ₜ* C[F])
+    (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F]))
+    (testF : ∀ v : Primes(F), 𝒟((v.adicCompletion F)ˣ))
+    (_hF : ∀ v u, (testF v).val u = f.val (finiteClassMap(v) u))
+    (Φ : chartChars(τ) → 𝓢(ℝ, ℂ)) (_hΦ : ∀ χ, ExponentialDecay (Φ χ))
+    (_hM : ∀ χ s, (∫ g, classMellinIntegrand(f, ideleClassNormTwist χ.val s, -1 / 2) g
+      ∂classMeasure) / (classVolume : ℂ) = logMellin (Φ χ) (s - 1 / 2)) :
+    HasSum (fun χ : chartChars(τ) ↦ (heckeLogDiscriminantConductor χ.val : ℂ) * Φ χ 0 -
+        ∑' j, explicitPrimeTerm(χ.val, Φ χ) j)
+      (-∑' v, finiteWeilScale(v) * finiteConnesWeilPrincipalValue v 1 (testF v)) := by
+  sorry
+
+/-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (one infinite place `w`). Let `Φ_χ` be
+the radial profiles of a test `f`, as in `idelicExplicitFormula_finiteMatching`. Summed over
+the characters trivial on the image of the norm section, the archimedean digamma terms at `w`
+of the explicit formula of Theorem B.4.2.2 for `Φ_χ` give minus the Connes–Weil principal
+value at `w` of the restriction of `f`. -/
+theorem idelicExplicitFormula_infiniteMatching (τ : ℝ≥0ˣ →ₜ* C[F])
+    (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F])) (w : InfinitePlace F)
+    (testI : 𝒟(w.Completionˣ)) (_hI : ∀ u, testI.val u = f.val (infiniteClassMap(w) u))
+    (Φ : chartChars(τ) → 𝓢(ℝ, ℂ)) (_hΦ : ∀ χ, ExponentialDecay (Φ χ))
+    (_hM : ∀ χ s, (∫ g, classMellinIntegrand(f, ideleClassNormTwist χ.val s, -1 / 2) g
+      ∂classMeasure) / (classVolume : ℂ) = logMellin (Φ χ) (s - 1 / 2)) :
+    HasSum (fun χ : chartChars(τ) ↦ explicitArchTerm(χ.val, w, Φ χ))
+      (-infiniteConnesWeilPrincipalValue w testI) := by
+  sorry
+
 /-- Paper: Theorem B.4.4.7, pp. 623–626. The pointwise idelic explicit formula: at every
 test, the multiplicity-weighted Mellin values at the completed Hecke zeros sum to the pole
 terms minus the archimedean and finite Connes–Weil principal values of the restricted tests. -/
@@ -9346,7 +9448,134 @@ theorem idelicExplicitFormula_pointwise (τ : ℝ≥0ˣ →ₜ* C[F])
           (∫ g, f.val g * classWeight(g, 1 / 2) ∂classMeasure)) / (classVolume : ℂ) -
         (∑ w, infiniteConnesWeilPrincipalValue w (testI w)) -
         ∑' v, finiteWeilScale(v) * finiteConnesWeilPrincipalValue v 1 (testF v)) := by
-  sorry
+  classical
+  set V : ℂ := (classVolume : ℂ) with hV
+  -- (a), (b): radial profiles whose Mellin transforms are the idelic Mellin integrals.
+  have hprof : ∀ χ : chartChars(τ), ∃ Φ : 𝓢(ℝ, ℂ), ExponentialDecay Φ ∧ ∀ s : ℂ,
+      (∫ g, classMellinIntegrand(f, ideleClassNormTwist χ.val s, -1 / 2) g ∂classMeasure) / V =
+        logMellin Φ (s - 1 / 2) := by
+    intro χ
+    obtain ⟨c, hc⟩ := idelicExplicitFormula_mellinMatching τ _hτ f χ.val χ.property
+    obtain ⟨Φ, hΦ, hΦx⟩ := idelicExplicitFormula_radialProfile τ _hτ f χ.val c
+    have hfun : (fun x ↦ c * ∫ u, f.val (radialFlow(τ, x) * (u : C[F])) *
+        (χ.val (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F) = (Φ : ℝ → ℂ) :=
+      funext fun x ↦ (hΦx x).symm
+    refine ⟨Φ, hΦ, fun s ↦ (hc s).trans ?_⟩
+    rw [hfun]
+  choose Φ hΦ hM using hprof
+  -- (c), (d): the explicit formula of each character, restricted to its zeros.
+  have hfiber : ∀ χ : chartChars(τ), HasSum
+      (fun s : {s : ℂ // 0 < MeromorphicOn.divisor (explicitFormulaCompletedHeckeL χ.val) univ s} ↦
+        (MeromorphicOn.divisor (explicitFormulaCompletedHeckeL χ.val) univ s.val : ℂ) / V *
+          ∫ g, classMellinIntegrand(f, ideleClassNormTwist χ.val s.val, -1 / 2) g ∂classMeasure)
+      ((((heckeLogDiscriminantConductor χ.val : ℂ) * Φ χ 0 -
+          ∑' j, explicitPrimeTerm(χ.val, Φ χ) j) + ∑ w, explicitArchTerm(χ.val, w, Φ χ)) +
+        if χ.val = 1 then logMellin (Φ χ) (0 - 1 / 2) + logMellin (Φ χ) (1 - 1 / 2) else 0) := by
+    intro χ
+    obtain ⟨hL, hAgree⟩ := explicitFormulaCompletedHeckeL_spec χ.val
+    have hE := hasSum_heckeExplicitFormula χ.val (Φ χ) (hΦ χ) _ hL hAgree
+    set d := MeromorphicOn.divisor (explicitFormulaCompletedHeckeL χ.val) univ with hd
+    set g : ℂ → ℂ := fun ρ ↦ (d ρ : ℂ) * logMellin (Φ χ) (ρ - 1 / 2) with hg
+    set P : ℂ := if χ.val = 1 then logMellin (Φ χ) (0 - 1 / 2) + logMellin (Φ χ) (1 - 1 / 2)
+      else 0 with hP
+    have hzero (ρ : ℂ) (h0 : ¬ 0 < d ρ) (hne : ¬ (χ.val = 1 ∧ (ρ = 0 ∨ ρ = 1))) : g ρ = 0 := by
+      have : d ρ = 0 := by
+        rcases lt_or_eq_of_le (not_lt.mp h0) with h | h
+        · exact absurd (idelicExplicitFormula_chart_poles τ _hτ χ.val χ.property ρ h) hne
+        · exact h
+      simp [hg, this]
+    have hcomp : HasSum ({ρ | 0 < d ρ}ᶜ.indicator g) (-P) := by
+      by_cases h1 : χ.val = 1
+      · obtain ⟨h0, h1'⟩ := idelicExplicitFormula_trivial_poles (F := F)
+        rw [← h1] at h0 h1'
+        have e0 : d 0 = -1 := h0
+        have e1 : d 1 = -1 := h1'
+        have heq : {ρ | 0 < d ρ}ᶜ.indicator g = fun ρ ↦
+            (if ρ = 0 then -logMellin (Φ χ) (0 - 1 / 2) else 0) +
+              (if ρ = 1 then -logMellin (Φ χ) (1 - 1 / 2) else 0) := by
+          funext ρ
+          by_cases hρ0 : ρ = 0
+          · subst hρ0
+            rw [Set.indicator_of_mem (by simp [e0])]
+            simp [hg, e0]
+          by_cases hρ1 : ρ = 1
+          · subst hρ1
+            rw [Set.indicator_of_mem (by simp [e1])]
+            simp [hg, e1]
+          simp only [hρ0, hρ1, if_false, add_zero]
+          by_cases hpos : 0 < d ρ
+          · exact Set.indicator_of_notMem (by simpa using hpos) _
+          · rw [Set.indicator_of_mem (by simpa using hpos)]
+            exact hzero ρ hpos (by tauto)
+        rw [heq, hP, if_pos h1, neg_add]
+        exact (hasSum_ite_eq 0 _).add (hasSum_ite_eq 1 _)
+      · have heq : {ρ | 0 < d ρ}ᶜ.indicator g = fun _ ↦ 0 := by
+          funext ρ
+          by_cases hpos : 0 < d ρ
+          · exact Set.indicator_of_notMem (by simpa using hpos) _
+          · rw [Set.indicator_of_mem (by simpa using hpos)]
+            exact hzero ρ hpos (by tauto)
+        rw [heq, hP, if_neg h1, neg_zero]
+        exact hasSum_zero
+    have key : {ρ | 0 < d ρ}.indicator g = fun ρ ↦ g ρ - {ρ | 0 < d ρ}ᶜ.indicator g ρ := by
+      funext ρ
+      rw [eq_sub_iff_add_eq]
+      exact congrFun (Set.indicator_self_add_compl {ρ | 0 < d ρ} g) ρ
+    have hZ := hE.sub hcomp
+    rw [← key, sub_neg_eq_add] at hZ
+    have hsub := (hasSum_subtype_iff_indicator (s := {ρ | 0 < d ρ})).mpr hZ
+    refine hsub.congr_fun fun s ↦ ?_
+    change (d s.val : ℂ) / V * _ = (d s.val : ℂ) * logMellin (Φ χ) (s.val - 1 / 2)
+    rw [← hM χ s.val]
+    ring
+  -- (e): sum over the characters.
+  have hS : Summable (fun z : chartZeros(τ) ↦ zeroMultiplicity(z) / V *
+      ∫ g, classMellinIntegrand(f, zeroCharacter(z), -1 / 2) g ∂classMeasure) :=
+    ((idelicExplicitFormula_summable_spectral τ _hτ f).of_norm.div_const V).congr fun z ↦ by ring
+  let Pr : chartChars(τ) → ℂ → Prop := fun χ s ↦
+    0 < MeromorphicOn.divisor (explicitFormulaCompletedHeckeL χ.val) univ s
+  let e := Equiv.subtypeProdEquivSigmaSubtype Pr
+  have hsig := ((e.symm.hasSum_iff).mpr hS.hasSum).sigma hfiber
+  -- (f) and the pole term.
+  let χ₁ : chartChars(τ) := ⟨1, fun _ ↦ rfl⟩
+  have hpole : HasSum (fun χ : chartChars(τ) ↦
+      if χ.val = 1 then logMellin (Φ χ) (0 - 1 / 2) + logMellin (Φ χ) (1 - 1 / 2) else 0)
+      (((∫ g, f.val g * classWeight(g, -1 / 2) ∂classMeasure) +
+          (∫ g, f.val g * classWeight(g, 1 / 2) ∂classMeasure)) / V) := by
+    have heq : (fun χ : chartChars(τ) ↦
+        if χ.val = 1 then logMellin (Φ χ) (0 - 1 / 2) + logMellin (Φ χ) (1 - 1 / 2) else 0) =
+        fun χ ↦ if χ = χ₁ then logMellin (Φ χ₁) (0 - 1 / 2) + logMellin (Φ χ₁) (1 - 1 / 2)
+          else 0 := by
+      funext χ
+      by_cases h : χ = χ₁
+      · subst h; simp [χ₁]
+      · have h' : ¬ χ.val = 1 := fun h' ↦ h (Subtype.ext h')
+        simp [h, h']
+    rw [heq]
+    convert hasSum_ite_eq χ₁ _ using 1
+    rw [← hM χ₁ 0, ← hM χ₁ 1, add_div]
+    have hw0 (g : C[F]) : classMellinIntegrand(f, ideleClassNormTwist (1 : U[F]) 0, -1 / 2) g =
+        f.val g * classWeight(g, -1 / 2) := by
+      change f.val g * ((1 : ℂ) * _ ^ (0 : ℂ)) * _ = _
+      rw [Complex.cpow_zero, one_mul, mul_one]
+    have hw1 (g : C[F]) : classMellinIntegrand(f, ideleClassNormTwist (1 : U[F]) 1, -1 / 2) g =
+        f.val g * classWeight(g, 1 / 2) := by
+      change f.val g * ideleClassNormTwist (1 : U[F]) 1 g * _ = _
+      rw [ideleClassNormTwist_one_one, mul_assoc]
+      congr 1
+      have hpos : (((ideleClassNorm F g).val : ℝ) : ℂ) ≠ 0 :=
+        Complex.ofReal_ne_zero.mpr (NNReal.coe_ne_zero.mpr (Units.ne_zero _))
+      conv_lhs => arg 1; rw [← Complex.cpow_one (((ideleClassNorm F g).val : ℝ) : ℂ)]
+      rw [← Complex.cpow_add _ _ hpos]
+      norm_num
+    simp only [χ₁, hw0, hw1]
+  have hfin := idelicExplicitFormula_finiteMatching τ _hτ f testF _hF Φ hΦ hM
+  have harch := hasSum_sum (s := Finset.univ) fun w _ ↦
+    idelicExplicitFormula_infiniteMatching τ _hτ f w (testI w) (_hI w) Φ hΦ hM
+  have htot := (hfin.add harch).add hpole
+  have hval := hsig.unique htot
+  rw [hS.hasSum_iff, hval, Finset.sum_neg_distrib]
+  ring
 
 /-- Paper: Theorem B.4.4.7, pp. 625–626, with Remark B.4.1.6. A family of distributions on
 the idele class test space whose values are absolutely summable at every test has a
