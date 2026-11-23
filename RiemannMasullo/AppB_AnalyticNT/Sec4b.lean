@@ -7987,13 +7987,81 @@ theorem idelicExplicitFormula_integralDistribution (c : C[F] → ℂ) (_hc : Con
         (explicitStage_integral_continuous classMeasure c _hc a e C)⟩ : P)
   exact ⟨⟨D, hD⟩, fun _ ↦ rfl⟩
 
+/-- Paper: Lemma B.4.4.9, pp. 624–625. The zeros of the completed Hecke L-function of a
+unitary character lie in the closed critical strip `0 ≤ Re s ≤ 1`: the Euler product does not
+vanish for `Re s > 1`, and the functional equation reflects this to `Re s < 0`. -/
+theorem explicitFormulaCompletedHeckeL_zero_re_mem (χ : U[F]) {s : ℂ}
+    (_hs : 0 < MeromorphicOn.divisor (explicitFormulaCompletedHeckeL χ) univ s) :
+    s.re ∈ Icc (0 : ℝ) 1 := by
+  sorry
+
+/-- Paper: Lemma B.4.4.9, pp. 624–625. The zeros of the completed Hecke L-function of a
+fixed unitary character, counted with multiplicity, satisfy `∑ ord(ρ) / (1 + |Im ρ|)² < ∞`.
+This is the classical consequence of the zero count `N(T + 1) - N(T) = O(log T)`. -/
+theorem explicitFormulaCompletedHeckeL_summable_divisor_div_sq (χ : U[F]) :
+    Summable (fun s : {s : ℂ //
+        0 < MeromorphicOn.divisor (explicitFormulaCompletedHeckeL χ) univ s} ↦
+      (MeromorphicOn.divisor (explicitFormulaCompletedHeckeL χ) univ s.val : ℝ) /
+        (1 + |s.val.im|) ^ 2) := by
+  sorry
+
+/-- Paper: Lemma B.4.4.9, pp. 624–625. For a fixed test and a fixed unitary character, the
+centered idelic Mellin transform of the test decays like the inverse square of the height in
+the closed critical strip. The test is smooth and compactly supported along the norm, so this
+is the standard integration by parts in the radial variable. -/
+theorem idelicExplicitFormula_mellin_decay (f : 𝒟(C[F])) (χ : U[F]) :
+    ∃ K : ℝ, ∀ s : ℂ, s.re ∈ Icc (0 : ℝ) 1 →
+      ‖∫ g, classMellinIntegrand(f, ideleClassNormTwist χ s, -1 / 2) g ∂classMeasure‖ ≤
+        K / (1 + |s.im|) ^ 2 := by
+  sorry
+
+/-- Paper: Lemma B.4.4.9, pp. 624–625, for one character. For a fixed unitary character `χ`,
+the spectral terms of the idelic explicit formula at the zeros of the completed Hecke
+L-function of `χ`, weighted by their multiplicities, are absolutely summable at every test. -/
+theorem idelicExplicitFormula_summable_spectral_fiber (f : 𝒟(C[F])) (χ : U[F]) :
+    Summable (fun s : {s : ℂ //
+        0 < MeromorphicOn.divisor (explicitFormulaCompletedHeckeL χ) univ s} ↦
+      ‖(MeromorphicOn.divisor (explicitFormulaCompletedHeckeL χ) univ s.val : ℂ) *
+        ∫ g, classMellinIntegrand(f, ideleClassNormTwist χ s.val, -1 / 2) g ∂classMeasure‖) := by
+  obtain ⟨K, hK⟩ := idelicExplicitFormula_mellin_decay f χ
+  refine Summable.of_nonneg_of_le (fun _ ↦ norm_nonneg _) (fun s ↦ ?_)
+    ((explicitFormulaCompletedHeckeL_summable_divisor_div_sq χ).mul_left K)
+  set d := MeromorphicOn.divisor (explicitFormulaCompletedHeckeL χ) univ s.val
+  have hd : (0 : ℝ) ≤ (d : ℝ) := by exact_mod_cast s.property.le
+  rw [norm_mul, show ((d : ℂ)) = ((d : ℝ) : ℂ) by push_cast; rfl, Complex.norm_real,
+    Real.norm_of_nonneg hd, mul_div_assoc', mul_comm K, mul_div_assoc]
+  exact mul_le_mul_of_nonneg_left
+    (hK s.val (explicitFormulaCompletedHeckeL_zero_re_mem χ s.property)) hd
+
+/-- Paper: Lemma B.4.4.9, pp. 624–625, summed over characters. Over the unitary characters
+trivial on the image of the norm section `τ`, the per-character sums of the absolute spectral
+terms of the idelic explicit formula at a fixed test are summable. This is the uniform half of
+Lemma B.4.4.9: a test only sees the characters of a Lie quotient of the idele classes, and the
+zero count of their completed Hecke L-functions must be polynomial jointly in the height and in
+the archimedean frequency of the character (see the paper-gap note at
+`summable_ideleClassMellin_completedHeckeZeros`). -/
+theorem idelicExplicitFormula_summable_spectral_characters (τ : ℝ≥0ˣ →ₜ* C[F])
+    (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F])) :
+    Summable (fun χ : {χ : U[F] // ∀ t : ℝ≥0ˣ, χ (τ t) = 1} ↦
+      ∑' s : {s : ℂ // 0 < MeromorphicOn.divisor (explicitFormulaCompletedHeckeL χ.val) univ s},
+        ‖(MeromorphicOn.divisor (explicitFormulaCompletedHeckeL χ.val) univ s.val : ℂ) *
+          ∫ g, classMellinIntegrand(f, ideleClassNormTwist χ.val s.val, -1 / 2) g
+            ∂classMeasure‖) := by
+  sorry
+
 /-- Paper: Theorem B.4.4.7, pp. 623–626, and Lemma B.4.4.9, pp. 624–625. The spectral terms
 of the idelic explicit formula are absolutely summable at every test. -/
 theorem idelicExplicitFormula_summable_spectral (τ : ℝ≥0ˣ →ₜ* C[F])
     (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F])) :
     Summable (fun z : chartZeros(τ) ↦ ‖zeroMultiplicity(z) *
       ∫ g, classMellinIntegrand(f, zeroCharacter(z), -1 / 2) g ∂classMeasure‖) := by
-  sorry
+  let P : {χ : U[F] // ∀ t : ℝ≥0ˣ, χ (τ t) = 1} → ℂ → Prop := fun χ s ↦
+    0 < MeromorphicOn.divisor (explicitFormulaCompletedHeckeL χ.val) univ s
+  let e := Equiv.subtypeProdEquivSigmaSubtype P
+  rw [← e.symm.summable_iff]
+  exact (summable_sigma_of_nonneg fun _ ↦ norm_nonneg _).2
+    ⟨fun χ ↦ idelicExplicitFormula_summable_spectral_fiber f χ.val,
+      idelicExplicitFormula_summable_spectral_characters τ _hτ f⟩
 
 /-- Paper: Theorem B.4.4.7, p. 625, (B.4.4.22). For all but finitely many primes the
 restricted test is a constant multiple of the integer-unit indicator at an unramified
