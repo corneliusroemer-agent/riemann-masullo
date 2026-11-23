@@ -2,6 +2,10 @@ module
 
 public import RiemannMasullo.Ch07_SchauderBasesZeta.Sec3b
 
+import Mathlib.Topology.Algebra.IsOpenUnits
+import RiemannMasullo.ForMathlib.MeasureTheory.Group.Arithmetic
+import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
+
 /-! # False printed PW-level claims in §7.3.2–7.3.3 -/
 
 @[expose] public noncomputable section
@@ -693,14 +697,519 @@ def Printed.sLocalPWOrbital_bases : Prop :=
                 ((mS j.val.1 : ℤ) - (j.val.2 : ℤ))) ∧
             ∀ σ : ℕ ≃ Iₚ(F, T, p, χ), Printed.HasPWOrbitalBases R W K (L ∘ σ)
 
+section OrbitalBases
+
+-- The measure comparison below is copied from `Ch12_TraceGeometric/Sec4.lean`
+-- (`sLocalTrace_measure_density`, `sLocalTrace_integral_units`, `sLocalTrace_nonunits_null`),
+-- and the archimedean Haar lemma from `AppA_AlgebraicNT/Sec3.lean`.
+
+open MeasureTheory
+open scoped ENNReal
+
+variable {F : Type*} [Field F] [NumberField F] {S : Finset (HeightOneSpectrum (𝓞 F))}
+
+local notation "Aₛ" => SAdeleRing F S
+local notation "Iₛ" => (SAdeleRing F S)ˣ
+local notation "modS(" x ")" => ((∏ w : InfinitePlace F, ‖(x : Aₛ).1 w‖ ^ w.mult) *
+  ∏ v : S, ‖(x : Aₛ).2 v‖)
+local notation "normS(" x ")" => (((sIdeleNorm F S x).val : ℝ))
+local notation "νₛ" => sAdditiveTamagawaMeasure F S
+local notation "μₛ" => sMultiplicativeTamagawaMeasure F S
+local notation "cS" => (∏ v ∈ S, (v.asIdeal.absNorm : ℝ) / ((v.asIdeal.absNorm : ℝ) - 1))
+
+attribute [local instance] instMeasurableSpaceSAdeleRing
+
+local instance sec3bP_msCompletion (w : InfinitePlace F) : MeasurableSpace w.Completion := borel _
+local instance sec3bP_msAdic (v : HeightOneSpectrum (𝓞 F)) : MeasurableSpace (v.adicCompletion F) :=
+  borel _
+
+/-- The archimedean additive Tamagawa factors are additive Haar measures. -/
+private theorem sec3bP_infAddHaar (v : InfinitePlace F) :
+    (infiniteLocalAdditiveTamagawaMeasure F v).IsAddHaarMeasure := by
+  let : BorelSpace v.Completion := ⟨rfl⟩
+  by_cases h : v.IsReal
+  · rw [infiniteLocalAdditiveTamagawaMeasure, dite_eq_left h]
+    exact (InfinitePlace.Completion.ringEquivRealOfIsReal h).symm.toAddEquiv.isAddHaarMeasure_map
+      volume (InfinitePlace.Completion.isometryEquivRealOfIsReal h).symm.continuous
+      (InfinitePlace.Completion.isometryEquivRealOfIsReal h).continuous
+  · let hc := InfinitePlace.not_isReal_iff_isComplex.mp h
+    rw [infiniteLocalAdditiveTamagawaMeasure, dite_eq_right h]
+    have : (2 • (volume : Measure ℂ)).IsAddHaarMeasure := by
+      rw [show 2 • (volume : Measure ℂ) = (2 : ℝ≥0∞) • volume by simp [two_smul]]
+      exact Measure.IsAddHaarMeasure.smul (μ := (volume : Measure ℂ)) (by norm_num) (by simp)
+    exact (InfinitePlace.Completion.ringEquivComplexOfIsComplex hc).symm.toAddEquiv.isAddHaarMeasure_map _
+      (InfinitePlace.Completion.isometryEquivComplexOfIsComplex hc).symm.continuous
+      (InfinitePlace.Completion.isometryEquivComplexOfIsComplex hc).continuous
+
+/-- The lower integral of a product of coordinate functions over a product measure on
+`n` coordinates is the product of the lower integrals. -/
+private theorem sec3bP_lintegral_fin {n : ℕ} {E : Fin n → Type*}
+    {mE : ∀ i, MeasurableSpace (E i)} {μ : (i : Fin n) → Measure (E i)} [∀ i, SigmaFinite (μ i)]
+    (f : (i : Fin n) → E i → ℝ≥0∞) (hf : ∀ i, Measurable (f i)) :
+    ∫⁻ x, ∏ i, f i (x i) ∂(Measure.pi μ) = ∏ i, ∫⁻ x, f i x ∂(μ i) := by
+  induction n with
+  | zero => simp
+  | succ n n_ih =>
+      rw [← ((measurePreserving_piFinSuccAbove μ 0).symm).lintegral_comp_emb
+        (MeasurableEquiv.measurableEmbedding _), Fin.prod_univ_succAbove _ 0]
+      have hfun : (fun p ↦ ∏ i, f i ((MeasurableEquiv.piFinSuccAbove E 0).symm p i)) =
+          fun p ↦ f 0 p.1 * ∏ j : Fin n, f (Fin.succAbove 0 j) (p.2 j) := by
+        funext p
+        rw [Fin.prod_univ_succAbove _ 0]
+        exact congrArg₂ (· * ·) (congrArg (f 0) (Fin.insertNth_apply_same 0 p.1 p.2))
+          (Finset.prod_congr rfl fun j _ ↦ congrArg _ (Fin.insertNth_apply_succAbove 0 p.1 p.2 j))
+      rw [hfun, lintegral_prod_mul (f := f 0) (g := fun x : (j : Fin n) → E (Fin.succAbove 0 j) ↦
+          ∏ j : Fin n, f (Fin.succAbove 0 j) (x j))
+        (hf 0).aemeasurable (Finset.measurable_prod _ fun j _ ↦
+          (hf (Fin.succAbove 0 j)).comp (measurable_pi_apply j)).aemeasurable,
+        n_ih (fun j ↦ f (Fin.succAbove 0 j)) (fun j ↦ hf _)]
+
+/-- The lower integral of a product of coordinate functions over a finite product measure
+is the product of the lower integrals. -/
+private theorem sec3bP_lintegral_pi {ι : Type*} [Fintype ι]
+    {E : ι → Type*} {mE : ∀ i, MeasurableSpace (E i)} {μ : (i : ι) → Measure (E i)}
+    [∀ i, SigmaFinite (μ i)] (f : (i : ι) → E i → ℝ≥0∞) (hf : ∀ i, Measurable (f i)) :
+    ∫⁻ x, ∏ i, f i (x i) ∂(Measure.pi μ) = ∏ i, ∫⁻ x, f i x ∂(μ i) := by
+  let e := (Fintype.equivFin ι).symm
+  rw [← (measurePreserving_piCongrLeft _ e).lintegral_comp_emb
+    (MeasurableEquiv.measurableEmbedding _)]
+  simp_rw [← e.prod_comp, MeasurableEquiv.coe_piCongrLeft, Equiv.piCongrLeft_apply_apply]
+  exact sec3bP_lintegral_fin (fun i ↦ f (e i)) (fun i ↦ hf (e i))
+
+/-- A finite product of measures with densities is the product measure with the
+product density. -/
+private theorem sec3bP_pi_withDensity {ι : Type*} [Fintype ι]
+    {E : ι → Type*} {mE : ∀ i, MeasurableSpace (E i)} (μ : (i : ι) → Measure (E i))
+    [∀ i, SigmaFinite (μ i)] (f : (i : ι) → E i → ℝ≥0∞) (hf : ∀ i, Measurable (f i))
+    [∀ i, SigmaFinite ((μ i).withDensity (f i))] :
+    Measure.pi (fun i ↦ (μ i).withDensity (f i)) =
+      (Measure.pi μ).withDensity (fun x ↦ ∏ i, f i (x i)) := by
+  refine Measure.pi_eq fun s hs ↦ ?_
+  rw [withDensity_apply _ (MeasurableSet.univ_pi hs), Measure.restrict_pi_pi,
+    sec3bP_lintegral_pi f hf]
+  exact Finset.prod_congr rfl fun i _ ↦ (withDensity_apply _ (hs i)).symm
+
+/-- The pushforward of multiplicative Tamagawa measure to the invertible locus has density
+c_S divided by the product norm against additive measure restricted to that locus. -/
+private theorem sec3bP_measure_density :
+    (μₛ).map (Units.val : Iₛ → Aₛ) =
+      ((νₛ).restrict (range (Units.val : Iₛ → Aₛ))).withDensity
+        (fun z ↦ ENNReal.ofReal (cS / modS(z))) := by
+  let (v : S) : ProperSpace (v.val.adicCompletion F) := properSpace_adicCompletion v.val
+  let (w : InfinitePlace F) : SecondCountableTopology w.Completion :=
+    (InfinitePlace.Completion.isometry_extensionEmbedding w).isEmbedding.secondCountableTopology
+  let (w : InfinitePlace F) : MeasurableSpace w.Completion := borel _
+  let (v : S) : MeasurableSpace (v.val.adicCompletion F) := borel _
+  let (v : S) : MeasurableSpace (v.val.adicCompletion F)ˣ := borel _
+  let (w : InfinitePlace F) : BorelSpace w.Completion := ⟨rfl⟩
+  let (v : S) : BorelSpace (v.val.adicCompletion F) := ⟨rfl⟩
+  let (w : InfinitePlace F) : BorelSpace w.Completionˣ := borelSpace_units_of_continuousInv₀ _
+  let (v : S) : BorelSpace (v.val.adicCompletion F)ˣ := ⟨rfl⟩
+  let (w : InfinitePlace F) : SecondCountableTopology w.Completionˣ :=
+    Units.isEmbedding_val₀.secondCountableTopology
+  let (v : S) : SecondCountableTopology (v.val.adicCompletion F)ˣ :=
+    Units.isEmbedding_val₀.secondCountableTopology
+  let (w : InfinitePlace F) : LocallyCompactSpace w.Completionˣ :=
+    (IsOpenUnits.isOpenEmbedding_unitsVal (M := w.Completion)).locallyCompactSpace
+  let (w : InfinitePlace F) : (infiniteLocalMultiplicativeTamagawaMeasure F w).IsHaarMeasure :=
+    infiniteLocalMultiplicativeTamagawaMeasure_haar F w
+  let (v : S) : (finiteLocalMultiplicativeTamagawaMeasure F v.val).IsHaarMeasure :=
+    finiteLocalMultiplicativeTamagawaMeasure_isHaarMeasure v.val
+  let (w : InfinitePlace F) : (infiniteLocalAdditiveTamagawaMeasure F w).IsAddHaarMeasure :=
+    sec3bP_infAddHaar w
+  let (v : S) : (finiteLocalAdditiveTamagawaMeasure F v.val).IsAddHaarMeasure :=
+    finiteLocalAdditiveTamagawaMeasure_isAddHaar F v.val
+  let ρI (w : InfinitePlace F) (x : w.Completion) : ℝ≥0∞ := (↑(‖x‖₊ ^ w.mult) : ℝ≥0∞)⁻¹
+  let c (v : S) : ℝ≥0∞ := ↑v.val.asIdeal.absNorm / (↑v.val.asIdeal.absNorm - 1)
+  let ρS (v : S) (x : v.val.adicCompletion F) : ℝ≥0∞ := c v * (↑‖x‖₊ : ℝ≥0∞)⁻¹
+  have hq (v : S) : 1 < v.val.asIdeal.absNorm := HeightOneSpectrum.one_lt_absNorm v.val
+  have hc (v : S) : c v ≠ ⊤ := ENNReal.div_ne_top (ENNReal.natCast_ne_top _)
+    (tsub_pos_of_lt (by exact_mod_cast hq v)).ne'
+  have hρI (w : InfinitePlace F) : Measurable (ρI w) :=
+    ((measurable_nnNorm.pow_const _).coe_nnreal_ennreal).inv
+  have hρS (v : S) : Measurable (ρS v) :=
+    measurable_const.mul measurable_nnNorm.coe_nnreal_ennreal.inv
+  have hRI (w : InfinitePlace F) : MeasurableSet (range (Units.val : w.Completionˣ → _)) :=
+    (IsOpenUnits.isOpenEmbedding_unitsVal (M := w.Completion)).isOpen_range.measurableSet
+  have hRS (v : S) : MeasurableSet (range (Units.val : (v.val.adicCompletion F)ˣ → _)) :=
+    (IsOpenUnits.isOpenEmbedding_unitsVal (M := v.val.adicCompletion F)).isOpen_range.measurableSet
+  have hlocI (w : InfinitePlace F) : (infiniteLocalMultiplicativeTamagawaMeasure F w).map Units.val =
+      ((infiniteLocalAdditiveTamagawaMeasure F w).restrict (range Units.val)).withDensity (ρI w) := by
+    rw [infiniteLocalMultiplicativeTamagawaMeasure,
+      (IsOpenUnits.isOpenEmbedding_unitsVal (M := w.Completion)).measurableEmbedding.map_comap,
+      restrict_withDensity (hRI w)]
+  have hlocS (v : S) : (finiteLocalMultiplicativeTamagawaMeasure F v.val).map Units.val =
+      ((finiteLocalAdditiveTamagawaMeasure F v.val).restrict (range Units.val)).withDensity
+        (ρS v) := by
+    rw [finiteLocalMultiplicativeTamagawaMeasure_eq_withDensity, Measure.map_smul,
+      (IsOpenUnits.isOpenEmbedding_unitsVal (M := v.val.adicCompletion F)).measurableEmbedding.map_comap,
+      restrict_withDensity (hRS v), ← withDensity_smul' _ _ (hc v)]
+    · rfl
+    · exact Units.continuous_val.measurable.aemeasurable
+  have hsfI (w : InfinitePlace F) : SigmaFinite
+      (((infiniteLocalAdditiveTamagawaMeasure F w).restrict (range Units.val)).withDensity
+        (ρI w)) :=
+    SigmaFinite.withDensity_of_ne_top ((ae_restrict_iff' (hRI w)).2 (ae_of_all _ fun x hx ↦ by
+      obtain ⟨u, rfl⟩ := hx
+      exact ENNReal.inv_ne_top.2 (ENNReal.coe_ne_zero.2 (pow_ne_zero _
+        (nnNorm_ne_zero_iff.2 u.ne_zero)))))
+  have hsfS (v : S) : SigmaFinite
+      (((finiteLocalAdditiveTamagawaMeasure F v.val).restrict (range Units.val)).withDensity
+        (ρS v)) :=
+    SigmaFinite.withDensity_of_ne_top ((ae_restrict_iff' (hRS v)).2 (ae_of_all _ fun x hx ↦ by
+      obtain ⟨u, rfl⟩ := hx
+      exact ENNReal.mul_ne_top (hc v) (ENNReal.inv_ne_top.2 (ENNReal.coe_ne_zero.2
+        (nnNorm_ne_zero_iff.2 u.ne_zero)))))
+  have (w : InfinitePlace F) :
+      SigmaFinite ((infiniteLocalMultiplicativeTamagawaMeasure F w).map Units.val) := by
+    rw [hlocI w]; exact hsfI w
+  have (v : S) :
+      SigmaFinite ((finiteLocalMultiplicativeTamagawaMeasure F v.val).map Units.val) := by
+    rw [hlocS v]; exact hsfS v
+  have hAI : Measurable (fun (f : (w : InfinitePlace F) → w.Completionˣ) (w : InfinitePlace F) ↦
+      (f w).val) :=
+    measurable_pi_iff.2 fun w ↦ Units.continuous_val.measurable.comp (measurable_pi_apply w)
+  have hAS : Measurable (fun (f : (v : S) → (v.val.adicCompletion F)ˣ) (v : S) ↦ (f v).val) :=
+    measurable_pi_iff.2 fun v ↦ Units.continuous_val.measurable.comp (measurable_pi_apply v)
+  have hmapL : (μₛ).map (Units.val : Iₛ → Aₛ) =
+      ((Measure.pi (infiniteLocalMultiplicativeTamagawaMeasure F)).map
+        (fun (f : (w : InfinitePlace F) → w.Completionˣ) (w : InfinitePlace F) ↦ (f w).val)).prod
+      ((Measure.pi fun v : S ↦ finiteLocalMultiplicativeTamagawaMeasure F v.val).map
+        (fun (f : (v : S) → (v.val.adicCompletion F)ˣ) (v : S) ↦ (f v).val)) := by
+    rw [Measure.map_prod_map _ _ hAI hAS]
+    unfold sMultiplicativeTamagawaMeasure
+    rw [Measure.map_map]
+    · rfl
+    · exact fun s hs ↦ ⟨s, hs, rfl⟩
+    · rintro _ ⟨t, ht, rfl⟩
+      exact (hAI.prodMap hAS) ht
+  have hrange : range (Units.val : Iₛ → Aₛ) =
+      (univ.pi fun w : InfinitePlace F ↦ range (Units.val : w.Completionˣ → w.Completion)) ×ˢ
+        (univ.pi fun v : S ↦
+          range (Units.val : (v.val.adicCompletion F)ˣ → v.val.adicCompletion F)) := by
+    ext z
+    simp only [Set.mem_prod, Set.mem_univ_pi]
+    change IsUnit z ↔ (∀ w, IsUnit (z.1 w)) ∧ ∀ v, IsUnit (z.2 v)
+    rw [Prod.isUnit_iff, Pi.isUnit_iff, Pi.isUnit_iff]
+  have hbox : MeasurableSet ((univ.pi fun w : InfinitePlace F ↦
+      range (Units.val : w.Completionˣ → w.Completion)) ×ˢ (univ.pi fun v : S ↦
+          range (Units.val : (v.val.adicCompletion F)ˣ → v.val.adicCompletion F))) :=
+    (MeasurableSet.univ_pi hRI).prod (MeasurableSet.univ_pi hRS)
+  have hpiI : (Measure.pi (infiniteLocalMultiplicativeTamagawaMeasure F)).map
+      (fun (f : (w : InfinitePlace F) → w.Completionˣ) (w : InfinitePlace F) ↦ (f w).val) =
+      Measure.pi fun w ↦ (infiniteLocalMultiplicativeTamagawaMeasure F w).map Units.val :=
+    Measure.pi_map_pi fun w ↦ Units.continuous_val.measurable.aemeasurable
+  have hpiS : (Measure.pi fun v : S ↦ finiteLocalMultiplicativeTamagawaMeasure F v.val).map
+      (fun (f : (v : S) → (v.val.adicCompletion F)ˣ) (v : S) ↦ (f v).val) =
+      Measure.pi fun v : S ↦ (finiteLocalMultiplicativeTamagawaMeasure F v.val).map Units.val :=
+    Measure.pi_map_pi fun v ↦ Units.continuous_val.measurable.aemeasurable
+  rw [hmapL, hpiI, hpiS]
+  simp_rw [hlocI, hlocS]
+  rw [sec3bP_pi_withDensity _ ρI hρI,
+    sec3bP_pi_withDensity _ ρS hρS,
+    prod_withDensity (f := fun x : (w : InfinitePlace F) → w.Completion ↦ ∏ w, ρI w (x w))
+      (g := fun x : (v : S) → v.val.adicCompletion F ↦ ∏ v, ρS v (x v))
+      (Finset.measurable_prod _ fun w _ ↦ (hρI w).comp (measurable_pi_apply w))
+      (Finset.measurable_prod _ fun v _ ↦ (hρS v).comp (measurable_pi_apply v)),
+    ← Measure.restrict_pi_pi, ← Measure.restrict_pi_pi, Measure.prod_restrict, hrange]
+  refine withDensity_congr_ae ((ae_restrict_iff' hbox).2 (ae_of_all _ fun z hz ↦ ?_))
+  have hz1 (w : InfinitePlace F) : 0 < ‖z.1 w‖ := by
+    obtain ⟨u, hu⟩ := (Set.mem_univ_pi.1 hz.1) w
+    exact norm_pos_iff.2 (hu ▸ u.ne_zero)
+  have hz2 (v : S) : 0 < ‖z.2 v‖ := by
+    obtain ⟨u, hu⟩ := (Set.mem_univ_pi.1 hz.2) v
+    exact norm_pos_iff.2 (hu ▸ u.ne_zero)
+  have hq' (v : S) : (1 : ℝ) < v.val.asIdeal.absNorm := by exact_mod_cast hq v
+  have e1 (w : InfinitePlace F) :
+      ρI w (z.1 w) = ENNReal.ofReal ((‖z.1 w‖ ^ w.mult)⁻¹) := by
+    rw [ENNReal.ofReal_inv_of_pos (pow_pos (hz1 w) _),
+      show ‖z.1 w‖ ^ w.mult = ((‖z.1 w‖₊ ^ w.mult : ℝ≥0) : ℝ) by simp,
+      ENNReal.ofReal_coe_nnreal]
+  have e2 (v : S) : ρS v (z.2 v) =
+      ENNReal.ofReal ((v.val.asIdeal.absNorm : ℝ) / ((v.val.asIdeal.absNorm : ℝ) - 1)) *
+        ENNReal.ofReal ‖z.2 v‖⁻¹ := by
+    rw [ENNReal.ofReal_inv_of_pos (hz2 v), ENNReal.ofReal_div_of_pos (sub_pos.2 (hq' v)),
+      ENNReal.ofReal_sub _ zero_le_one, ENNReal.ofReal_natCast, ENNReal.ofReal_one,
+      ← coe_nnNorm, ENNReal.ofReal_coe_nnreal]
+  simp only [e1, e2]
+  rw [← ENNReal.ofReal_prod_of_nonneg (fun w _ ↦ inv_nonneg.2 (pow_nonneg (hz1 w).le _))]
+  simp_rw [← ENNReal.ofReal_mul (div_nonneg (Nat.cast_nonneg _) (sub_pos.2 (hq' _)).le)]
+  rw [← ENNReal.ofReal_prod_of_nonneg (fun v _ ↦ mul_nonneg
+      (div_nonneg (Nat.cast_nonneg _) (sub_pos.2 (hq' v)).le) (inv_nonneg.2 (hz2 v).le)),
+    ← ENNReal.ofReal_mul (Finset.prod_nonneg fun w _ ↦ inv_nonneg.2 (pow_nonneg (hz1 w).le _))]
+  congr 1
+  rw [← Finset.prod_coe_sort S, Finset.prod_mul_distrib,
+    Finset.prod_inv_distrib, Finset.prod_inv_distrib]
+  ring
+
+/-- A normed field with a nonzero element of norm less than one has no isolated zero. -/
+private theorem sec3bP_neBot_of_norm_lt_one {K : Type*} [NormedField K] (a : K)
+    (ha0 : a ≠ 0) (ha : ‖a‖ < 1) : (𝓝[≠] (0 : K)).NeBot :=
+  mem_closure_iff_nhdsWithin_neBot.mp (mem_closure_of_tendsto
+    (tendsto_pow_atTop_nhds_zero_of_norm_lt_one ha) (Eventually.of_forall fun n ↦ pow_ne_zero n ha0))
+
+/-- Zero is not isolated in a finite completion: the powers of a uniformizer tend to it. -/
+private theorem sec3bP_finite_neBot (v : HeightOneSpectrum (𝓞 F)) : (𝓝[≠] (0 : v.adicCompletion F)).NeBot := by
+  let val : Valuation (v.adicCompletion F) (WithZero (Multiplicative ℤ)) := Valued.v
+  obtain ⟨π, hπ⟩ := val.exists_isUniformizer_of_isCyclic_of_nontrivial
+  exact sec3bP_neBot_of_norm_lt_one (π : v.adicCompletion F) hπ.ne_zero
+    (Valued.toNormedField.norm_lt_one_iff.mpr hπ.val_lt_one)
+
+/-- Zero is not isolated in an infinite completion: the powers of one half tend to it. -/
+private theorem sec3bP_infinite_neBot (w : InfinitePlace F) :
+    (𝓝[≠] (0 : w.Completion)).NeBot := by
+  let a : w.Completion := ((WithAbs.equiv w.1).symm (2⁻¹ : F) : WithAbs w.1)
+  have h2 : w (2 : F) = 2 := by simpa using w.map_natCast 2
+  have hval : ‖a‖ = 2⁻¹ := by
+    rw [InfinitePlace.Completion.norm_coe, RingEquiv.apply_symm_apply, map_inv₀, h2]
+  refine sec3bP_neBot_of_norm_lt_one a (fun h ↦ ?_) (by rw [hval]; norm_num)
+  rw [h, norm_zero] at hval
+  norm_num at hval
+
+/-- The S-adeles with a zero coordinate form a null set for additive Tamagawa measure. -/
+private theorem sec3bP_nonunits_null :
+    νₛ (range (Units.val : Iₛ → Aₛ))ᶜ = 0 := by
+  let (v : S) : ProperSpace (v.val.adicCompletion F) := properSpace_adicCompletion v.val
+  let (w : InfinitePlace F) : SecondCountableTopology w.Completion :=
+    (InfinitePlace.Completion.isometry_extensionEmbedding w).isEmbedding.secondCountableTopology
+  let (w : InfinitePlace F) : MeasurableSpace w.Completion := borel _
+  let (v : S) : MeasurableSpace (v.val.adicCompletion F) := borel _
+  let (w : InfinitePlace F) : BorelSpace w.Completion := ⟨rfl⟩
+  let (v : S) : BorelSpace (v.val.adicCompletion F) := ⟨rfl⟩
+  let (w : InfinitePlace F) : (infiniteLocalAdditiveTamagawaMeasure F w).IsAddHaarMeasure :=
+    sec3bP_infAddHaar w
+  let (v : S) : (finiteLocalAdditiveTamagawaMeasure F v.val).IsAddHaarMeasure :=
+    finiteLocalAdditiveTamagawaMeasure_isAddHaar F v.val
+  let (w : InfinitePlace F) : (𝓝[≠] (0 : w.Completion)).NeBot := sec3bP_infinite_neBot w
+  let (v : S) : (𝓝[≠] (0 : v.val.adicCompletion F)).NeBot := sec3bP_finite_neBot v.val
+  have hw (w : InfinitePlace F) : infiniteLocalAdditiveTamagawaMeasure F w {0} = 0 :=
+    measure_singleton 0
+  have hv (v : S) : finiteLocalAdditiveTamagawaMeasure F v.val {0} = 0 :=
+    measure_singleton 0
+  have hsub : (range (Units.val : Iₛ → Aₛ))ᶜ ⊆
+      (⋃ w : InfinitePlace F, Prod.fst ⁻¹' (Function.eval w ⁻¹' {0})) ∪
+        ⋃ v : S, Prod.snd ⁻¹' (Function.eval v ⁻¹' {0}) := by
+    intro a ha
+    by_contra h
+    simp only [mem_union, mem_iUnion, not_or, not_exists, mem_preimage, Function.eval,
+      mem_singleton_iff] at h
+    have hu : IsUnit a := Prod.isUnit_iff.mpr
+      ⟨Pi.isUnit_iff.mpr fun w ↦ isUnit_iff_ne_zero.mpr (h.1 w),
+        Pi.isUnit_iff.mpr fun v ↦ isUnit_iff_ne_zero.mpr (h.2 v)⟩
+    exact ha ⟨hu.unit, rfl⟩
+  refine measure_mono_null hsub (measure_union_null (measure_iUnion_null fun w ↦ ?_)
+    (measure_iUnion_null fun v ↦ ?_))
+  · rw [← prod_univ]
+    change ((Measure.pi (infiniteLocalAdditiveTamagawaMeasure F)).prod
+      (Measure.pi (fun v : S ↦ finiteLocalAdditiveTamagawaMeasure F v.val))) (_ ×ˢ _) = 0
+    rw [Measure.prod_prod, Measure.pi_eval_preimage_null _ (hw w), zero_mul]
+  · rw [← univ_prod]
+    change ((Measure.pi (infiniteLocalAdditiveTamagawaMeasure F)).prod
+      (Measure.pi (fun v : S ↦ finiteLocalAdditiveTamagawaMeasure F v.val))) (_ ×ˢ _) = 0
+    rw [Measure.prod_prod, Measure.pi_eval_preimage_null
+      (fun v : S ↦ finiteLocalAdditiveTamagawaMeasure F v.val) (i := v) (hv v), mul_zero]
+
+/-- The multiplicative integral of the norm times a function is c_S times its additive integral. -/
+private theorem sec3bP_integral_units (a : Aₛ → ℂ) :
+    (∫ t : Iₛ, (normS(t) : ℂ) * a t.val ∂μₛ) = (cS : ℂ) * ∫ t, a t ∂νₛ := by
+  have : BorelSpace Aₛ := sAdeleRing_borelSpace
+  have : BorelSpace Iₛ := sIdeleGroup_borelSpace
+  have ho : Topology.IsOpenEmbedding (Units.val : Iₛ → Aₛ) := IsOpenUnits.isOpenEmbedding_unitsVal
+    (M := ((w : InfinitePlace F) → w.Completion) × ((v : S) → v.val.adicCompletion F))
+  have hfull : ∀ᵐ u ∂νₛ, u ∈ range (Units.val : Iₛ → Aₛ) :=
+    measure_eq_zero_iff_ae_notMem.mp sec3bP_nonunits_null |>.mono fun _ h ↦ not_not.mp h
+  have hres : (νₛ).restrict (range (Units.val : Iₛ → Aₛ)) = νₛ :=
+    Measure.restrict_eq_self_of_ae_mem hfull
+  let n (t : Aₛ) := modS(t)
+  have hn (t : Iₛ) : normS(t) = n t.val := by simp [n, sIdeleNorm, Units.coe_prod]
+  have hm : Continuous n := by
+    unfold n
+    exact (continuous_finsetProd _ fun w _ ↦
+      (((continuous_apply w).comp continuous_fst).norm.pow _)).mul
+      (continuous_finsetProd _ fun v _ ↦ ((continuous_apply v).comp continuous_snd).norm)
+  let c := cS
+  have hc : 0 ≤ c := by
+    apply Finset.prod_nonneg
+    intro v _
+    have hv : (1 : ℝ) < v.asIdeal.absNorm := by exact_mod_cast HeightOneSpectrum.one_lt_absNorm v
+    exact div_nonneg (Nat.cast_nonneg _) (sub_nonneg.mpr hv.le)
+  let d (t : Aₛ) := ENNReal.ofReal (c / n t)
+  have hd : Measurable d := (measurable_const.div hm.measurable).ennreal_ofReal
+  simp_rw [hn]
+  rw [← ho.measurableEmbedding.integral_map (μ := μₛ) (fun t ↦ (n t : ℂ) * a t),
+    sec3bP_measure_density]
+  change (∫ t, (n t : ℂ) * a t ∂((νₛ).restrict _).withDensity d) = _
+  rw [integral_withDensity_eq_integral_toReal_smul hd (ae_of_all _ fun _ ↦ ENNReal.ofReal_lt_top)]
+  conv_rhs => rw [← hres]
+  rw [← integral_const_mul]
+  apply integral_congr_ae
+  apply (ae_restrict_iff' ho.isOpen_range.measurableSet).2
+  apply ae_of_all
+  rintro _ ⟨t, rfl⟩
+  have hpos : 0 < n t.val := (hn t) ▸ NNReal.coe_pos.mpr (Units.zero_lt (sIdeleNorm F S t))
+  simp only [d, ENNReal.toReal_ofReal (div_nonneg hc hpos.le), Complex.real_smul,
+    Complex.ofReal_div]
+  have hn0 : ((n t.val : ℝ) : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr hpos.ne'
+  push_cast [c]
+  field_simp
+
+local notation "Jₛ" => SIdeleQuotient F S
+local notation "mₛ" => sIdeleQuotientNorm F S
+local notation "twistₛ" => quasiCharacterNormTwist (G := Jₛ) mₛ
+  (isProperMap_sIdeleQuotientNorm F S).continuous
+local notation "dualₛ" => dualQuasiCharacter (G := Jₛ) mₛ
+  (isProperMap_sIdeleQuotientNorm F S).continuous
+local notation "circleToComplex" => (⟨Circle.coeHom, continuous_subtype_val⟩ : Circle →ₜ* ℂ)
+
+/-- The continued zeta function at the norm character is c_S times the additive integral. -/
+private theorem sec3bP_zeta_norm (g : SchwartzBruhat (Multiplicative Aₛ)) :
+    sLocalIdelicZFunction g (dualₛ (twistₛ 1 0)) =
+      (cS : ℂ) * ∫ x, g (Multiplicative.ofAdd x) ∂νₛ := by
+  have hval (x : Jₛ) : dualₛ (twistₛ 1 0) x = (((mₛ x : ℝ≥0) : ℝ) : ℂ) := by
+    simp [dualQuasiCharacter, quasiCharacterNormTwist]
+    change _ * (1 : ℂ)⁻¹ = _
+    rw [inv_one, mul_one]
+    rfl
+  have hc : dualₛ (twistₛ 1 0) = twistₛ ((circleToComplex).comp 1) 1 := by
+    ext x
+    rw [hval]
+    simp [quasiCharacterNormTwist]
+    rfl
+  rw [sLocalIdelicZFunction_eq_integral g ⟨1, 1, by simp, hc⟩, sLocalIdelicZetaIntegral,
+    ← sec3bP_integral_units]
+  refine integral_congr_ae (ae_of_all _ fun t ↦ ?_)
+  change g _ * dualₛ (twistₛ 1 0) (QuotientGroup.mk t) = _
+  rw [hval, sIdeleQuotientNorm_mk, mul_comm]
+
+
+/-- Every subring of the rationals is a principal ideal ring. -/
+private theorem sec3bP_subring_pid (R : Subring ℚ) : IsPrincipalIdealRing R := by
+  refine ⟨fun I ↦ ?_⟩
+  let J : Ideal ℤ := I.comap (Int.castRingHom R)
+  obtain ⟨g, hg⟩ := (IsPrincipalIdealRing.principal J).principal
+  refine ⟨⟨(g : R), ?_⟩⟩
+  have hgJ : g ∈ J := hg ▸ Submodule.mem_span_singleton_self g
+  apply le_antisymm
+  · intro x hx
+    let q : ℚ := x
+    have hcop : Int.gcd q.num q.den = 1 := q.reduced
+    have hb := Int.gcd_eq_gcd_ab q.num q.den
+    rw [hcop] at hb
+    -- the inverse denominator lies in the subring
+    have hinv : (q.den : ℚ)⁻¹ ∈ R := by
+      have : (q.den : ℚ)⁻¹ = q * (Int.gcdA q.num q.den : ℚ) + (Int.gcdB q.num q.den : ℚ) := by
+        have hd : (q.den : ℚ) ≠ 0 := by positivity
+        have h1 : ((1 : ℤ) : ℚ) = (q.num : ℚ) * Int.gcdA q.num q.den + (q.den : ℚ) * Int.gcdB q.num q.den := by
+          exact_mod_cast hb
+        push_cast at h1
+        generalize Int.gcdA q.num q.den = A at h1 ⊢
+        generalize Int.gcdB q.num q.den = B at h1 ⊢
+        conv_rhs => rw [← Rat.num_div_den q]
+        field_simp
+        linear_combination h1
+      rw [this]
+      exact R.add_mem (R.mul_mem x.property (intCast_mem R _)) (intCast_mem R _)
+    have hnum : (q.num : R) ∈ I := by
+      have : (q.num : R) = (q.den : R) * x := by
+        apply Subtype.ext
+        push_cast
+        exact (Rat.mul_den_eq_num q).symm.trans (mul_comm _ _)
+      rw [this]
+      exact I.mul_mem_left _ hx
+    have hnumJ : q.num ∈ J := hnum
+    rw [hg, Ideal.mem_span_singleton'] at hnumJ
+    obtain ⟨k, hk⟩ := hnumJ
+    rw [Ideal.submodule_span_eq, Ideal.mem_span_singleton']
+    refine ⟨(k : R) * ⟨_, hinv⟩, Subtype.ext ?_⟩
+    push_cast
+    change (k : ℚ) * (q.den : ℚ)⁻¹ * g = q
+    rw [mul_right_comm, ← Int.cast_mul, hk, ← div_eq_mul_inv]
+    exact Rat.num_div_den q
+  · rw [Ideal.submodule_span_eq, Ideal.span_le, Set.singleton_subset_iff]
+    exact hgJ
+
+end OrbitalBases
+
 /-- Paper: Theorem 7.3.3.4(1)–(2), pp. 360–361.
 Over the rationals with one added prime and trivial character, the index contains the
 order-zero jet at the trivial center. It evaluates the Fourier zeta integral at norm
 power one, a nonzero multiple of evaluation at zero by Fourier inversion. Its restriction
 vanishes on each zero-moment level, contradicting the unit biorthogonal pairing.
 The same obstruction persists with the proof's intersection denominator. -/
-theorem Printed.sLocalPWOrbital_bases_false : ¬ Printed.sLocalPWOrbital_bases :=
-  by sorry
+theorem Printed.sLocalPWOrbital_bases_false : ¬ Printed.sLocalPWOrbital_bases := by
+  intro h
+  obtain ⟨m, hm⟩ := Ideal.exists_maximal (𝓞 ℚ)
+  let p : Vℚ := ⟨m, hm.isPrime, NeZero.ne m⟩
+  let S : Finset Vℚ := ∅
+  let T : Finset Vℚ := {p}
+  have hsub : S ⊆ T := Finset.empty_subset _
+  have hpT : p ∈ T \ S := by simp [S, T]
+  have hu : NormOneCharacterUnramifiedOutside (1 : PontryaginDual (ideleClassNorm ℚ).ker) S :=
+    ⟨⟨1, (mem_unramifiedOutside_iff ℚ S 1).mpr (fun _ _ _ ↦ rfl)⟩, fun _ ↦ rfl⟩
+  have hχ : (1 : PontryaginDual J₁(ℚ, T)) =
+      sLocalNormOneCharacter (F := ℚ) T 1 (hu.mono hsub) := by
+    ext y
+    have := sLocalNormOneCharacter_eq_sIdeleRestriction (F := ℚ) (S := T) 1
+      ⟨1, (mem_unramifiedOutside_iff ℚ T 1).mpr (fun _ _ _ ↦ rfl)⟩ (fun _ ↦ rfl) y
+    rw [this]
+    obtain ⟨g, hg⟩ := QuotientGroup.mk_surjective y.val
+    rw [← hg, sIdeleRestriction_mk]
+    rfl
+  have hunder : p.under (𝓞 ℚ) = p := by
+    apply HeightOneSpectrum.ext
+    change Ideal.comap (algebraMap (𝓞 ℚ) (𝓞 ℚ)) p.asIdeal = p.asIdeal
+    rw [Algebra.algebraMap_self, Ideal.comap_id]
+  have hP : sLocalPrimaryPlaces (F := ℚ) T p = T := by
+    ext v
+    rw [mem_sLocalPrimaryPlaces]
+    constructor
+    · exact fun hv ↦ hv.1
+    · intro hv
+      refine ⟨hv, ?_⟩
+      rw [Finset.mem_singleton.mp hv]
+      exact hunder
+  have hPne : (sLocalPrimaryPlaces (F := ℚ) T p).Nonempty := by
+    rw [hP]; exact Finset.singleton_nonempty p
+  have hPsub : sLocalPrimaryPlaces (F := ℚ) T p ⊆ T := sLocalPrimaryPlaces_subset T p
+  obtain ⟨B, -, hall⟩ := h ℚ S T T (by simp [S, T]) (Finset.disjoint_empty_left _)
+    (sec3bP_saturated p) sec3bP_pic p 1 hu hsub 1 hχ hPne hPsub
+  have hn : Fintype.card (InfinitePlace ℚ) + Finset.card S ≠ 0 := by
+    have : Nonempty (InfinitePlace ℚ) := ⟨Rat.infinitePlace⟩
+    have := Fintype.card_pos (α := InfinitePlace ℚ)
+    omega
+  let X := max B 1
+  have hBX : B ≤ X := le_max_left _ _
+  have hBY : B ≤ X ^ (Fintype.card (InfinitePlace ℚ) + Finset.card S) :=
+    hBX.trans (le_self_pow₀ (le_max_right _ _) hn)
+  obtain ⟨-, hrest⟩ := hall X _ hBX hBY le_rfl _ _ (Or.inl ⟨rfl, rfl⟩)
+  obtain ⟨L, hL, hbases⟩ := hrest true
+  obtain ⟨j₀, hj₀⟩ := (sLocalOrbitalIndex_one_iff (F := ℚ) (S := T) hPsub 0).mpr
+    (by rw [hP]; simp [T])
+  have hPic : Subsingleton (CommRing.Pic (((T : Set Vℚ)).integer ℚ)) := by
+    let A := (((T : Set Vℚ)).integer ℚ)
+    let := sec3bP_subring_pid A.toSubring
+    let i : A.toSubring ≃+* A := RingEquiv.refl _
+    let := IsPrincipalIdealRing.of_surjective i.toRingHom i.surjective
+    infer_instance
+  obtain ⟨σ⟩ := (sLocalOrbitalIndex_enumerable_or_empty (F := ℚ) (S := T) p 1
+    (sec3bP_saturated p) hPne hPic).resolve_right (fun h ↦ h.1.false j₀)
+  obtain ⟨e, d, eW, dW, ev, -, -, hdW, hlift, -, -, -, hbas, -⟩ := hbases σ
+  let k := σ.symm j₀
+  obtain ⟨x, hxK, -⟩ := hlift k
+  have h1 : dW k (eW k) = 1 := (hbas.1 k k).trans (if_pos rfl)
+  have h2 : dW k (eW k) = L j₀ x.val := (congrArg (dW k) hxK).symm.trans
+    ((hdW k x).trans (congrArg (fun j ↦ L j x.val) (σ.apply_symm_apply j₀)))
+  have hx0 : x.val ∈ LinearMap.ker (L j₀).toLinearMap := by
+    refine Submodule.topologicalClosure_minimal _ ?_ (L j₀).isClosed_ker x.property
+    rintro _ ⟨f, ⟨hfE, -⟩, rfl⟩
+    obtain ⟨t, -, rfl⟩ := Submodule.mem_map.mp hfE
+    rw [LinearMap.mem_ker, ContinuousLinearMap.coe_coe, hL j₀, if_pos rfl]
+    erw [sLocalOrbitalFourierJet_mk]
+    rw [hj₀]
+    simp only [iteratedDeriv_zero]
+    rw [sec3bP_zeta_norm, ← sAdeleSchwartzFourier_apply_zero, sLocal_fourier_inversion, neg_zero,
+      sec3bP_sPV_zero Finset.sdiff_subset hpT 0 rfl t, mul_zero]
+  exact one_ne_zero (h1.symm.trans (h2.trans (LinearMap.mem_ker.mp hx0)))
 
 local notation "lexLe(" e ", " a ", " b ")" =>
   ((∀ i, a (e i).val = b (e i).val) ∨
