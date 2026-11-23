@@ -1602,7 +1602,7 @@ section StripConvolutionCoefficients
 
 variable {α s : ℝ} (hα : 0 ≤ α) (hs : 1 < s)
 
-local notation "logNorm" => (fun g : C𝔽 ↦ Real.log ((ideleClassNorm F g).val : ℝ))
+local notation "logNorm" => (logIdeleClassNorm F)
 local notation "D" => spectralSobolevDualEmbedding F a (hStrip(hα)) hs₀(hs)
 local notation "raw(" χ ", " j ")" =>
   spectralZeroJet (F := F) (χ (j).val.1) (j).val.2.1 (j).val.2.2.1 (j).val.2.2.2
@@ -1649,7 +1649,7 @@ private theorem spectralStripConvolution_jet_translate (η : PontryaginDual C�
   let L (y : C𝔽) : ℂ := logNorm y
   let c (i : ℕ) := T g * L g ^ (m - i) * (m.choose i : ℂ)
   have hlog (y : C𝔽) : L (g * y) = L y + L g := by
-    dsimp only [L]
+    dsimp only [L, logIdeleClassNorm]
     rw [map_mul, Units.val_mul, NNReal.coe_mul, Real.log_mul
       (NNReal.coe_ne_zero.2 (ideleClassNorm F g).ne_zero)
       (NNReal.coe_ne_zero.2 (ideleClassNorm F y).ne_zero), Complex.ofReal_add, add_comm]
