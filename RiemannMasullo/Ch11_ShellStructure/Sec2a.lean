@@ -35,7 +35,7 @@ local notation "V" => HeightOneSpectrum (𝓞 F)
 local notation "μ𝔽" => ideleClassTamagawaMeasure F
 local notation "m𝔽" =>
   (⟨ideleClassNorm F, (isProperMap_ideleClassNorm F).continuous⟩ : C𝔽 →ₜ* ℝ≥0ˣ)
-local notation "logNorm" => (fun g : C𝔽 ↦ Real.log ((ideleClassNorm F g).val : ℝ))
+local notation "logNorm" => (logIdeleClassNorm F)
 local notation "W(" s ")" => CompactIntervalSobolev μ𝔽 logNorm 0 0 s
 local notation "W'(" s ")" => CompactIntervalSobolev μ𝔽 logNorm 0 0 s true
 local notation "μ'(" s ")" => (μ𝔽).withDensity (fun g ↦
@@ -1972,7 +1972,7 @@ theorem orbitalJet_isotype (χ : PontryaginDual C𝔽) (S : Finset V) {s : ℝ} 
     have hnorm : ideleClassNorm F (k.val⁻¹ * g) = ideleClassNorm F g := by
       rw [map_mul, map_inv, hk, inv_one, one_mul]
     have hlog : logNorm (k.val⁻¹ * g) = logNorm g := by
-      dsimp only
+      dsimp only [logIdeleClassNorm]
       rw [hnorm]
     change (χ (k.val⁻¹ * g) : ℂ) *
         (((ideleClassNorm F (k.val⁻¹ * g)).val : ℝ) : ℂ) ^ ((0 : ℂ) + (j.val.1 : ℂ) * Complex.I) *
@@ -2244,7 +2244,7 @@ private theorem orbitalQuotientDual_isometry_range_conj {s : ℝ} (hs : 0 ≤ s)
   have hwk : ∀ (k : C₁) g, w (k.val⁻¹ * g) = w g := by
     intro k g
     have hk : ideleClassNorm F k.val = 1 := k.2
-    simp only [w, map_mul, map_inv, hk, inv_one, one_mul]
+    simp only [w, logIdeleClassNorm, map_mul, map_inv, hk, inv_one, one_mul]
   have hbase : μ𝔽 ≪ (μ𝔽).withDensity (fun x ↦ ENNReal.ofReal (w x)) :=
     withDensity_absolutelyContinuous' hw.ennreal_ofReal.aemeasurable
       (ae_of_all _ fun x ↦ (ENNReal.ofReal_pos.mpr (hwpos x)).ne')

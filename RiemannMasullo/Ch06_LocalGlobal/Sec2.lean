@@ -8,6 +8,13 @@ import all RiemannMasullo.Ch02_AdelicTheta.Sec1
 import all RiemannMasullo.Ch04_PeriodicSchauderBases.Sec3b
 import all RiemannMasullo.AppC_LCTVS.Sec2b
 import RiemannMasullo.ForMathlib.Analysis.Fourier.CompactGroup
+import RiemannMasullo.AppA_AlgebraicNT.Sec2b
+import RiemannMasullo.Ch02_AdelicTheta.Sec2b
+import RiemannMasullo.ForMathlib.NumberTheory.NumberField.InfiniteAdeleRing
+import Mathlib.Analysis.Distribution.SchwartzSpace.Basic
+import Mathlib.Analysis.SpecialFunctions.Gaussian.GaussianIntegral
+import Mathlib.MeasureTheory.Constructions.HaarToSphere
+import Mathlib.NumberTheory.NumberField.CanonicalEmbedding.Basic
 import Mathlib.LinearAlgebra.Eigenspace.Basic
 
 import RiemannMasullo.Ch05_ThetaZSpaces.Sec4
@@ -3326,6 +3333,438 @@ theorem infiniteStandardThetaAverage_integrable (χ : PontryaginDual Iₛ(S))
   rw [eNorm_mul, ← ofReal_norm (χ _ : ℂ), Circle.norm_coe, ENNReal.ofReal_one, mul_one,
     mul_inv_rev, mul_assoc]
 
+section ArchimedeanThetaAverageProof
+
+open scoped Classical
+
+local notation "emptyPlaces" => (∅ : Finset V)
+local notation "M∞" => mixedEmbedding.mixedSpace F
+local notation "mix" => InfiniteAdeleRing.ringEquiv_mixedSpace F
+local notation "μ∞" => sNormOneIdeleTamagawaMeasure F emptyPlaces
+local notation "archLog" => fun g : N∞ ↦ infiniteIdeleLog F (archPart(emptyPlaces) g.val)
+local notation "logDecayRate" => (2 * (Fintype.card (InfinitePlace F) : ℝ))⁻¹
+
+private theorem thetaAverage_logDecayRate_pos : 0 < logDecayRate :=
+  inv_pos.mpr (mul_pos (by norm_num) (Nat.cast_pos.mpr Fintype.card_pos))
+
+private theorem thetaAverage_archPart_norm (g : Iₛ(emptyPlaces)) :
+    infiniteIdeleNorm F (archPart(emptyPlaces) g) = sIdeleNorm F emptyPlaces g := by
+  rw [sIdeleNorm, Finset.univ_eq_empty (α := emptyPlaces), Finset.prod_empty, mul_one,
+    infiniteIdeleNorm, MonoidHom.finsetProd_apply, MonoidHom.finsetProd_apply]
+  rfl
+
+/-- The same coordinate bound used in Ch03 §3.3 (Sec3.lean). -/
+private theorem thetaAverage_placeNorm_le_mixedNorm (x : InfiniteAdeleRing F) (w : InfinitePlace F) :
+    ‖x w‖ ≤ ‖mix x‖ := by
+  rw [mixedEmbedding.norm_eq_sup'_normAtPlace]
+  apply Finset.le_sup'_of_le _ (Finset.mem_univ w)
+  by_cases hw : w.IsReal
+  · rw [mixedEmbedding.normAtPlace_apply_of_isReal hw, InfiniteAdeleRing.ringEquiv_mixedSpace_apply]
+    exact ((InfinitePlace.Completion.isometry_extensionEmbeddingOfIsReal hw).norm_map_of_map_zero
+      (map_zero _) _).symm.le
+  · have hc := InfinitePlace.not_isReal_iff_isComplex.mp hw
+    rw [mixedEmbedding.normAtPlace_apply_of_isComplex hc, InfiniteAdeleRing.ringEquiv_mixedSpace_apply]
+    exact ((InfinitePlace.Completion.isometry_extensionEmbedding w).norm_map_of_map_zero
+      (map_zero _) _).symm.le
+
+/-- On the norm-one subgroup, the negative weighted logs control all weighted logs.
+The largest coordinate of the inverse therefore controls exponential log growth. -/
+private theorem thetaAverage_exp_log_le (g : N∞) :
+    Real.exp (logDecayRate * ‖archLog g‖) ≤ max 1 ‖mix (archPart(emptyPlaces) g.val)⁻¹.val‖ := by
+  let u : I∞ := archPart(emptyPlaces) g.val
+  let R := max 1 ‖mix u⁻¹.val‖
+  let t : ℝ := 2 * Real.log R
+  let n : ℝ := Fintype.card (InfinitePlace F)
+  have hn : 1 ≤ n := by
+    change (1 : ℝ) ≤ (Fintype.card (InfinitePlace F) : ℝ)
+    have hnNat : 1 ≤ Fintype.card (InfinitePlace F) := Nat.succ_le_of_lt Fintype.card_pos
+    exact_mod_cast hnNat
+  have hR : 1 ≤ R := le_max_left _ _
+  have ht : 0 ≤ t := mul_nonneg (by norm_num) (Real.log_nonneg hR)
+  have hsum : ∑ w, infiniteIdeleLog F u w = 0 :=
+    infiniteIdeleLog_sum_zero F ⟨u, (thetaAverage_archPart_norm g.val).trans g.property⟩
+  have hlow (w : InfinitePlace F) : -infiniteIdeleLog F u w ≤ t := by
+    have hcoord : 0 < ‖u⁻¹.val w‖ := norm_pos_iff.mpr
+      (Units.map (Pi.evalRingHom InfinitePlace.Completion w).toMonoidHom u⁻¹).ne_zero
+    have hl : Real.log ‖u⁻¹.val w‖ ≤ Real.log R :=
+      Real.log_le_log hcoord ((thetaAverage_placeNorm_le_mixedNorm u⁻¹.val w).trans (le_max_right _ _))
+    have hmul : (w.mult : ℝ) ≤ 2 := by
+      by_cases hw : w.IsReal
+      · simp [hw.mult_eq_one]
+      · simp [(InfinitePlace.not_isReal_iff_isComplex.mp hw).mult_eq_two]
+    have hmult : 0 ≤ (w.mult : ℝ) := Nat.cast_nonneg _
+    change -((w.mult : ℝ) * Real.log ‖u.val w‖) ≤ 2 * Real.log R
+    have hi : ‖u⁻¹.val w‖ = ‖u.val w‖⁻¹ := by
+      change ‖(Units.map (Pi.evalRingHom InfinitePlace.Completion w).toMonoidHom u⁻¹).val‖ =
+        ‖(Units.map (Pi.evalRingHom InfinitePlace.Completion w).toMonoidHom u).val‖⁻¹
+      rw [map_inv, Units.val_inv_eq_inv_val, norm_inv]
+    rw [hi, Real.log_inv] at hl
+    rw [← mul_neg]
+    exact (mul_le_mul_of_nonneg_left hl hmult).trans
+      (mul_le_mul_of_nonneg_right hmul (Real.log_nonneg hR))
+  have hnorm : ‖infiniteIdeleLog F u‖ ≤ n * t := by
+    rw [pi_norm_le_iff_of_nonneg (mul_nonneg (zero_le_one.trans hn) ht)]
+    intro w
+    change ‖infiniteIdeleLog F u w‖ ≤ _
+    rw [Real.norm_eq_abs, abs_le]
+    have hw := Finset.single_le_sum
+      (f := fun w : InfinitePlace F ↦ t + infiniteIdeleLog F u w)
+      (fun b _ ↦ by linarith [hlow b]) (Finset.mem_univ w)
+    simp only [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, nsmul_eq_mul, hsum,
+      add_zero] at hw
+    constructor
+    · linarith [hlow w, le_mul_of_one_le_left ht hn]
+    · linarith
+  change Real.exp ((2 * n)⁻¹ * ‖infiniteIdeleLog F u‖) ≤ R
+  apply (Real.le_log_iff_exp_le (zero_lt_one.trans_le hR)).mp
+  rw [inv_mul_eq_div, div_le_iff₀ (by positivity)]
+  simpa only [t, mul_assoc, mul_left_comm, mul_comm] using hnorm
+
+local notation "orbitIntegrand" => fun (χ : PontryaginDual Iₛ(S)) (a : I∞) (f : SchwartzMap M∞ ℂ)
+    (x : I∞) (g : N∞) ↦
+  f (mix ((a * archPart(emptyPlaces) g.val)⁻¹ * x).val) *
+    (χ (archInsert(S) (a * archPart(emptyPlaces) g.val)) : ℂ)
+local notation "schwartzBound" => fun f : SchwartzMap M∞ ℂ ↦
+  SchwartzMap.seminorm ℂ 0 0 f + SchwartzMap.seminorm ℂ 1 0 f
+local notation "translationBound" => fun (a x : I∞) ↦ max 1 ‖mix (x⁻¹ * a).val‖
+
+/-- A fixed Schwartz seminorm and a continuous factor in the translated argument
+bound the norm-one orbit by a decaying exponential in logarithmic coordinates. -/
+private theorem thetaAverage_orbit_bound (χ : PontryaginDual Iₛ(S))
+    (a : I∞) (f : SchwartzMap M∞ ℂ) (x : I∞) (g : N∞) :
+    ‖orbitIntegrand χ a f x g‖ ≤ (schwartzBound f * translationBound a x) * Real.exp (-logDecayRate * ‖archLog g‖) := by
+  let u := archPart(emptyPlaces) g.val
+  let y := (a * u)⁻¹ * x
+  let W := max 1 ‖mix y.val‖
+  have hu : u⁻¹ = y * (x⁻¹ * a) := by
+    dsimp only [y]
+    rw [mul_inv_rev]
+    group
+  have hexp : Real.exp (logDecayRate * ‖archLog g‖) ≤ translationBound a x * W := by
+    refine (thetaAverage_exp_log_le g).trans (max_le ?_ ?_)
+    · exact one_le_mul_of_one_le_of_one_le (le_max_left _ _) (le_max_left _ _)
+    · calc
+        ‖mix u⁻¹.val‖ = ‖mix y.val * mix (x⁻¹ * a).val‖ := by
+          rw [show (u⁻¹ : I∞).val = (y * (x⁻¹ * a)).val from congrArg Units.val hu,
+            Units.val_mul, map_mul]
+        _ ≤ ‖mix (x⁻¹ * a).val‖ * ‖mix y.val‖ := (norm_mul_le _ _).trans_eq (mul_comm _ _)
+        _ ≤ translationBound a x * W := mul_le_mul (le_max_right _ _) (le_max_right _ _) (norm_nonneg _)
+          (zero_le_one.trans (le_max_left _ _))
+  have hSch : ‖f (mix y.val)‖ * W ≤ schwartzBound f := by
+    dsimp [W]
+    rw [mul_max_of_nonneg _ _ (norm_nonneg _), mul_one, max_le_iff]
+    have h₀ := SchwartzMap.norm_le_seminorm ℂ f (mix y.val)
+    have h₁ := SchwartzMap.norm_pow_mul_le_seminorm ℂ f 1 (mix y.val)
+    rw [pow_one, mul_comm] at h₁
+    exact ⟨h₀.trans (le_add_of_nonneg_right (apply_nonneg _ _)),
+      h₁.trans (le_add_of_nonneg_left (apply_nonneg _ _))⟩
+  change ‖f (mix y.val) * _‖ ≤ _
+  rw [norm_mul, Circle.norm_coe, mul_one, neg_mul, Real.exp_neg, ← div_eq_mul_inv,
+    le_div_iff₀ (Real.exp_pos _)]
+  calc
+    ‖f (mix y.val)‖ * Real.exp (logDecayRate * ‖archLog g‖) ≤
+        ‖f (mix y.val)‖ * (translationBound a x * W) := mul_le_mul_of_nonneg_left hexp (norm_nonneg _)
+    _ = (‖f (mix y.val)‖ * W) * translationBound a x := by ring
+    _ ≤ schwartzBound f * translationBound a x := mul_le_mul_of_nonneg_right hSch (zero_le_one.trans (le_max_left _ _))
+
+private theorem thetaAverage_integrable_exp_neg_norm {E : Type*} [NormedAddCommGroup E] [NormedSpace ℝ E]
+    [FiniteDimensional ℝ E] [MeasurableSpace E] [BorelSpace E]
+    (μ : Measure E) [μ.IsAddHaarMeasure] (c : ℝ) (hc : 0 < c) :
+    Integrable (fun x : E ↦ Real.exp (-c * ‖x‖)) μ := by
+  cases subsingleton_or_nontrivial E with
+  | inl h =>
+    simp [Subsingleton.elim (α := E) _ 0]
+  | inr h =>
+    apply (integrable_fun_norm_addHaar μ (f := fun x ↦ Real.exp (-c * x))).mpr
+    simpa [smul_eq_mul] using integrableOn_rpow_mul_exp_neg_mul_rpow
+      (s := ((Module.finrank ℝ E - 1 : ℕ) : ℝ)) (by linarith [Nat.cast_nonneg (α := ℝ) (Module.finrank ℝ E - 1)])
+      (p := 1) zero_lt_one hc
+
+/-- The full weighted logarithm pushes the archimedean norm-one Haar measure to
+Haar measure on the zero-sum hyperplane. -/
+private theorem thetaAverage_integrable_exp (c : ℝ) (hc : 0 < c) :
+    Integrable (fun g : N∞ ↦ Real.exp (-c * ‖infiniteIdeleLog F (archPart(emptyPlaces) g.val)‖))
+      (sNormOneIdeleTamagawaMeasure F emptyPlaces) := by
+  classical
+  let : MeasurableSpace (SAdeleRing F emptyPlaces) := instMeasurableSpaceSAdeleRing F emptyPlaces
+  let : BorelSpace (SAdeleRing F emptyPlaces)ˣ := sIdeleGroup_borelSpace
+  let μ := sNormOneIdeleTamagawaMeasure F emptyPlaces
+  let : μ.IsHaarMeasure := (sNormOneIdeleTamagawaMeasure_existsUnique F emptyPlaces).exists.choose_spec.1
+  let θ : (SAdeleRing F emptyPlaces)ˣ ≃ₜ I∞ :=
+    { toFun := archPart(emptyPlaces)
+      invFun := Units.map (MonoidHom.inl (InfiniteAdeleRing F) (∀ v : emptyPlaces, v.val.adicCompletion F))
+      left_inv := fun g ↦ Units.ext (Prod.ext rfl (Subsingleton.elim _ _))
+      right_inv := fun _ ↦ rfl
+      continuous_toFun := continuous_fst.units_map _
+      continuous_invFun := (continuous_id.prodMk continuous_const).units_map _ }
+  have hclosed : IsClosed (N∞ : Set (SAdeleRing F emptyPlaces)ˣ) :=
+    isClosed_eq ((isProperMap_sIdeleQuotientNorm F emptyPlaces).continuous.comp continuous_quotient_mk')
+      continuous_const
+  let B : Submodule ℝ (InfinitePlace F → ℝ) :=
+    LinearMap.ker (∑ v, LinearMap.proj v)
+  let l (g : N∞) : B :=
+    ⟨infiniteIdeleLog F (θ g.val), by
+      change (∑ v, LinearMap.proj v) _ = 0
+      rw [LinearMap.sum_apply]
+      exact infiniteIdeleLog_sum_zero F ⟨θ g.val, (thetaAverage_archPart_norm _).trans g.property⟩⟩
+  have hcont : Continuous l := ((infiniteIdeleLog_continuous F).comp
+    (θ.continuous.comp continuous_subtype_val)).subtype_mk _
+  have hprop : IsProperMap l :=
+    isProperMap_of_comp_of_inj hcont continuous_subtype_val
+      ((infiniteIdeleLog_proper F).comp (θ.isProperMap.comp hclosed.isClosedEmbedding_subtypeVal.isProperMap))
+      Subtype.val_injective
+  have hsurj : Surjective l := by
+    intro y
+    obtain ⟨u, hu⟩ := infiniteIdeleLog_surjective F y.val
+    have hs : ∑ v, infiniteIdeleLog F u v = 0 := by
+      rw [hu]
+      have hy := y.property
+      change (∑ v, LinearMap.proj v) y.val = 0 at hy
+      rw [LinearMap.sum_apply] at hy
+      exact hy
+    have hn : infiniteIdeleNorm F u = 1 := by
+      apply Units.ext
+      apply NNReal.coe_injective
+      change ((infiniteIdeleNorm F u).val : ℝ) = 1
+      rw [← Real.exp_zero, ← hs, Real.exp_sum]
+      simp only [infiniteIdeleNorm, MonoidHom.finsetProd_apply, Units.coe_prod, MonoidHom.pow_apply,
+        NNReal.coe_prod]
+      change (∏ v : InfinitePlace F, ‖u.val v‖ ^ v.mult) = _
+      refine Finset.prod_congr rfl fun v _ ↦ ?_
+      have hne : u.val v ≠ 0 := (Units.map (Pi.evalRingHom InfinitePlace.Completion v).toMonoidHom u).ne_zero
+      rw [infiniteIdeleLog, Real.exp_nat_mul, Real.exp_log (norm_pos_iff.mpr hne)]
+    refine ⟨⟨θ.symm u, (thetaAverage_archPart_norm _).symm.trans (by
+      change infiniteIdeleNorm F (θ (θ.symm u)) = 1
+      rwa [θ.apply_symm_apply])⟩, ?_⟩
+    apply Subtype.ext
+    change infiniteIdeleLog F (θ (θ.symm u)) = y.val
+    rwa [θ.apply_symm_apply]
+  let L : N∞ →* Multiplicative B := MonoidHom.mk' (fun g ↦ Multiplicative.ofAdd (l g))
+    (fun g h ↦ congrArg Multiplicative.ofAdd (Subtype.ext (infiniteIdeleLog_mul F (archPart(emptyPlaces) g.val) (archPart(emptyPlaces) h.val))))
+  let ν : Measure B := μ.map l
+  have hν : (μ.map L).IsHaarMeasure :=
+    Measure.isHaarMeasure_map μ L hcont hsurj (isProperMap_iff_tendsto_cocompact.mp hprop).2
+  let : ν.IsAddHaarMeasure :=
+    { toIsFiniteMeasureOnCompacts := hν.toIsFiniteMeasureOnCompacts
+      toIsOpenPosMeasure := hν.toIsOpenPosMeasure
+      map_add_left_eq_self := fun x ↦ hν.map_mul_left_eq_self (Multiplicative.ofAdd x) }
+  exact (integrable_map_measure (μ := μ) (f := l) (g := fun y : B ↦ Real.exp (-c * ‖y‖))
+    (by fun_prop) hcont.measurable.aemeasurable).mp (thetaAverage_integrable_exp_neg_norm ν c hc)
+
+/-- For fixed representatives and character, the orbit integrand is jointly continuous in
+the test, the archimedean idele and the norm-one integration variable. -/
+private theorem thetaAverage_orbit_continuous (χ : PontryaginDual Iₛ(S)) (a : I∞) :
+    Continuous (fun p : (SchwartzMap M∞ ℂ × I∞) × N∞ ↦ orbitIntegrand χ a p.1.1 p.1.2 p.2) := by
+  let X := (SchwartzMap M∞ ℂ × I∞) × N∞
+  let u (p : X) := a * archPart(emptyPlaces) p.2.val
+  have hu : Continuous u := continuous_const.mul (((continuous_fst.units_map _).comp
+    continuous_subtype_val).comp continuous_snd)
+  have hIns : Continuous (archInsert(S) : I∞ → Iₛ(S)) :=
+    (continuous_id.prodMk continuous_const).units_map _
+  have harg : Continuous (fun p : X ↦ mix ((u p)⁻¹ * p.1.2).val) := by
+    exact (continuous_infiniteAdeleRingEquivMixedSpace F).comp
+      (Units.continuous_val.comp (hu.inv.mul (continuous_snd.comp continuous_fst)))
+  have htest : Continuous (fun p : X ↦ p.1.1 (mix ((u p)⁻¹ * p.1.2).val)) := by
+    have hev := ((SchwartzMap.toBoundedContinuousFunctionCLM ℂ M∞ ℂ).continuous.comp
+      (continuous_fst.comp continuous_fst)).eval harg
+    simpa only [Function.comp_def, SchwartzMap.toBoundedContinuousFunctionCLM_apply] using hev
+  exact htest.mul (continuous_subtype_val.comp (χ.continuous.comp (hIns.comp hu)))
+
+private theorem thetaAverage_orbit_integrable (χ : PontryaginDual Iₛ(S)) (a : I∞)
+    (f : SchwartzMap M∞ ℂ) (x : I∞) : Integrable (orbitIntegrand χ a f x) μ∞ := by
+  let : MeasurableSpace (SAdeleRing F emptyPlaces) := instMeasurableSpaceSAdeleRing F emptyPlaces
+  have : BorelSpace (SAdeleRing F emptyPlaces)ˣ := sIdeleGroup_borelSpace
+  have hG := thetaAverage_integrable_exp (F := F) logDecayRate thetaAverage_logDecayRate_pos
+  have hg : Continuous (fun g : N∞ ↦ ((f, x), g)) := continuous_const.prodMk continuous_id
+  refine (hG.const_mul (schwartzBound f * translationBound a x)).mono'
+    ((thetaAverage_orbit_continuous χ a).comp hg).aestronglyMeasurable ?_
+  exact .of_forall (thetaAverage_orbit_bound χ a f x)
+
+private theorem exists_thetaAverage_single (χ : PontryaginDual Iₛ(S)) (a : I∞) :
+    ∃ A : SchwartzMap M∞ ℂ →L[ℂ] C(I∞, ℂ), ∀ f x, A f x = ∫ g, orbitIntegrand χ a f x g ∂μ∞ := by
+  let E := SchwartzMap M∞ ℂ
+  let : FirstCountableTopology (InfiniteAdeleRing F) :=
+    (infiniteAdeleHomeomorphMixedSpace F).isEmbedding.firstCountableTopology
+  let : FirstCountableTopology (MulOpposite (InfiniteAdeleRing F)) :=
+    MulOpposite.opHomeomorph.symm.isEmbedding.firstCountableTopology
+  let : FirstCountableTopology I∞ := (Units.isEmbedding_embedProduct (M := InfiniteAdeleRing F)).firstCountableTopology
+  let G (p : E × I∞) := schwartzBound p.1 * translationBound a p.2
+  have hP : Continuous (schwartzBound : E → ℝ) :=
+    ((schwartz_withSeminorms ℂ M∞ ℂ).continuous_seminorm (0, 0)).add
+      ((schwartz_withSeminorms ℂ M∞ ℂ).continuous_seminorm (1, 0))
+  have hC : Continuous (translationBound a) :=
+    continuous_const.max (((continuous_infiniteAdeleRingEquivMixedSpace F).comp
+      (Units.continuous_val.comp (continuous_inv.mul continuous_const))).norm)
+  have hG : Continuous G := (hP.comp continuous_fst).mul (hC.comp continuous_snd)
+  let ψ (p : E × I∞) (g : N∞) := orbitIntegrand χ a p.1 p.2 g
+  have hcont : Continuous (fun p : E × I∞ ↦ ∫ g, ψ p g ∂μ∞) := by
+    refine continuous_iff_continuousAt.mpr fun p ↦ ?_
+    let M := G p + 1
+    have hb : ∀ᶠ q : E × I∞ in 𝓝 p, G q < M :=
+      hG.continuousAt.eventually_lt continuousAt_const (lt_add_one _)
+    have hτ := thetaAverage_integrable_exp (F := F) logDecayRate thetaAverage_logDecayRate_pos
+    refine continuousAt_of_dominated
+      (bound := fun g ↦ M * Real.exp (-logDecayRate * ‖archLog g‖))
+      (.of_forall fun q ↦ (thetaAverage_orbit_integrable χ a q.1 q.2).aestronglyMeasurable)
+      (hb.mono fun q hq ↦ .of_forall fun g ↦ (thetaAverage_orbit_bound χ a q.1 q.2 g).trans
+        (mul_le_mul_of_nonneg_right hq.le (Real.exp_nonneg _)))
+      (hτ.const_mul M) ?_
+    exact .of_forall fun g ↦ ((thetaAverage_orbit_continuous χ a).comp
+      (continuous_id.prodMk continuous_const)).continuousAt
+  let A (f : E) : C(I∞, ℂ) :=
+    ⟨fun x ↦ ∫ g, ψ (f, x) g ∂μ∞, hcont.comp (continuous_const.prodMk continuous_id)⟩
+  refine ⟨{ toFun := A, map_add' := ?_, map_smul' := ?_, cont := ?_ }, fun _ _ ↦ rfl⟩
+  · intro f h
+    ext x
+    change (∫ g, orbitIntegrand χ a (f + h) x g ∂μ∞) = (∫ g, orbitIntegrand χ a f x g ∂μ∞) +
+      ∫ g, orbitIntegrand χ a h x g ∂μ∞
+    rw [← integral_add (thetaAverage_orbit_integrable χ a f x)
+      (thetaAverage_orbit_integrable χ a h x)]
+    exact integral_congr_ae (.of_forall fun g ↦ by
+      dsimp only
+      rw [add_apply, add_mul])
+  · intro d f
+    ext x
+    change (∫ g, orbitIntegrand χ a (d • f) x g ∂μ∞) = d • ∫ g, orbitIntegrand χ a f x g ∂μ∞
+    rw [← integral_smul]
+    exact integral_congr_ae (.of_forall fun g ↦ by
+      dsimp only
+      rw [smul_apply, smul_mul_assoc])
+  · exact ContinuousMap.continuous_of_continuous_uncurry A hcont
+
+section MixedCoordinates
+
+open Set
+open scoped ENNReal Uniformity
+
+/-- Separating point evaluations give a closed graph for a linear map of Fréchet spaces. -/
+private theorem thetaAverage_continuous_of_eval {X Y I : Type*}
+    [AddCommGroup X] [Module ℂ X] [UniformSpace X] [IsUniformAddGroup X]
+    [FirstCountableTopology X] [T2Space X] [BaireSpace X] [CompleteSpace X] [ContinuousSMul ℂ X]
+    [AddCommGroup Y] [Module ℂ Y] [UniformSpace Y] [IsUniformAddGroup Y]
+    [FirstCountableTopology Y] [CompleteSpace Y] [ContinuousSMul ℂ Y]
+    (f : X →ₗ[ℂ] Y) (u : I → X → ℂ) (v : I → Y → ℂ)
+    (hu : ∀ i, Continuous (u i)) (hv : ∀ i, Continuous (v i))
+    (hsep : ∀ y z, (∀ i, v i y = v i z) → y = z)
+    (he : ∀ i x, v i (f x) = u i x) : Continuous f := by
+  have hg : (f.graph : Set (X × Y)) = ⋂ i, {p | v i p.2 = u i p.1} := by
+    ext p
+    change p ∈ f.graph ↔ _
+    rw [f.mem_graph_iff, mem_iInter]
+    refine ⟨fun h i ↦ (congrArg (v i) h).trans (he i p.1), fun hp ↦ ?_⟩
+    exact hsep _ _ fun i ↦ (hp i).trans (he i p.1).symm
+  have hc : IsClosed (f.graph : Set (X × Y)) := hg ▸
+    isClosed_iInter (fun i ↦ isClosed_eq ((hv i).comp continuous_snd) ((hu i).comp continuous_fst))
+  have : FirstCountableTopology f.graph := Topology.IsInducing.subtypeVal.firstCountableTopology
+  let : IsUniformAddGroup f.graph := .comap f.graph.subtype.toAddMonoidHom
+  let : CompleteSpace f.graph := hc.isComplete.completeSpace_coe
+  let p : f.graph →L[ℂ] X :=
+    (ContinuousLinearMap.fst ℂ X Y).comp ⟨f.graph.subtype, continuous_subtype_val⟩
+  have hps : Surjective p := fun x ↦ ⟨⟨(x, f x), (f.mem_graph_iff _).mpr rfl⟩, rfl⟩
+  have hpi : Injective p := by
+    intro x y h
+    have hx := (f.mem_graph_iff x.val).mp x.property
+    have hy := (f.mem_graph_iff y.val).mp y.property
+    exact Subtype.ext (Prod.ext h (hx.trans ((congrArg f h).trans hy.symm)))
+  let e := Equiv.ofBijective p ⟨hpi, hps⟩
+  have ho : IsOpenMap p := isOpenMap_of_not_isMeagre_range p
+    (by rw [hps.range_eq]; exact not_isMeagre_of_isOpen isOpen_univ univ_nonempty)
+  exact (continuous_subtype_val.snd.comp (e.continuous_symm_iff.mpr ho)).congr fun x ↦
+    ((f.mem_graph_iff (e.symm x).val).mp (e.symm x).property).trans
+      (congrArg f (e.apply_symm_apply x))
+
+/-- The uniform seminorm controls evaluation on every realized elementary stage. -/
+private theorem thetaAverage_stage_eval {G : Type*} [CommGroup G] [TopologicalSpace G]
+    (a : BruhatStructuralPair G) (e : ElementaryLCAPresentation a.quotient) (x : G) :
+    Continuous (fun f : SchwartzBruhatStage e ↦ SchwartzBruhat.ofStage a e f x) := by
+  let L := (LinearMap.proj x).comp (schwartzBruhatStageRealization a e)
+  refine (norm_withSeminorms ℂ ℂ).continuous_of_continuous_comp L fun _ ↦ ?_
+  apply Seminorm.continuous_of_le (elementarySchwartz_withSeminorms.continuous_seminorm (0, 0, 0, 0))
+  intro f
+  change ‖schwartzBruhatStageRealization a e f x‖ ≤ elementarySchwartzSeminorm (0, 0, 0, 0) f
+  rw [schwartzBruhatStageRealization_apply]
+  split_ifs
+  · change (‖f _‖₊ : ENNReal).toReal ≤ (elementarySchwartzBound f.val (0, 0, 0, 0)).toReal
+    apply ENNReal.toReal_mono (f.property.2 _).ne
+    rw [elementarySchwartzBound_zero]
+    exact le_iSup (fun y ↦ (‖f y‖₊ : ENNReal)) _
+  · exact norm_zero.trans_le (apply_nonneg _ _)
+
+private theorem thetaAverage_coordinates_continuous {F : Type*} [Field F] [NumberField F]
+    (L : SchwartzBruhat (Multiplicative (InfiniteAdeleRing F)) →ₗ[ℂ]
+      SchwartzMap (mixedEmbedding.mixedSpace F) ℂ)
+    (hL : ∀ f x, L f (InfiniteAdeleRing.ringEquiv_mixedSpace F x) = f (Multiplicative.ofAdd x)) :
+    Continuous L := by
+  let MixedSpace := mixedEmbedding.mixedSpace F
+  let M := InfiniteAdeleRing.ringEquiv_mixedSpace F
+  let : PolynormableSpace ℂ (SchwartzMap MixedSpace ℂ) := (schwartz_withSeminorms ℂ MixedSpace ℂ).toPolynormableSpace
+  refine SchwartzBruhat.continuous_of_continuous_comp_ofStage L fun a e ↦ ?_
+  let X := SchwartzBruhatStage e
+  let Y := SchwartzMap MixedSpace ℂ
+  let P : X →ₗ[ℂ] Y := L.comp (SchwartzBruhat.ofStage a e)
+  obtain ⟨_, _, hm, hc⟩ := elementarySchwartz_isFrechet (m := e.realDim) (n := e.torusDim)
+    (r := e.latticeRank) (F := e.finiteFactor)
+  let : TopologicalSpace.MetrizableSpace X := hm
+  have : CompleteSpace X := by
+    rw [← IsUniformAddGroup.rightUniformSpace_eq (G := X)]
+    exact hc
+  have : (𝓤 X).IsCountablyGenerated := by
+    rw [uniformity_eq_comap_nhds_zero X]
+    infer_instance
+  let : CompleteSpace Y := completeSpace_schwartzMap
+  change Continuous P
+  refine thetaAverage_continuous_of_eval P
+    (fun x f ↦ SchwartzBruhat.ofStage a e f (Multiplicative.ofAdd x))
+    (fun x g ↦ g (M x)) (fun x ↦ thetaAverage_stage_eval a e _) (fun x ↦ ?_) ?_ (fun x f ↦ hL _ x)
+  · exact ((BoundedContinuousFunction.evalCLM ℂ (M x)).comp
+      (SchwartzMap.toBoundedContinuousFunctionCLM ℂ MixedSpace ℂ)).continuous
+  · intro u v h
+    exact SchwartzMap.ext fun y ↦ (M.surjective y).elim fun x hx ↦ hx ▸ h x
+
+/-- Pullback to mixed coordinates is continuous for the final Schwartz–Bruhat topology. -/
+private theorem exists_thetaAverage_coordinates {F : Type*} [Field F] [NumberField F] :
+    ∃ J : SchwartzBruhat (Multiplicative (InfiniteAdeleRing F)) →L[ℂ]
+      SchwartzMap (mixedEmbedding.mixedSpace F) ℂ, ∀ f x,
+      J f (InfiniteAdeleRing.ringEquiv_mixedSpace F x) = f (Multiplicative.ofAdd x) := by
+  let A := SchwartzBruhat (Multiplicative (InfiniteAdeleRing F))
+  let MixedSpace := mixedEmbedding.mixedSpace F
+  let M := InfiniteAdeleRing.ringEquiv_mixedSpace F
+  have h (f : A) : ∃ g : SchwartzMap MixedSpace ℂ, ∀ x, g (M x) = f (Multiplicative.ofAdd x) :=
+    (mem_archimedeanSchwartzBruhat_iff _).mp f.property
+  let L : A →ₗ[ℂ] SchwartzMap MixedSpace ℂ :=
+    { toFun := fun f ↦ (h f).choose
+      map_add' := fun f g ↦ SchwartzMap.ext fun y ↦ by
+        obtain ⟨x, rfl⟩ := M.surjective y
+        exact ((h _).choose_spec x).trans (congrArg₂ (· + ·) ((h f).choose_spec x).symm
+          ((h g).choose_spec x).symm)
+      map_smul' := fun c f ↦ SchwartzMap.ext fun y ↦ by
+        obtain ⟨x, rfl⟩ := M.surjective y
+        exact ((h _).choose_spec x).trans (congrArg (c • ·) ((h f).choose_spec x).symm) }
+  have hL (f : A) (x : InfiniteAdeleRing F) : L f (M x) = f (Multiplicative.ofAdd x) :=
+    (h f).choose_spec x
+  exact ⟨⟨L, thetaAverage_coordinates_continuous L hL⟩, hL⟩
+
+end MixedCoordinates
+
+private theorem thetaAverage_assemble
+    (J : ℬ∞ →L[ℂ] SchwartzMap M∞ ℂ)
+    (hJ : ∀ (f : ℬ∞) (x : InfiniteAdeleRing F),
+      J f (mix x) = f (Multiplicative.ofAdd x))
+    (χ : PontryaginDual Iₛ(S)) (r : Fin (classNumber F) → Nₛ(S)) :
+    ∃ A : ℬ∞ →L[ℂ] C(I∞, ℂ), ∀ f x,
+      A f x = ∑ k, ∫ g : N∞,
+        let a := archPart(S) (r k).val * archPart(emptyPlaces) g.val
+        f (Multiplicative.ofAdd (a⁻¹ * x).val) * (χ (archInsert(S) a) : ℂ)
+        ∂μ∞ := by
+  choose B hB using fun k : Fin (classNumber F) ↦ exists_thetaAverage_single χ (archPart(S) (r k).val)
+  refine ⟨(∑ k, B k).comp J, fun f x ↦ ?_⟩
+  simp only [ContinuousLinearMap.comp_apply, sum_apply, ContinuousMap.sum_apply, hB]
+  refine Finset.sum_congr rfl fun k _ ↦ integral_congr_ae (.of_forall fun g ↦ ?_)
+  dsimp only
+  rw [hJ]
+
+end ArchimedeanThetaAverageProof
+
 /-- Paper: (6.2.2.3), p. 298.
 The sum of archimedean integrals specifies a continuous linear map into the
 continuous functions on the archimedean ideles. -/
@@ -3335,7 +3774,9 @@ theorem exists_infiniteStandardThetaAverage (χ : PontryaginDual Iₛ(S))
       A f x = ∑ k, ∫ g : N∞,
         let a := archPart(S) (r k).val * archPart((∅ : Finset V)) g.val
         f (Multiplicative.ofAdd (a⁻¹ * x).val) * (χ (archInsert(S) a) : ℂ)
-        ∂sNormOneIdeleTamagawaMeasure F ∅ := by sorry
+        ∂sNormOneIdeleTamagawaMeasure F ∅ := by
+  obtain ⟨J, hJ⟩ := exists_thetaAverage_coordinates (F := F)
+  exact thetaAverage_assemble J hJ χ r
 
 /-- Paper: (6.2.2.3), p. 298.
 The archimedean operator sums the character-weighted integrals over the
