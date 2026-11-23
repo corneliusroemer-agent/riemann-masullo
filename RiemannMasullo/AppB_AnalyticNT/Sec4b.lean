@@ -7825,6 +7825,88 @@ private theorem explicitFormula_finiteRestrict_stage (v : Primes(F)) {H : Type*}
       (mem_bruhatCompactSupportStage_iff a e C s.val).1 s.property
     exact (image_eq_zero_of_notMem_tsupport fun h ↦ hxD (hs h)).symm
 
+/-- Neighbourhoods of one in the finite adeles contain the integers of all but finitely many
+completions, inserted at their place. -/
+private theorem explicitFormula_eventually_finiteAdele_mem (N : Set (FiniteAdeleRing (𝓞 F) F))
+    (hN : N ∈ 𝓝 (1 : FiniteAdeleRing (𝓞 F) F)) :
+    ∀ᶠ v : Primes(F) in cofinite, ∀ y ∈ v.adicCompletionIntegers F,
+      FiniteAdeleRing.ofAdicCompletion F v y ∈ N := by
+  classical
+  let R := fun v : Primes(F) ↦ v.adicCompletion F
+  let A := fun v : Primes(F) ↦ ((v.adicCompletionIntegers F : Set (v.adicCompletion F)))
+  have hAopen : ∀ v, IsOpen (A v) := fun v ↦ Valued.isOpen_valuationSubring _
+  let s := RestrictedProduct.structureMap R A cofinite
+  let x₁ : Π v, A v := fun v ↦ ⟨1, (v.adicCompletionIntegers F).one_mem⟩
+  have hs1 : s x₁ = (1 : FiniteAdeleRing (𝓞 F) F) := rfl
+  have hN' : s ⁻¹' N ∈ 𝓝 x₁ := by
+    have h := RestrictedProduct.nhds_eq_map_structureMap hAopen x₁
+    have hN₁ : N ∈ map (RestrictedProduct.structureMap (HeightOneSpectrum.adicCompletion F) A
+        cofinite) (𝓝 x₁) := h ▸ hN
+    exact hN₁
+  rw [nhds_pi, Filter.mem_pi'] at hN'
+  obtain ⟨I, t, ht, hsub⟩ := hN'
+  filter_upwards [I.finite_toSet.compl_mem_cofinite] with v hv y hy
+  have heq : FiniteAdeleRing.ofAdicCompletion F v y = s (Function.update x₁ v ⟨y, hy⟩) := by
+    apply RestrictedProduct.ext
+    intro w
+    change RestrictedProduct.mulSingle _ v y w = (Function.update x₁ v ⟨y, hy⟩ w).val
+    by_cases hw : w = v
+    · subst hw
+      rw [RestrictedProduct.mulSingle_eq_same, Function.update_self]
+    · rw [RestrictedProduct.mulSingle_eq_of_ne _ _ hw, Function.update_of_ne hw]
+  rw [heq]
+  apply hsub
+  intro w hw
+  have hwv : w ≠ v := fun h ↦ hv (h ▸ hw)
+  rw [Function.update_of_ne hwv]
+  exact mem_of_mem_nhds (ht w)
+
+/-- The images of the integer units of all but finitely many finite completions lie in a given
+neighbourhood of one in the idele classes. -/
+private theorem explicitFormula_eventually_units_mem (W : Set C[F]) (hW : W ∈ 𝓝 (1 : C[F])) :
+    ∀ᶠ v : Primes(F) in cofinite, ∀ u ∈ (O(v)).units, finiteClassMap(v) u ∈ W := by
+  let π : IdeleGroup (𝓞 F) F → C[F] := QuotientGroup.mk
+  have h1 : π ⁻¹' W ∈ 𝓝 (1 : IdeleGroup (𝓞 F) F) :=
+    QuotientGroup.continuous_mk.continuousAt.preimage_mem_nhds hW
+  rw [Units.isInducing_embedProduct.nhds_eq_comap] at h1
+  obtain ⟨N, hN, hNsub⟩ := mem_comap.mp h1
+  let Ψ : FiniteAdeleRing (𝓞 F) F × FiniteAdeleRing (𝓞 F) F →
+      AdeleRing (𝓞 F) F × (AdeleRing (𝓞 F) F)ᵐᵒᵖ :=
+    fun p ↦ ((1, p.1), MulOpposite.op (1, p.2))
+  have hΨ : Continuous Ψ := (continuous_const.prodMk continuous_fst).prodMk
+    (MulOpposite.continuous_op.comp (continuous_const.prodMk continuous_snd))
+  have h2 : Ψ ⁻¹' N ∈ 𝓝 ((1, 1) : FiniteAdeleRing (𝓞 F) F × FiniteAdeleRing (𝓞 F) F) :=
+    hΨ.continuousAt.preimage_mem_nhds hN
+  obtain ⟨N₁, hN₁, N₂, hN₂, hprod⟩ := mem_nhds_prod_iff.mp h2
+  filter_upwards [explicitFormula_eventually_finiteAdele_mem N₁ hN₁,
+    explicitFormula_eventually_finiteAdele_mem N₂ hN₂] with v hv₁ hv₂ u hu
+  apply hNsub
+  exact hprod (Set.mk_mem_prod (hv₁ _ hu.1) (hv₂ _ hu.2))
+
+/-- A unit of a finite completion outside the integer units has norm at least `q` or at
+most `q⁻¹`. -/
+private theorem explicitFormula_finiteUnits_norm_shell (v : Primes(F))
+    (x : (v.adicCompletion F)ˣ) (hx : x ∉ (O(v)).units) : q(v) ≤ ‖x.val‖ ∨ ‖x.val‖ ≤ q(v)⁻¹ := by
+  have hx0 : Valued.v x.val ≠ 0 := Valued.v.ne_zero_iff.mpr x.ne_zero
+  have hq : (1 : ℝ) < q(v) := by exact_mod_cast HeightOneSpectrum.one_lt_absNorm v
+  have hn : ‖x.val‖ = q(v) ^ WithZero.log (Valued.v x.val) := by
+    rw [FinitePlace.norm_def, WithZeroMulInt.toNNReal_neg_apply _ hx0]
+    simp
+  have hne : WithZero.log (Valued.v x.val) ≠ 0 := by
+    intro h
+    apply hx
+    rw [HeightOneSpectrum.adicCompletionIntegers.mem_units_iff_valued_eq_one,
+      ← WithZero.exp_log hx0, h, WithZero.exp_zero]
+  rw [hn]
+  rcases lt_or_gt_of_ne hne with h | h
+  · right
+    calc q(v) ^ WithZero.log (Valued.v x.val) ≤ q(v) ^ (-1 : ℤ) :=
+          zpow_le_zpow_right₀ hq.le (by omega)
+      _ = q(v)⁻¹ := zpow_neg_one _
+  · left
+    calc q(v) = q(v) ^ (1 : ℤ) := (zpow_one _).symm
+      _ ≤ q(v) ^ WithZero.log (Valued.v x.val) := zpow_le_zpow_right₀ hq.le (by omega)
+
 end ExplicitFormulaTestMaps
 
 -- TODO(paper-gap): The printed sum omits zero multiplicity. In (B.4.4.16)
@@ -7920,7 +8002,81 @@ theorem idelicExplicitFormula_finite_support (f : 𝒟(C[F]))
     (test : ∀ v : Primes(F), 𝒟((v.adicCompletion F)ˣ))
     (_htest : ∀ v u, (test v).val u = f.val (finiteClassMap(v) u)) :
     {v : Primes(F) | finiteConnesWeilPrincipalValue v 1 (test v) ≠ 0}.Finite := by
-  sorry
+  -- Invariance under the integer units at almost every prime.
+  obtain ⟨k, hk, hinv, _⟩ := (mem_bruhatSmoothSubmodule_iff _).mp f.property.1 0
+  obtain ⟨W, hW, hpow⟩ := explicitFormula_smallPowers (G := C[F]) k hk
+  have hI : ∀ᶠ v : Primes(F) in cofinite,
+      ∀ u ∈ (O(v)).units, f.val (finiteClassMap(v) u) = f.val 1 := by
+    filter_upwards [explicitFormula_eventually_units_mem W hW] with v hv u hu
+    have hk' : finiteClassMap(v) u ∈ k := hpow _ fun n ↦ by
+      rw [← map_pow]
+      exact hv _ ((O(v)).units.pow_mem hu n)
+    exact (congrArg f.val (mul_one (finiteClassMap(v) u)).symm).trans (hinv ⟨_, hk'⟩ 1)
+  -- Vanishing off the integer units at primes of large norm.
+  let n : C[F] → ℝ := fun g ↦ ((ideleClassNorm F g : ℝ≥0) : ℝ)
+  have hn : Continuous n := NNReal.continuous_coe.comp
+    (Units.continuous_val.comp (isProperMap_ideleClassNorm F).continuous)
+  have hpos (g : C[F]) : 0 < n g := NNReal.coe_pos.mpr (Units.zero_lt _)
+  have hnι (v : Primes(F)) (x : (v.adicCompletion F)ˣ) : n (finiteClassMap(v) x) = ‖x.val‖ := by
+    simp only [n, ideleClassNorm_ofAdicCompletion]
+    rfl
+  obtain ⟨M₁, hM₁⟩ := f.property.2.exists_bound_of_continuousOn hn.continuousOn
+  obtain ⟨M₂, hM₂⟩ := f.property.2.exists_bound_of_continuousOn
+    (hn.inv₀ fun g ↦ (hpos g).ne').continuousOn
+  let M := max M₁ M₂
+  have hS : ∀ᶠ v : Primes(F) in cofinite, M < q(v) := by
+    have hfin : {v : Primes(F) | q(v) ≤ M}.Finite := by
+      refine ((Ring.HasFiniteQuotients.finite_absNorm_le (S := 𝓞 F) ⌊M⌋₊).preimage
+        fun v _ w _ h ↦ HeightOneSpectrum.ext h).subset fun v hv ↦ ?_
+      exact Nat.le_floor (show ((Ideal.absNorm v.asIdeal : ℕ) : ℝ) ≤ M from hv)
+    filter_upwards [hfin.compl_mem_cofinite] with v hv
+    exact lt_of_not_ge hv
+  have hZ : ∀ᶠ v : Primes(F) in cofinite, ∀ x : (v.adicCompletion F)ˣ,
+      x ∉ (O(v)).units → f.val (finiteClassMap(v) x) = 0 := by
+    filter_upwards [hS] with v hv x hx
+    by_contra h0
+    have hmem : finiteClassMap(v) x ∈ tsupport f.val := subset_tsupport _ h0
+    have h₁ := hM₁ _ hmem
+    have h₂ := hM₂ _ hmem
+    rw [Real.norm_eq_abs, abs_of_pos (hpos _), hnι] at h₁
+    rw [Pi.inv_apply, Real.norm_eq_abs, abs_of_pos (inv_pos.mpr (hpos _)), hnι] at h₂
+    have hx0 : 0 < ‖x.val‖ := norm_pos_iff.mpr x.ne_zero
+    have hq : 0 < q(v) := by exact_mod_cast (HeightOneSpectrum.one_lt_absNorm v).trans' zero_lt_one
+    rcases explicitFormula_finiteUnits_norm_shell v x hx with h | h
+    · linarith [le_max_left M₁ M₂]
+    · have : q(v) ≤ ‖x.val‖⁻¹ := by
+        rw [le_inv_comm₀ hq hx0]
+        exact h
+      linarith [le_max_right M₁ M₂]
+  -- Unramified primes.
+  have hD : ∀ᶠ v : Primes(F) in cofinite,
+      multiplicity (HeightOneSpectrum.asIdeal v) (differentIdeal ℤ (𝓞 F)) = 0 := by
+    filter_upwards [(Ideal.finite_factors (differentIdeal_ne_bot (A := ℤ) (B := 𝓞 F))).compl_mem_cofinite]
+      with v hv
+    exact multiplicity_eq_zero_of_not_dvd hv
+  refine (Filter.eventually_cofinite.mp (hI.and (hZ.and hD))).subset fun v hv hP ↦ hv ?_
+  obtain ⟨hIv, hZv, hDv⟩ := hP
+  obtain ⟨g, hg, hgPV⟩ := finiteConnesWeilPrincipalValue_integerUnits v
+  have htest : test v = f.val 1 • g := by
+    refine Subtype.ext (funext fun u ↦ ?_)
+    change (test v).val u = f.val 1 * g.val u
+    rw [_htest, hg]
+    by_cases hu : u ∈ (O(v)).units
+    · rw [indicator_of_mem hu, hIv u hu, mul_one]
+    · rw [indicator_of_notMem hu, hZv u hu, mul_zero]
+  have hq : (1 : ℝ) < q(v) := by exact_mod_cast HeightOneSpectrum.one_lt_absNorm v
+  have hV : V𝔭(v) ≠ 0 := by
+    rw [finiteLocalMultiplicativeTamagawaMeasure_integerUnits, ENNReal.toReal_ne_zero]
+    refine ⟨ENNReal.inv_ne_zero.mpr ENNReal.ofReal_ne_top, ENNReal.inv_ne_top.mpr ?_⟩
+    refine (ENNReal.ofReal_pos.mpr (Real.sqrt_pos.mpr (pow_pos ?_ _))).ne'
+    exact_mod_cast (NumberField.HeightOneSpectrum.one_lt_absNorm v).trans' zero_lt_one
+  have hscale : finiteWeilScale(v) ≠ 0 :=
+    Complex.ofReal_ne_zero.mpr (div_ne_zero (Real.log_pos hq).ne' hV)
+  have hPV : finiteConnesWeilPrincipalValue v 1 g = 0 := by
+    rw [hDv] at hgPV
+    simp only [Nat.cast_zero, zero_mul, Complex.ofReal_zero, neg_zero] at hgPV
+    exact (mul_eq_zero.mp hgPV).resolve_left hscale
+  rw [htest, map_smul, hPV, smul_zero]
 
 /-- Paper: Theorem B.4.4.7, pp. 623–626. The pointwise idelic explicit formula: at every
 test, the multiplicity-weighted Mellin values at the completed Hecke zeros sum to the pole
