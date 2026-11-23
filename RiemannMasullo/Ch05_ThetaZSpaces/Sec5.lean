@@ -574,10 +574,46 @@ theorem sLocalThetaEigendistributions_eq_span (c : QuasiCharacter Jₛ) :
     (sLocalEigendistributions_eq_span (F := F) (S := S) c)
     (sLocalThetaEigendistribution_mk (F := F) (S := S) c)
 
+/-- A family of functionals on a quotient is pointwise differentiable when the family of its
+pullbacks to the total space is. -/
+private theorem sLocalThetaEigendistribution_holomorphic_quot {M : Type*} [AddCommGroup M]
+    [Module ℂ M] [TopologicalSpace M] (K : Submodule ℂ M)
+    (U : ℂ → StrongDual ℂ (M ⧸ K)) (T : ℂ → StrongDual ℂ M)
+    (hU : ∀ (z : ℂ) (f : M), U z (K.mkQL f) = T z f)
+    (hT : ∀ f : M, DifferentiableOn ℂ (fun z ↦ T z f) univ) (x : M ⧸ K) :
+    DifferentiableOn ℂ (fun z ↦ U z x) univ := by
+  obtain ⟨f, rfl⟩ := K.mkQ_surjective x
+  exact (hT f).congr fun z _ ↦ hU z f
+
 /-- Paper: Theorem 5.5.1.2(2), p. 278.
 The normalized S-local family in the strong dual of the theta quotient is holomorphic. -/
 theorem sLocalThetaEigendistribution_holomorphic (χ : PontryaginDual Jₛ) :
-    VectorHolomorphicOn (fun s ↦ sLocalThetaEigendistribution (chartₛ(χ) s)) univ := by sorry
+    VectorHolomorphicOn (fun s ↦ sLocalThetaEigendistribution (chartₛ(χ) s)) univ := by
+  let : UniformSpace (SLocalAdelicThetaSpace F S) := IsTopologicalAddGroup.rightUniformSpace _
+  let : IsUniformAddGroup (SLocalAdelicThetaSpace F S) := isUniformAddGroup_of_addCommGroup
+  let : T2Space (SLocalAdelicThetaSpace F S) :=
+    (sLocalAdelicThetaSpace_nuclear.{_, 0} (F := F) (S := S)).1
+  let : PolynormableSpace ℂ (SLocalAdelicThetaSpace F S) :=
+    (sLocalAdelicThetaSpace_nuclear.{_, 0} (F := F) (S := S)).2.1
+  let : MontelSpace ℂ (SLocalAdelicThetaSpace F S) := sLocalAdelicThetaSpace_montel
+  let : CompleteSpace D(SLocalAdelicThetaSpace F S) := sLocalAdelicThetaSpace_strongDual_complete
+  let : PolynormableSpace ℂ D(SLocalAdelicThetaSpace F S) :=
+    (sLocalAdelicThetaSpace_strongDual_nuclear.{_, 0} (F := F) (S := S)).2.1
+  apply sLocalNormalizedEigendistribution_holomorphic_pointwise
+  refine sLocalThetaEigendistribution_holomorphic_quot (Kₛ)
+    (fun z ↦ sLocalThetaEigendistribution (chartₛ(χ) z))
+    (fun z ↦ sLocalNormalizedEigendistribution (chartₛ(χ) z))
+    (fun z f ↦ sLocalThetaEigendistribution_mk (chartₛ(χ) z) f) fun f ↦ ?_
+  let M : ℂ := ↑(∏ v : S, unitMass(v.val))
+  have hM : M ≠ 0 := sLocalNormalizedEigendistribution_mass_ne_zero
+  have he : (fun z ↦ sLocalNormalizedEigendistribution (chartₛ(χ) z) f) =
+      (fun z ↦ M⁻¹ * sLocalNormalizedZFunction f (chartₛ(χ) z)) := by
+    funext z
+    have h := (existsUnique_sLocalNormalizedEigendistribution (chartₛ(χ) z)).exists.choose_spec f
+    change M * sLocalNormalizedEigendistribution (chartₛ(χ) z) f = _ at h
+    rw [← h, ← mul_assoc, inv_mul_cancel₀ hM, one_mul]
+  rw [he]
+  exact (sLocalNormalizedZFunction_entire f χ).differentiableOn.const_mul M⁻¹
 
 end SLocal
 
