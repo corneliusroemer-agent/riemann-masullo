@@ -105,6 +105,98 @@ def criticalTraceTestSubmodule (τ : ℝ≥0ˣ →ₜ* C𝔽) : Submodule ℂ D�
   ⨅ (χ : sectionCharacters(τ)) (k : Fin (Module.finrank ℚ F)),
     ((criticalTraceMoment_isLinearMap χ.val k.val).mk' _).ker
 
+/-- Decompose the critical trace moment integral using the norm section.
+This is the key computation showing the Mellin integral equals the moment. -/
+private lemma criticalTraceMoment_integral_decomp (τ : ℝ≥0ˣ →ₜ* C𝔽)
+    (hτ : RightInverse τ (ideleClassNorm F)) (χ : U𝔽) (k : ℕ) (φ : D𝔽) :
+    (∫ g : C𝔽, (φ : D𝔽).val g * spectralZeroJet (F := F) χ 0 0 k g ∂μ𝔽) =
+      ∫ t : ℝ≥0ˣ, (χ (τ t) : ℂ) * (Real.log (t.val : ℝ) : ℂ) ^ k *
+        (∫ g : C₁, (φ : D𝔽).val (τ t * g.val) * (χ g.val : ℂ) ∂normOneIdeleClassTamagawaMeasure F) ∂positiveRealHaar := by
+  have h₁ : (∫ g : C𝔽, (φ : D𝔽).val g * spectralZeroJet (F := F) χ 0 0 k g ∂μ𝔽) =
+      ∫ t : ℝ≥0ˣ, (χ (τ t) : ℂ) * (Real.log (t.val : ℝ) : ℂ) ^ k *
+        (∫ g : C₁, (φ : D𝔽).val (τ t * g.val) * (χ g.val : ℂ) ∂normOneIdeleClassTamagawaMeasure F) ∂positiveRealHaar := by
+    -- This follows from the Fubini decomposition of the idele class Tamagawa measure
+    -- using the section τ of the norm map, as established in Ch03_IdelicZeta.
+    -- The spectralZeroJet χ 0 0 k is χ · (log |·|)^k.
+    -- The measure μ𝔽 decomposes as (positiveRealHaar.prod normOneIdeleClassTamagawaMeasure) ∘ j
+    -- where j(t, u) = τ t * u.
+    sorry
+  rw [h₁]
+
+/-- Relate the Mellin derivative to the log-norm moment.
+If χ(τ t) = t^(i x), then the k-th derivative at s = -i x of the Mellin integral
+equals the log-norm moment integral (WITHOUT the χ(τ t) factor, since it cancels with t^(-i x)). -/
+private lemma mellinDeriv_eq_logNormMoment (τ : ℝ≥0ˣ →ₜ* C𝔽)
+    (hτ : RightInverse τ (ideleClassNorm F)) (χ : U𝔽) (x : ℝ) (k : ℕ) (φ : D𝔽)
+    (hχ : ∀ t : ℝ≥0ˣ, (χ (τ t) : ℂ) = ((t.val : ℝ) : ℂ) ^ ((x : ℂ) * Complex.I)) :
+    iteratedDeriv k (fun s : ℂ ↦
+      ∫ t : ℝ≥0ˣ, (χ (τ t) : ℂ) * ((t.val : ℝ) : ℂ) ^ s *
+        (∫ g : C₁, (φ : D𝔽).val (τ t * g.val) * (χ g.val : ℂ) ∂normOneIdeleClassTamagawaMeasure F) ∂positiveRealHaar)
+    (-((x : ℂ) * Complex.I)) =
+      ∫ t : ℝ≥0ˣ, (Real.log (t.val : ℝ) : ℂ) ^ k *
+        (∫ g : C₁, (φ : D𝔽).val (τ t * g.val) * (χ g.val : ℂ) ∂normOneIdeleClassTamagawaMeasure F) ∂positiveRealHaar := by
+  have h₁ : iteratedDeriv k (fun s : ℂ ↦
+      ∫ t : ℝ≥0ˣ, (χ (τ t) : ℂ) * ((t.val : ℝ) : ℂ) ^ s *
+        (∫ g : C₁, (φ : D𝔽).val (τ t * g.val) * (χ g.val : ℂ) ∂normOneIdeleClassTamagawaMeasure F) ∂positiveRealHaar)
+    (-((x : ℂ) * Complex.I)) =
+      ∫ t : ℝ≥0ˣ, (Real.log (t.val : ℝ) : ℂ) ^ k *
+        (∫ g : C₁, (φ : D𝔽).val (τ t * g.val) * (χ g.val : ℂ) ∂normOneIdeleClassTamagawaMeasure F) ∂positiveRealHaar := by
+    -- The integrand is f(s, t) = χ(τ t) * t^s * (inner integral).
+    -- By hχ, χ(τ t) = t^(i x), so f(s, t) = t^(i x) * t^s * (inner) = t^(s + i x) * (inner).
+    -- The k-th derivative w.r.t. s at s = -i x brings down (log t)^k.
+    -- So ∂^k/∂s^k t^(s + i x) |_{s=-i x} = (log t)^k * t^0 = (log t)^k.
+    sorry
+  rw [h₁]
+
+/-- For a character trivial on the section (x = 0), the critical trace moment equals the Mellin derivative at 0. -/
+private lemma criticalTraceMoment_eq_mellinDeriv_zero (τ : ℝ≥0ˣ →ₜ* C𝔽)
+    (hτ : RightInverse τ (ideleClassNorm F)) (χ : U𝔽) (k : ℕ) (φ : D𝔽)
+    (hχ : ∀ t : ℝ≥0ˣ, (χ (τ t) : ℂ) = 1) :
+    (∫ g : C𝔽, (φ : D𝔽).val g * spectralZeroJet (F := F) χ 0 0 k g ∂μ𝔽) =
+      iteratedDeriv k (fun s : ℂ ↦
+        ∫ t : ℝ≥0ˣ, (χ (τ t) : ℂ) * ((t.val : ℝ) : ℂ) ^ s *
+          (∫ g : C₁, (φ : D𝔽).val (τ t * g.val) * (χ g.val : ℂ) ∂normOneIdeleClassTamagawaMeasure F) ∂positiveRealHaar)
+      (0 : ℂ) := by
+  have h₁ : (∫ g : C𝔽, (φ : D𝔽).val g * spectralZeroJet (F := F) χ 0 0 k g ∂μ𝔽) =
+      ∫ t : ℝ≥0ˣ, (χ (τ t) : ℂ) * (Real.log (t.val : ℝ) : ℂ) ^ k *
+        (∫ g : C₁, (φ : D𝔽).val (τ t * g.val) * (χ g.val : ℂ) ∂normOneIdeleClassTamagawaMeasure F) ∂positiveRealHaar := by
+    apply criticalTraceMoment_integral_decomp τ hτ χ k φ
+  have h₂ : iteratedDeriv k (fun s : ℂ ↦
+      ∫ t : ℝ≥0ˣ, (χ (τ t) : ℂ) * ((t.val : ℝ) : ℂ) ^ s *
+        (∫ g : C₁, (φ : D𝔽).val (τ t * g.val) * (χ g.val : ℂ) ∂normOneIdeleClassTamagawaMeasure F) ∂positiveRealHaar)
+    (0 : ℂ) =
+      ∫ t : ℝ≥0ˣ, (Real.log (t.val : ℝ) : ℂ) ^ k *
+        (∫ g : C₁, (φ : D𝔽).val (τ t * g.val) * (χ g.val : ℂ) ∂normOneIdeleClassTamagawaMeasure F) ∂positiveRealHaar := by
+    have h₃ : (∀ t : ℝ≥0ˣ, (χ (τ t) : ℂ) = ((t.val : ℝ) : ℂ) ^ ((0 : ℂ) * Complex.I)) := by
+      intro t
+      have h₄ : (χ (τ t) : ℂ) = 1 := hχ t
+      have h₅ : ((t.val : ℝ) : ℂ) ^ ((0 : ℂ) * Complex.I) = 1 := by
+        simp [Complex.cpow_zero]
+      rw [h₄, h₅]
+    have h₄ := mellinDeriv_eq_logNormMoment τ hτ χ (0 : ℝ) k φ h₃
+    simpa [Complex.ext_iff, Complex.I_mul_I] using h₄
+  calc
+    (∫ g : C𝔽, (φ : D𝔽).val g * spectralZeroJet (F := F) χ 0 0 k g ∂μ𝔽) =
+        ∫ t : ℝ≥0ˣ, (χ (τ t) : ℂ) * (Real.log (t.val : ℝ) : ℂ) ^ k *
+          (∫ g : C₁, (φ : D𝔽).val (τ t * g.val) * (χ g.val : ℂ) ∂normOneIdeleClassTamagawaMeasure F) ∂positiveRealHaar := by rw [h₁]
+    _ = ∫ t : ℝ≥0ˣ, (Real.log (t.val : ℝ) : ℂ) ^ k *
+        (∫ g : C₁, (φ : D𝔽).val (τ t * g.val) * (χ g.val : ℂ) ∂normOneIdeleClassTamagawaMeasure F) ∂positiveRealHaar := by
+      have h₅ : (∀ t : ℝ≥0ˣ, (χ (τ t) : ℂ) = 1) := hχ
+      have h₆ : (∫ t : ℝ≥0ˣ, (χ (τ t) : ℂ) * (Real.log (t.val : ℝ) : ℂ) ^ k *
+          (∫ g : C₁, (φ : D𝔽).val (τ t * g.val) * (χ g.val : ℂ) ∂normOneIdeleClassTamagawaMeasure F) ∂positiveRealHaar) =
+          ∫ t : ℝ≥0ˣ, (Real.log (t.val : ℝ) : ℂ) ^ k *
+            (∫ g : C₁, (φ : D𝔽).val (τ t * g.val) * (χ g.val : ℂ) ∂normOneIdeleClassTamagawaMeasure F) ∂positiveRealHaar := by
+        congr
+        ext t
+        rw [h₅ t]
+        ; ring
+      rw [h₆]
+    _ = iteratedDeriv k (fun s : ℂ ↦
+        ∫ t : ℝ≥0ˣ, (χ (τ t) : ℂ) * ((t.val : ℝ) : ℂ) ^ s *
+          (∫ g : C₁, (φ : D𝔽).val (τ t * g.val) * (χ g.val : ℂ) ∂normOneIdeleClassTamagawaMeasure F) ∂positiveRealHaar)
+      (0 : ℂ) := by
+      rw [h₂]
+
 /-- Paper: (13.3.1.2), p. 522. Membership in the test subspace is equivalent to
 the printed Mellin-derivative conditions at `−i x₀(χ)` for all unitary characters.
 The continuous norm section and the exponent along it are given explicitly. -/
@@ -118,7 +210,82 @@ theorem mem_criticalTraceTestSubmodule_iff (τ : ℝ≥0ˣ →ₜ* C𝔽)
             ∫ t : ℝ≥0ˣ, (χ (τ t) : ℂ) * ((t.val : ℝ) : ℂ) ^ s *
               (∫ g : C₁, φ.val (τ t * g.val) * (χ g.val : ℂ)
                 ∂normOneIdeleClassTamagawaMeasure F) ∂positiveRealHaar)
-            (-((x : ℂ) * Complex.I)) = 0 := by sorry
+            (-((x : ℂ) * Complex.I)) = 0 := by
+  constructor
+  · -- (→) Assume φ is in the test subspace, prove the Mellin derivative condition
+    intro hφ χ x hχ k
+    have h₁ : iteratedDeriv k.val (fun s : ℂ ↦
+      ∫ t : ℝ≥0ˣ, (χ (τ t) : ℂ) * ((t.val : ℝ) : ℂ) ^ s *
+        (∫ g : C₁, φ.val (τ t * g.val) * (χ g.val : ℂ) ∂normOneIdeleClassTamagawaMeasure F) ∂positiveRealHaar)
+      (-((x : ℂ) * Complex.I)) = 0 := by
+      have h₂ : iteratedDeriv k.val (fun s : ℂ ↦
+        ∫ t : ℝ≥0ˣ, (χ (τ t) : ℂ) * ((t.val : ℝ) : ℂ) ^ s *
+          (∫ g : C₁, φ.val (τ t * g.val) * (χ g.val : ℂ) ∂normOneIdeleClassTamagawaMeasure F) ∂positiveRealHaar)
+        (-((x : ℂ) * Complex.I)) =
+          ∫ t : ℝ≥0ˣ, (Real.log (t.val : ℝ) : ℂ) ^ k.val *
+            (∫ g : C₁, φ.val (τ t * g.val) * (χ g.val : ℂ) ∂normOneIdeleClassTamagawaMeasure F) ∂positiveRealHaar := by
+        apply mellinDeriv_eq_logNormMoment _ _hτ χ x k.val φ hχ
+      rw [h₂]
+      -- The Mellin derivative equals the log-norm moment integral without the χ(τ t) factor.
+      -- For χ with χ(τ t) = t^(i x), we can define χ₀(g) = χ(g) * (ideleClassNorm g)^(-i x).
+      -- Then χ₀(τ t) = 1, so χ₀ ∈ sectionCharacters(τ).
+      -- The log-norm moment integral for χ equals the critical trace moment for χ₀.
+      -- Since φ is in the test subspace, the critical trace moment for χ₀ is zero.
+      -- Therefore this integral is zero.
+      have h₃ : (∫ t : ℝ≥0ˣ, (Real.log (t.val : ℝ) : ℂ) ^ k.val *
+          (∫ g : C₁, φ.val (τ t * g.val) * (χ g.val : ℂ) ∂normOneIdeleClassTamagawaMeasure F) ∂positiveRealHaar) = 0 := by
+        -- Define χ₀ = χ · |·|^(-i x). Then χ₀(τ t) = χ(τ t) · t^(-i x) = t^(i x) · t^(-i x) = 1.
+        -- So χ₀ ∈ sectionCharacters(τ).
+        -- The log-norm moment integral for χ equals the critical trace moment for χ₀:
+        -- ∫ (log t)^k * ∫ φ(τ t u) χ(u) dμ₁(u) dt/t
+        -- = ∫ (log t)^k * ∫ φ(τ t u) χ₀(u) t^(i x) dμ₁(u) dt/t   (since χ = χ₀ · t^(i x))
+        -- But we need to relate this to the critical trace moment:
+        -- ∫ φ(g) * χ₀(g) * (log |g|)^k dμ(g)
+        -- = ∫ (log t)^k * ∫ φ(τ t u) χ₀(τ t u) dμ₁(u) dt/t
+        -- Since χ₀(τ t u) = χ₀(τ t) χ₀(u) = 1 · χ₀(u) = χ₀(u)
+        -- This equals the critical trace moment for χ₀, which is zero because φ ∈ test subspace.
+        -- Therefore the integral is zero.
+        sorry
+      rw [h₃]
+    exact h₁
+  · -- (←) Assume the Mellin derivative condition, prove φ is in the test subspace
+    intro h
+    have h₂ : φ ∈ criticalTraceTestSubmodule τ := by
+      -- The test subspace is the intersection of kernels for χ ∈ sectionCharacters(τ) and k < [F:ℚ].
+      -- For any such χ and k, we have χ(τ t) = 1 = t^(i*0).
+      -- By the hypothesis with x = 0, the Mellin derivative at 0 is zero.
+      -- By criticalTraceMoment_eq_mellinDeriv_zero, the critical trace moment equals the Mellin derivative at 0.
+      -- So the critical trace moment is zero, meaning φ is in the kernel.
+      have h₃ : ∀ (χ : U𝔽), (∀ t : ℝ≥0ˣ, (χ (τ t) : ℂ) = 1) →
+          ∀ (k : Fin (Module.finrank ℚ F)), (∫ g : C𝔽, (φ : D𝔽).val g * spectralZeroJet (F := F) χ 0 0 k.val g ∂μ𝔽) = 0 := by
+        intro χ hχ k
+        have h₄ : (∀ t : ℝ≥0ˣ, (χ (τ t) : ℂ) = ((t.val : ℝ) : ℂ) ^ ((0 : ℂ) * Complex.I)) := by
+          intro t
+          have h₅ : (χ (τ t) : ℂ) = 1 := hχ t
+          have h₆ : ((t.val : ℝ) : ℂ) ^ ((0 : ℂ) * Complex.I) = 1 := by simp [Complex.cpow_zero]
+          rw [h₅, h₆]
+        have h₅ : iteratedDeriv k.val (fun s : ℂ ↦
+            ∫ t : ℝ≥0ˣ, (χ (τ t) : ℂ) * ((t.val : ℝ) : ℂ) ^ s *
+              (∫ g : C₁, φ.val (τ t * g.val) * (χ g.val : ℂ) ∂normOneIdeleClassTamagawaMeasure F) ∂positiveRealHaar)
+          (-((0 : ℂ) * Complex.I)) = 0 := h χ 0 h₄ k
+        have h₆ : iteratedDeriv k.val (fun s : ℂ ↦
+            ∫ t : ℝ≥0ˣ, (χ (τ t) : ℂ) * ((t.val : ℝ) : ℂ) ^ s *
+              (∫ g : C₁, φ.val (τ t * g.val) * (χ g.val : ℂ) ∂normOneIdeleClassTamagawaMeasure F) ∂positiveRealHaar)
+          (0 : ℂ) = 0 := by
+          simpa [Complex.ext_iff, Complex.I_mul_I] using h₅
+        have h₇ : (∫ g : C𝔽, (φ : D𝔽).val g * spectralZeroJet (F := F) χ 0 0 k.val g ∂μ𝔽) =
+            iteratedDeriv k.val (fun s : ℂ ↦
+              ∫ t : ℝ≥0ˣ, (χ (τ t) : ℂ) * ((t.val : ℝ) : ℂ) ^ s *
+                (∫ g : C₁, φ.val (τ t * g.val) * (χ g.val : ℂ) ∂normOneIdeleClassTamagawaMeasure F) ∂positiveRealHaar)
+            (0 : ℂ) := by
+          apply criticalTraceMoment_eq_mellinDeriv_zero τ _hτ χ k.val φ hχ
+        rw [h₇] at *
+        exact h₆
+      -- Use the fact that the test subspace is defined as the intersection of these kernels
+      have h₄ : φ ∈ criticalTraceTestSubmodule τ := by
+        sorry
+      exact h₄
+    exact h₂
 
 /-- Paper: Theorem 13.3.1.1, p. 522. The rational Mellin-jet test subspace has
 codimension at least two, as witnessed by the trivial character and the character
