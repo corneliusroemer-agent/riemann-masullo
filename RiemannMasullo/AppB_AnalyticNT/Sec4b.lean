@@ -7549,6 +7549,284 @@ local notation "classMellinIntegrand(" f ", " c ", " a ")" =>
 local notation "finiteClassMap(" v ")" => IdeleClassGroup.ofAdicCompletion (𝓞 F) F v
 local notation "infiniteClassMap(" w ")" => IdeleClassGroup.ofCompletion (𝓞 F) F w
 
+section ExplicitFormulaTestMaps
+
+/-- A compactly supported test on the idele classes is a Schwartz–Bruhat function. -/
+private theorem explicitTest_mem_schwartz (f : 𝒟(C[F])) :
+    f.val ∈ schwartzBruhatSubmodule C[F] := by
+  obtain ⟨m, _, hm, hms⟩ := exists_ideleClassModulation F
+  have hf := bruhatCompactSupport_le_modulatedExponentialDecay m {0} hm hms f.property
+  rwa [modulatedExponentialDecaySubmodule_singleton_zero] at hf
+
+/-- A compactly supported test on the idele classes is continuous. -/
+private theorem explicitTest_continuous (f : 𝒟(C[F])) : Continuous f.val := by
+  obtain ⟨a, e, s, hs⟩ := (mem_schwartzBruhatSubmodule_iff _).mp (explicitTest_mem_schwartz f)
+  exact hs ▸ continuous_stage_realization a e s
+
+/-- Integration against a continuous function is continuous on a fixed-support stage. -/
+private theorem explicitStage_integral_continuous {G : Type*} [CommGroup G] [TopologicalSpace G]
+    [IsTopologicalGroup G] [T2Space G] [LocallyCompactSpace G] [MeasurableSpace G]
+    [OpensMeasurableSpace G] (μ : Measure G) [IsFiniteMeasureOnCompacts μ]
+    (c : G → ℂ) (hc : Continuous c) (a : BruhatStructuralPair G)
+    (e : ElementaryLCAPresentation a.quotient) (C : TopologicalSpace.Compacts G) :
+    Continuous (fun s : bruhatCompactSupportStage a e C ↦
+      ∫ g, schwartzBruhatStageRealization a e s.val g * c g ∂μ) := by
+  let E := SchwartzBruhatStage e
+  let : TopologicalSpace.MetrizableSpace E := elementarySchwartz_isFrechet.choose_spec.2.1
+  let : BarrelledSpace ℂ E := elementarySchwartz_barrelled
+  let c' : G → ℂ := (C : Set G).indicator c
+  have hc' : Integrable c' μ :=
+    (integrable_indicator_iff C.isCompact.measurableSet).mpr
+      (hc.continuousOn.integrableOn_compact C.isCompact)
+  let A : E →ₗ[ℂ] (G → ℂ) :=
+    { toFun := fun s x ↦ schwartzBruhatStageRealization a e s x * c' x
+      map_add' := fun s t ↦ funext fun x ↦ by simp only [map_add, Pi.add_apply, add_mul]
+      map_smul' := fun z s ↦ funext fun x ↦ by
+        simp only [map_smul, Pi.smul_apply, smul_eq_mul, RingHom.id_apply, mul_assoc] }
+  obtain ⟨L, hL⟩ := exists_integralCLM_of_pointwise_continuous μ A
+    (fun x ↦ (continuous_schwartzBruhatStage_eval a e x).mul_const _)
+    (fun s ↦ hc'.bdd_mul (continuous_stage_realization a e s).aestronglyMeasurable
+      (.of_forall fun x ↦ norm_stage_realization_le a e s x))
+  refine (L.continuous.comp continuous_subtype_val).congr fun s ↦ ?_
+  change L s.val = _
+  rw [hL]
+  refine integral_congr_ae (.of_forall fun x ↦ ?_)
+  change schwartzBruhatStageRealization a e s.val x * c' x =
+    schwartzBruhatStageRealization a e s.val x * c x
+  by_cases hx : x ∈ (C : Set G)
+  · simp only [c', indicator_of_mem hx]
+  · have hs : tsupport (schwartzBruhatStageRealization a e s.val) ⊆ (C : Set G) :=
+      (mem_bruhatCompactSupportStage_iff a e C s.val).1 s.property
+    have h0 : schwartzBruhatStageRealization a e s.val x = 0 :=
+      image_eq_zero_of_notMem_tsupport fun h ↦ hx (hs h)
+    rw [h0, zero_mul, zero_mul]
+
+/-- A cyclic subgroup small on a compact generating set of the annihilator
+lies in the original closed subgroup. Copied from `Ch12_TraceGeometric/Sec4.lean`. -/
+private theorem explicitFormula_smallPowers {G : Type*} [CommGroup G] [TopologicalSpace G]
+    [IsTopologicalGroup G] [T2Space G] [LocallyCompactSpace G]
+    (K : Subgroup G) (hK : IsBruhatGoodSubgroup K) :
+    ∃ W ∈ 𝓝 (1 : G), ∀ x : G, (∀ n : ℕ, x ^ n ∈ W) → x ∈ K := by
+  let D := lcaAnnihilator K
+  obtain ⟨C, _, hc, hgen⟩ := hK.2.2
+  let arc := Circle.centeredArc (Real.pi / 2)
+  have ha : arc ∈ 𝓝 (1 : Circle) := by
+    simpa [arc] using Circle.hasBasis_centeredArc_div_two_pow.mem_of_mem (i := 0) trivial
+  let W := {x : G | ∀ χ ∈ C, (χ : D).val x ∈ arc}
+  have hW : W ∈ 𝓝 (1 : G) := by
+    apply hc.eventually_forall_of_forall_eventually
+    intro χ _
+    have hχ : Continuous (fun χ : D ↦ (χ.val : G →ₜ* Circle)) := continuous_subtype_val
+    have he : Continuous (fun p : G × D ↦ p.2.val p.1) :=
+      (continuous_eval (F := G →ₜ* Circle)).comp ((hχ.comp ((show Continuous (Prod.snd : G × D → D) from continuous_snd))).prodMk continuous_fst)
+    exact he.continuousAt.preimage_mem_nhds (by simpa only [map_one] using ha)
+  refine ⟨W, hW, fun x hx ↦ ?_⟩
+  let ev : D →* Circle := ⟨⟨fun χ ↦ χ.val x, rfl⟩, fun _ _ ↦ rfl⟩
+  have hg : C ⊆ ev.ker := by
+    intro χ hχ
+    apply Circle.eq_one_of_forall_pow_mem_centeredArc_pi_div_two
+    intro n _
+    change χ.val x ^ n ∈ arc
+    simpa only [map_pow] using hx n χ hχ
+  have htop : ⊤ ≤ ev.ker := hgen ▸ (Subgroup.closure_le _).mpr hg
+  rw [← lcaDualAnnihilator_annihilator K hK.1, mem_lcaDualAnnihilator_iff]
+  exact fun χ ↦ htop (Subgroup.mem_top χ)
+
+/-- A function invariant under a compact open subgroup and of compact support is a test
+function. -/
+private theorem explicitFormula_mem_of_openSubgroup_invariant {G : Type*} [CommGroup G]
+    [TopologicalSpace G] [IsTopologicalGroup G] [T2Space G] [LocallyCompactSpace G]
+    (U : Subgroup G) (hU : IsOpen (U : Set G)) (hUc : IsCompact (U : Set G)) (g : G → ℂ)
+    (hg : ∀ h ∈ U, ∀ x, g (h * x) = g x) (hgc : HasCompactSupport g) :
+    g ∈ bruhatCompactSupportSubmodule G := by
+  let : CompactSpace (lcaAnnihilator U) :=
+    isCompact_iff_compactSpace.mp (isCompact_lcaAnnihilator U hU)
+  have hClosed : IsClosed (U : Set G) := U.isClosed_of_isOpen hU
+  have hSmooth : IsBruhatSmooth g := by
+    intro p
+    refine ⟨U, ⟨hClosed, isOpen_lcaAnnihilator U hUc, isCompactlyGeneratedGroup_of_compact⟩,
+      fun h x ↦ hg h.val h.property x, ?_⟩
+    intro a ha
+    let f₀ : a.quotient → ℂ := fun q ↦ g (Quotient.out q : a.val.1).val
+    refine ⟨f₀, fun x ↦ ?_, ?_⟩
+    · obtain ⟨h, hh⟩ := QuotientGroup.mk_out_eq_mul
+        ((OrderDual.ofDual a.val.2).comap a.val.1.subtype) x
+      change g (Quotient.out (QuotientGroup.mk x : a.quotient) : a.val.1).val = g x.val
+      have hmem : (h.val : G) ∈ U := ha ▸ Subgroup.mem_comap.mp h.property
+      rw [hh, Subgroup.coe_mul, mul_comm]
+      exact hg _ hmem _
+    · intro e z b
+      let : DiscreteTopology a.quotient := QuotientGroup.discreteTopology (by
+        rw [ha]
+        exact hU.preimage continuous_subtype_val)
+      let X := EuclideanSpace ℝ (Fin e.realDim) × EuclideanSpace ℝ (Fin e.torusDim)
+      let q : X → a.quotient := fun x ↦ e.equiv.symm (Multiplicative.ofAdd (elementaryCover x z b))
+      have hq : Continuous q := e.equiv.symm.continuous.comp
+        (continuous_fst.prodMk ((continuous_pi fun j ↦ (AddCircle.continuous_mk' (1 : ℝ)).comp
+          ((PiLp.continuous_apply 2 _ j).comp continuous_snd)).prodMk continuous_const))
+      change ContDiff ℝ (p : ℕ∞) (fun x ↦ f₀ (q x))
+      have heq : (fun x ↦ f₀ (q x)) = fun _ : X ↦ f₀ (q 0) :=
+        funext fun x ↦ congrArg f₀ (TotallyDisconnectedSpace.eq_of_continuous q hq x 0)
+      rw [heq]
+      exact contDiff_const
+  exact ⟨(mem_bruhatSmoothSubmodule_iff _).mpr hSmooth, hgc⟩
+
+/-- The units of a finite completion have arbitrarily small compact open subgroups. -/
+private theorem explicitFormula_finiteUnits_openSubgroup (v : Primes(F))
+    {W : Set (v.adicCompletion F)ˣ} (hW : W ∈ 𝓝 (1 : (v.adicCompletion F)ˣ)) :
+    ∃ V : Subgroup (v.adicCompletion F)ˣ, IsOpen (V : Set (v.adicCompletion F)ˣ) ∧
+      IsCompact (V : Set (v.adicCompletion F)ˣ) ∧ (V : Set (v.adicCompletion F)ˣ) ⊆ W := by
+  let G := (v.adicCompletion F)ˣ
+  let B : OpenSubgroup G :=
+    ⟨(v.adicCompletionIntegers F).units, Submonoid.isOpen_units (Valued.isOpen_valuationSubring _)⟩
+  have hBc : IsCompact (B : Set G) := Submonoid.units_isCompact
+    (isCompact_iff_compactSpace.mpr (compactSpace_adicCompletionIntegers v))
+  let : CompactSpace B.toSubgroup := isCompact_iff_compactSpace.mp hBc
+  let j : B.toSubgroup → v.adicCompletion F := Units.val ∘ Subtype.val
+  have hj : Topology.IsEmbedding j :=
+    (Units.isEmbedding_val₀ (G₀ := v.adicCompletion F)).comp Topology.IsEmbedding.subtypeVal
+  have hpre : (Subtype.val : B.toSubgroup → G) ⁻¹' W ∈ 𝓝 (1 : B.toSubgroup) :=
+    continuous_subtype_val.continuousAt.preimage_mem_nhds hW
+  rw [hj.isInducing.nhds_eq_comap] at hpre
+  obtain ⟨S, hS, hSsub⟩ := mem_comap.mp hpre
+  let ν : Valuation (v.adicCompletion F) (WithZero (Multiplicative ℤ)) := Valued.v
+  obtain ⟨r, hr⟩ := (Valued.mem_nhds (Γ₀ := WithZero (Multiplicative ℤ))).mp hS
+  let W' := (fun x : B.toSubgroup ↦ j x - j 1) ⁻¹' {y | ν.restrict y < r.val}
+  have hW' : IsClopen W' :=
+    (Valued.isClopen_ball (v.adicCompletion F) r.val).preimage (hj.continuous.sub continuous_const)
+  have h1W : (1 : B.toSubgroup) ∈ W' := by
+    change ν.restrict (j 1 - j 1) < r.val
+    rw [sub_self, map_zero]
+    exact pos_iff_ne_zero.mpr r.ne_zero
+  obtain ⟨V, hV⟩ := IsTopologicalGroup.exist_openSubgroup_sub_clopen_nhds_of_one hW' h1W
+  refine ⟨V.toSubgroup.map B.toSubgroup.subtype, ?_, ?_, ?_⟩
+  · rw [Subgroup.coe_map]
+    exact B.isOpen.isOpenEmbedding_subtypeVal.isOpenMap _ V.isOpen
+  · rw [Subgroup.coe_map]
+    exact V.isClosed.isCompact.image continuous_subtype_val
+  · rintro _ ⟨x, hx, rfl⟩
+    exact hSsub (hr (hV hx))
+
+/-- The preimage of a compact set of idele classes in the units of a finite completion is
+compact, since the idele class norm restricts to the local norm. -/
+private theorem explicitFormula_finiteClassMap_isCompact_preimage (v : Primes(F))
+    {C : Set C[F]} (hC : IsCompact C) : IsCompact (finiteClassMap(v) ⁻¹' C) := by
+  let K := v.adicCompletion F
+  let : ProperSpace K := properSpace_adicCompletion v
+  let n : C[F] → ℝ := fun g ↦ ((ideleClassNorm F g : ℝ≥0) : ℝ)
+  have hn : Continuous n := NNReal.continuous_coe.comp
+    (Units.continuous_val.comp (isProperMap_ideleClassNorm F).continuous)
+  have hpos (g : C[F]) : 0 < n g := NNReal.coe_pos.mpr (Units.zero_lt _)
+  have hnι (x : Kˣ) : n (finiteClassMap(v) x) = ‖x.val‖ := by
+    simp only [n, ideleClassNorm_ofAdicCompletion]
+    rfl
+  obtain ⟨M₁, hM₁⟩ := hC.exists_bound_of_continuousOn hn.continuousOn
+  obtain ⟨M₂, hM₂⟩ := hC.exists_bound_of_continuousOn
+    (hn.inv₀ fun g ↦ (hpos g).ne').continuousOn
+  let K₀ : Set K := {y | (max M₂ 1)⁻¹ ≤ ‖y‖ ∧ ‖y‖ ≤ M₁}
+  have hK₀ : IsCompact K₀ := (isCompact_closedBall (0 : K) M₁).of_isClosed_subset
+    ((isClosed_le continuous_const continuous_norm).inter (isClosed_le continuous_norm continuous_const))
+    fun y hy ↦ mem_closedBall_zero_iff.mpr hy.2
+  have hK₀r : K₀ ⊆ range (Units.val : Kˣ → K) := fun y hy ↦ by
+    have hy0 : y ≠ 0 := fun h ↦ by
+      have := hy.1
+      rw [h, norm_zero] at this
+      exact (inv_pos.mpr (lt_of_lt_of_le zero_lt_one (le_max_right M₂ 1))).not_ge this
+    exact ⟨Units.mk0 y hy0, rfl⟩
+  have hpre : IsCompact ((Units.val : Kˣ → K) ⁻¹' K₀) :=
+    (Units.isEmbedding_val₀ (G₀ := K)).isInducing.isCompact_preimage' hK₀ hK₀r
+  refine hpre.of_isClosed_subset (hC.isClosed.preimage (continuous_ideleClass_ofAdicCompletion F v))
+    fun x hx ↦ ?_
+  have h₁ := hM₁ _ hx
+  have h₂ := hM₂ _ hx
+  rw [Real.norm_eq_abs, abs_of_pos (hpos _), hnι] at h₁
+  rw [Pi.inv_apply, Real.norm_eq_abs, abs_of_pos (inv_pos.mpr (hpos _)), hnι] at h₂
+  have hx0 : 0 < ‖x.val‖ := norm_pos_iff.mpr x.ne_zero
+  refine ⟨?_, h₁⟩
+  rw [inv_le_comm₀ (lt_of_lt_of_le zero_lt_one (le_max_right M₂ 1)) hx0]
+  exact h₂.trans (le_max_left M₂ 1)
+
+/-- A good subgroup of a group receiving the units of a finite completion contains the image
+of a compact open subgroup. -/
+private theorem explicitFormula_finiteUnits_good (v : Primes(F)) {G : Type*} [CommGroup G]
+    [TopologicalSpace G] [IsTopologicalGroup G] [T2Space G] [LocallyCompactSpace G]
+    (ι : (v.adicCompletion F)ˣ →* G) (hι : Continuous ι) (k : Subgroup G)
+    (hk : IsBruhatGoodSubgroup k) :
+    ∃ V : Subgroup (v.adicCompletion F)ˣ, IsOpen (V : Set (v.adicCompletion F)ˣ) ∧
+      IsCompact (V : Set (v.adicCompletion F)ˣ) ∧ ∀ h ∈ V, ι h ∈ k := by
+  obtain ⟨W, hW, hpow⟩ := explicitFormula_smallPowers k hk
+  have hW' : ι ⁻¹' W ∈ 𝓝 1 := hι.continuousAt.preimage_mem_nhds (by rwa [map_one])
+  obtain ⟨V, hVo, hVc, hVW⟩ := explicitFormula_finiteUnits_openSubgroup v hW'
+  refine ⟨V, hVo, hVc, fun h hh ↦ hpow _ fun n ↦ ?_⟩
+  rw [← map_pow]
+  exact hVW (V.pow_mem hh n)
+
+/-- On a fixed-support stage, restriction to the units of a finite completion factors
+through finitely many point evaluations. -/
+private theorem explicitFormula_finiteRestrict_stage (v : Primes(F)) {H : Type*} [CommGroup H]
+    [TopologicalSpace H] [IsTopologicalGroup H] [T2Space H] [LocallyCompactSpace H]
+    (ι : (v.adicCompletion F)ˣ →* H) (hι : Continuous ι)
+    (hpre : ∀ C : Set H, IsCompact C → IsCompact (ι ⁻¹' C))
+    (R : 𝒟(H) →ₗ[ℂ] 𝒟((v.adicCompletion F)ˣ)) (hR : ∀ f u, (R f).val u = f.val (ι u))
+    (a : BruhatStructuralPair H) (e : ElementaryLCAPresentation a.quotient)
+    (C : TopologicalSpace.Compacts H) :
+    Continuous (R ∘ bruhatCompactSupportStageInclusion a e C) := by
+  let G := (v.adicCompletion F)ˣ
+  have hk : IsBruhatGoodSubgroup (OrderDual.ofDual a.val.2) := a.property.2.2.1
+  have hV := explicitFormula_finiteUnits_good v (ι)
+    hι _ hk
+  obtain ⟨V, hVo, hVc, hVk⟩ := hV
+  let D := ι ⁻¹' (C : Set H)
+  have hD : IsCompact D := hpre _ C.isCompact
+  let : DiscreteTopology (G ⧸ V) := QuotientGroup.discreteTopology hVo
+  have hT : (QuotientGroup.mk '' D : Set (G ⧸ V)).Finite :=
+    (hD.image QuotientGroup.continuous_mk).finite_of_discrete
+  let T := hT.toFinset
+  let Ψf (c : T → ℂ) (x : G) : ℂ := if h : (x : G ⧸ V) ∈ T then c ⟨_, h⟩ else 0
+  have hΨ (c : T → ℂ) : Ψf c ∈ bruhatCompactSupportSubmodule G := by
+    refine explicitFormula_mem_of_openSubgroup_invariant V hVo hVc _ (fun h hh x ↦ ?_) ?_
+    · have hq : ((h * x : G) : G ⧸ V) = (x : G ⧸ V) :=
+        QuotientGroup.eq.mpr (by simpa [mul_inv_rev] using V.inv_mem hh)
+      simp only [Ψf, hq]
+    · refine HasCompactSupport.intro (hD.mul hVc) fun x hx ↦ ?_
+      refine dite_eq_right_iff.mpr fun hxT ↦ absurd ?_ hx
+      obtain ⟨d, hd, hdx⟩ := hT.mem_toFinset.mp hxT
+      exact Set.mem_mul.mpr ⟨d, hd, d⁻¹ * x, QuotientGroup.eq.mp hdx, mul_inv_cancel_left d x⟩
+  let Ψ : (T → ℂ) →ₗ[ℂ] 𝒟(G) :=
+    { toFun := fun c ↦ ⟨Ψf c, hΨ c⟩
+      map_add' := fun c c' ↦ Subtype.ext (funext fun x ↦ by
+        change Ψf (c + c') x = Ψf c x + Ψf c' x
+        simp only [Ψf]
+        split_ifs <;> simp)
+      map_smul' := fun z c ↦ Subtype.ext (funext fun x ↦ by
+        change Ψf (z • c) x = z * Ψf c x
+        simp only [Ψf]
+        split_ifs <;> simp) }
+  let ev : bruhatCompactSupportStage a e C → (T → ℂ) := fun s t ↦
+    schwartzBruhatStageRealization a e s.val (ι (Quotient.out t.val))
+  have hev : Continuous ev := continuous_pi fun t ↦
+    (continuous_schwartzBruhatStage_eval a e _).comp continuous_subtype_val
+  let : ContinuousSMul ℂ 𝒟(G) := (PolynormableSpace.withSeminorms ℂ _).continuousSMul
+  have hΨc : Continuous Ψ := Ψ.continuous_of_finiteDimensional
+  refine (hΨc.comp hev).congr fun s ↦ Subtype.ext (funext fun x ↦ ?_)
+  refine Eq.trans ?_ (hR (bruhatCompactSupportStageInclusion a e C s) x).symm
+  change Ψf (ev s) x = schwartzBruhatStageRealization a e s.val (ι x)
+  simp only [Ψf]
+  split_ifs with hx
+  · let h := (QuotientGroup.mk_out_eq_mul V x).choose
+    have hh : Quotient.out (x : G ⧸ V) = x * h := (QuotientGroup.mk_out_eq_mul V x).choose_spec
+    have key : schwartzBruhatStageRealization a e s.val (ι (x * h)) =
+        schwartzBruhatStageRealization a e s.val (ι x) := by
+      rw [map_mul, mul_comm]
+      exact stage_realization_mul_kernel a e s.val (hVk _ h.property) _
+    exact (congrArg (fun y ↦ schwartzBruhatStageRealization a e s.val (ι y)) hh).trans key
+  · have hxD : x ∉ D := fun h ↦ hx (hT.mem_toFinset.mpr ⟨x, h, rfl⟩)
+    have hs : tsupport (schwartzBruhatStageRealization a e s.val) ⊆ (C : Set H) :=
+      (mem_bruhatCompactSupportStage_iff a e C s.val).1 s.property
+    exact (image_eq_zero_of_notMem_tsupport fun h ↦ hxD (hs h)).symm
+
+end ExplicitFormulaTestMaps
+
 -- TODO(paper-gap): The printed sum omits zero multiplicity. In (B.4.4.16)
 -- the corrected archimedean Fourier pairing is already canonically normalized.
 -- The proof on p. 625 also needs the norm-one volume divisor in D(φ) and
@@ -7562,7 +7840,36 @@ compactly supported test spaces. -/
 theorem idelicExplicitFormula_finiteTestMap (v : Primes(F)) :
     ∃ R : 𝒟(C[F]) →L[ℂ] 𝒟((v.adicCompletion F)ˣ),
       ∀ (f : 𝒟(C[F])) (u : (v.adicCompletion F)ˣ), (R f).val u = f.val (finiteClassMap(v) u) := by
-  sorry
+  let G := (v.adicCompletion F)ˣ
+  let ι := finiteClassMap(v)
+  have hgood := explicitFormula_finiteUnits_good v (G := C[F]) ι
+    (continuous_ideleClass_ofAdicCompletion F v)
+  have hmem (f : 𝒟(C[F])) : f.val ∘ ι ∈ bruhatCompactSupportSubmodule G := by
+    obtain ⟨k, hk, hinv, _⟩ := (mem_bruhatSmoothSubmodule_iff _).mp f.property.1 0
+    obtain ⟨V, hVo, hVc, hVk⟩ := hgood k hk
+    refine explicitFormula_mem_of_openSubgroup_invariant V hVo hVc _ (fun h hh x ↦ ?_) ?_
+    · change f.val (ι (h * x)) = f.val (ι x)
+      rw [map_mul]
+      exact hinv ⟨_, hVk h hh⟩ _
+    · exact HasCompactSupport.intro (explicitFormula_finiteClassMap_isCompact_preimage v
+        f.property.2) fun x hx ↦
+        show f.val (ι x) = 0 from image_eq_zero_of_notMem_tsupport hx
+  let R : 𝒟(C[F]) →ₗ[ℂ] 𝒟(G) :=
+    { toFun := fun f ↦ ⟨f.val ∘ ι, hmem f⟩
+      map_add' := fun _ _ ↦ rfl
+      map_smul' := fun _ _ ↦ rfl }
+  have hstage := explicitFormula_finiteRestrict_stage v (H := C[F]) ι
+    (continuous_ideleClass_ofAdicCompletion F v)
+    (fun _ hC ↦ explicitFormula_finiteClassMap_isCompact_preimage v hC) R fun _ _ ↦ rfl
+  let P := {q : Seminorm ℂ (bruhatCompactSupportSubmodule C[F]) //
+    ∀ (a : BruhatStructuralPair C[F]) (e : ElementaryLCAPresentation a.quotient)
+      (C : TopologicalSpace.Compacts C[F]),
+      Continuous (q ∘ bruhatCompactSupportStageInclusion a e C)}
+  have hR : Continuous R :=
+    (PolynormableSpace.withSeminorms ℂ 𝒟(G)).continuous_of_continuous_comp R fun p ↦
+      (withGeneratingSeminorms_spec _ (Subtype.val : P → _)).continuous_seminorm
+        (⟨p.val.comp R, fun a e C ↦ p.property.comp (hstage a e C)⟩ : P)
+  exact ⟨⟨R, hR⟩, fun _ _ ↦ rfl⟩
 
 /-- Paper: Theorem B.4.4.7, p. 626. Restriction along the closed embedding of the
 units of an archimedean completion into the idele classes is a continuous linear map of
@@ -7576,7 +7883,27 @@ theorem idelicExplicitFormula_infiniteTestMap (w : InfinitePlace F) :
 idele classes is a continuous linear functional on the compactly supported test space. -/
 theorem idelicExplicitFormula_integralDistribution (c : C[F] → ℂ) (_hc : Continuous c) :
     ∃ D : StrongDual ℂ (𝒟(C[F])), ∀ f : 𝒟(C[F]), D f = ∫ g, f.val g * c g ∂classMeasure := by
-  sorry
+  let G := C[F]
+  let : BorelSpace G := ⟨rfl⟩
+  let : (classMeasure).IsHaarMeasure := (ideleClassTamagawaMeasure_isWeil F).1
+  have hint (f : 𝒟(G)) : Integrable (fun g ↦ f.val g * c g) classMeasure :=
+    ((explicitTest_continuous f).mul _hc).integrable_of_hasCompactSupport f.property.2.mul_right
+  let D : 𝒟(G) →ₗ[ℂ] ℂ :=
+    { toFun := fun f ↦ ∫ g, f.val g * c g ∂classMeasure
+      map_add' := fun f f' ↦ by
+        rw [← integral_add (hint f) (hint f')]
+        exact integral_congr_ae (.of_forall fun g ↦ add_mul (f.val g) (f'.val g) (c g))
+      map_smul' := fun z f ↦ by
+        rw [RingHom.id_apply, smul_eq_mul, ← integral_const_mul]
+        exact integral_congr_ae (.of_forall fun g ↦ mul_assoc z (f.val g) (c g)) }
+  let P := {q : Seminorm ℂ (bruhatCompactSupportSubmodule G) //
+    ∀ (a : BruhatStructuralPair G) (e : ElementaryLCAPresentation a.quotient)
+      (C : TopologicalSpace.Compacts G), Continuous (q ∘ bruhatCompactSupportStageInclusion a e C)}
+  have hD : Continuous D := (norm_withSeminorms ℂ ℂ).continuous_of_continuous_comp D fun _ ↦
+    (withGeneratingSeminorms_spec _ (Subtype.val : P → _)).continuous_seminorm
+      (⟨(normSeminorm ℂ ℂ).comp D, fun a e C ↦ continuous_norm.comp
+        (explicitStage_integral_continuous classMeasure c _hc a e C)⟩ : P)
+  exact ⟨⟨D, hD⟩, fun _ ↦ rfl⟩
 
 /-- Paper: Theorem B.4.4.7, pp. 623–626, and Lemma B.4.4.9, pp. 624–625. The spectral terms
 of the idelic explicit formula are absolutely summable at every test. -/
