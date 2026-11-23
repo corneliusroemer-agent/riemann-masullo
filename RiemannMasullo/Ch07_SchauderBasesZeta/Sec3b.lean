@@ -2640,6 +2640,31 @@ theorem sLocalGammaOrbitalQuotient_product (ω : PontryaginDual J₁(S)) :
     (Denumerable.eqv _).trans (Denumerable.eqv depths).symm
   exact ⟨Ψ.trans (ContinuousLinearEquiv.piCongrLeft ℂ (fun _ : depths ↦ ℂ) e)⟩
 
+/-- The strong dual of a space identified with a countably infinite product of complex lines is
+the direct sum of complex lines over the same index with its finest locally convex topology. The
+product is identified with formal power series, whose strong dual is the space of polynomials. -/
+private theorem sLocalGammaOrbitalQuotient_dual_directSum_of_equiv {Q ι : Type*}
+    [AddCommGroup Q] [Module ℂ Q] [TopologicalSpace Q]
+    (Ψ : Q ≃L[ℂ] (ι → ℂ)) (σ : ℕ ≃ ι) :
+    Nonempty (StrongDual ℂ Q ≃L[ℂ] FinestLocallyConvex (ι →₀ ℂ)) := by
+  obtain ⟨t, _⟩ := realSchwartzTaylor_equiv
+  obtain ⟨p, _⟩ := realDiracDerivatives_polynomialEquiv
+  let : TopologicalSpace (PowerSeries ℂ) := inferInstanceAs (TopologicalSpace ((Unit →₀ ℕ) → ℂ))
+  let idx := (Finsupp.uniqueLinearEquiv ℕ ℕ ()).symm.toEquiv
+  let series := ContinuousLinearEquiv.piCongrLeft ℂ (fun _ : Unit →₀ ℕ ↦ ℂ) idx
+  let q : Q ≃L[ℂ] (ℕ → ℂ) :=
+    Ψ.trans (ContinuousLinearEquiv.piCongrLeft ℂ (fun _ : ℕ ↦ ℂ) σ.symm)
+  let e := (q.trans series).trans t.symm
+  let d : FinestLocallyConvex (Polynomial ℂ) ≃L[ℂ] StrongDual ℂ Q :=
+    p.trans (e.symm.arrowCongr (ContinuousLinearEquiv.refl ℂ ℂ))
+  let l : FinestLocallyConvex (Polynomial ℂ) ≃ₗ[ℂ] FinestLocallyConvex (ι →₀ ℂ) :=
+    (AddMonoidAlgebra.coeffLinearEquiv ℂ).trans (Finsupp.domLCongr σ)
+  let := finestLocallyConvex_t2 (Polynomial ℂ)
+  let := finestLocallyConvex_t2 (ι →₀ ℂ)
+  have h := continuous_of_finestLocallyConvex (Polynomial ℂ) l.toLinearMap
+  have h' := continuous_of_finestLocallyConvex (ι →₀ ℂ) l.symm.toLinearMap
+  exact ⟨d.symm.trans ⟨l, h, h'⟩⟩
+
 /-- Paper: Theorem 7.3.4.1(4), p. 365.
 The strong dual of the quotient is topologically linearly isomorphic to the
 direct sum of complex lines with its finest locally convex topology.
@@ -2647,7 +2672,12 @@ The quotient dual represents the annihilator via pullback along the quotient map
 theorem sLocalGammaOrbitalQuotient_dual_directSum (ω : PontryaginDual J₁(S)) :
     let E := ↥(fullPV(ω))
     let P := Γker(ω)
-    Nonempty (StrongDual ℂ (E ⧸ P) ≃L[ℂ] FinestLocallyConvex (depths →₀ ℂ)) := by sorry
+    Nonempty (StrongDual ℂ (E ⧸ P) ≃L[ℂ] FinestLocallyConvex (depths →₀ ℂ)) := by
+  intro E P
+  obtain ⟨Ψ⟩ := sLocalGammaOrbitalQuotient_product ω
+  let := Encodable.ofCountable depths
+  let := Denumerable.ofEncodableOfInfinite depths
+  exact sLocalGammaOrbitalQuotient_dual_directSum_of_equiv Ψ (Denumerable.eqv depths).symm
 
 /-- Paper: Theorem 7.3.4.1(5), pp. 365–366.
 The set of archimedean centers with their admissible Laurent orders admits an enumeration. -/
