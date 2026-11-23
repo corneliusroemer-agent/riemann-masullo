@@ -3,6 +3,12 @@ module
 public import RiemannMasullo.Ch10_TraceSpectral.Sec3
 public import Mathlib.Analysis.Normed.Module.Bases
 public import Mathlib.Analysis.Normed.Module.DoubleDual
+public import Mathlib.Algebra.Order.Archimedean.Basic
+public import Mathlib.Analysis.LocallyConvex.WeakSpace
+public import Mathlib.Topology.Algebra.Module.ContinuousLinearMap.Quotient
+public import Mathlib.Topology.Algebra.Module.Spaces.WeakBilin
+public import Mathlib.Topology.Algebra.Module.Spaces.WeakDual
+public import Mathlib.Topology.Compactness.Compact
 import all RiemannMasullo.Ch10_TraceSpectral.Sec1
 import all RiemannMasullo.Ch10_TraceSpectral.Sec3
 import all RiemannMasullo.AppC_LCTVS.Sec3a
@@ -536,11 +542,204 @@ theorem quotient_image_openUnitBall :
     obtain ⟨x, hxy, hx⟩ := Submodule.Quotient.norm_mk_lt y (sub_pos.mpr hy)
     exact ⟨x, by linarith, hxy⟩
 
+private theorem quotient_image_closedUnitBall_of_reflexive_bidual_coe (w : WeakSpace ℂ E) :
+    NormedSpace.inclusionInDoubleDualWeak ℂ E w =
+      (NormedSpace.inclusionInDoubleDual ℂ E ((toWeakSpace ℂ E).symm w)).toWeakDual := by
+  refine DFunLike.ext _ _ fun ψ => ?_
+  rw [StrongDual.toWeakDual_apply]
+  change (NormedSpace.inclusionInDoubleDualWeak ℂ E).toLinearMap w ψ = ψ ((toWeakSpace ℂ E).symm w)
+  rw [NormedSpace.toLinearMap_inclusionInDoubleDualWeak, LinearEquiv.arrowCongr_apply,
+    StrongDual.toWeakDual_apply]
+  exact NormedSpace.dual_def ℂ E ((toWeakSpace ℂ E).symm w) ψ
+
+private theorem quotient_image_closedUnitBall_of_reflexive_norm_bidual (x : E) :
+    ‖NormedSpace.inclusionInDoubleDual ℂ E x‖ = ‖x‖ :=
+  (NormedSpace.inclusionInDoubleDualLi ℂ (E := E)).norm_map x
+
+private theorem quotient_image_closedUnitBall_of_reflexive_isClosed_ball (r : ℝ) :
+    IsClosed ((toWeakSpace ℂ E) '' Metric.closedBall (0 : E) r) := by
+  classical
+  by_cases hr : 0 ≤ r
+  · have himage :
+        (toWeakSpace ℂ E) '' Metric.closedBall (0 : E) r =
+          {w : WeakSpace ℂ E | ‖(toWeakSpace ℂ E).symm w‖ ≤ r} := by
+      ext w
+      constructor
+      · rintro ⟨y, hy, rfl⟩
+        rw [Metric.mem_closedBall, dist_zero_right] at hy
+        change ‖(toWeakSpace ℂ E).symm ((toWeakSpace ℂ E) y)‖ ≤ r
+        rw [LinearEquiv.symm_apply_apply]
+        exact hy
+      · intro hw
+        refine ⟨(toWeakSpace ℂ E).symm w, ?_, (toWeakSpace ℂ E).apply_symm_apply w⟩
+        rw [Metric.mem_closedBall, dist_zero_right]
+        exact hw
+    let ι : WeakSpace ℂ E →L[ℂ] WeakDual ℂ (StrongDual ℂ E) := NormedSpace.inclusionInDoubleDualWeak ℂ E
+    have hpre : IsClosed
+        (ι ⁻¹' (WeakDual.toStrongDual (𝕜 := ℂ) (E := StrongDual ℂ E) ⁻¹'
+          Metric.closedBall (0 : StrongDual ℂ (StrongDual ℂ E)) r)) :=
+      (WeakDual.isClosed_closedBall (0 : StrongDual ℂ (StrongDual ℂ E)) r).preimage ι.continuous
+    have heq :
+        {w : WeakSpace ℂ E | ‖(toWeakSpace ℂ E).symm w‖ ≤ r} =
+          ι ⁻¹' (WeakDual.toStrongDual (𝕜 := ℂ) (E := StrongDual ℂ E) ⁻¹'
+            Metric.closedBall (0 : StrongDual ℂ (StrongDual ℂ E)) r) := by
+      ext w
+      simp only [ι, mem_ofPred_eq, mem_preimage, Metric.mem_closedBall, dist_zero_right]
+      rw [quotient_image_closedUnitBall_of_reflexive_bidual_coe,
+        StrongDual.toStrongDual_toWeakDual,
+        quotient_image_closedUnitBall_of_reflexive_norm_bidual]
+    exact himage ▸ heq ▸ hpre
+  · rw [Metric.closedBall_eq_empty.mpr (lt_of_not_ge hr), image_empty]
+    exact isClosed_empty
+
+private theorem quotient_image_closedUnitBall_of_reflexive_surjective_weak
+    (hE : Function.Surjective (NormedSpace.inclusionInDoubleDual ℂ E)) :
+    Function.Surjective (NormedSpace.inclusionInDoubleDualWeak ℂ E) := by
+  intro w
+  obtain ⟨φ, rfl⟩ := (StrongDual.toWeakDual (E := StrongDual ℂ E)).surjective w
+  obtain ⟨x, hx⟩ := hE φ
+  refine ⟨toWeakSpace ℂ E x, ?_⟩
+  rw [quotient_image_closedUnitBall_of_reflexive_bidual_coe, LinearEquiv.symm_apply_apply, hx]
+
+private theorem quotient_image_closedUnitBall_of_reflexive_isCompact_ball
+    (hE : Function.Surjective (NormedSpace.inclusionInDoubleDual ℂ E)) (r : ℝ) :
+    IsCompact ((toWeakSpace ℂ E) '' Metric.closedBall (0 : E) r) := by
+  let S : Set (WeakSpace ℂ E) := (toWeakSpace ℂ E) '' Metric.closedBall (0 : E) r
+  have hclosed : IsClosed S := quotient_image_closedUnitBall_of_reflexive_isClosed_ball r
+  have hb : Bornology.IsBounded ((toWeakSpace ℂ E) ⁻¹' S) := by
+    have : (toWeakSpace ℂ E) ⁻¹' S = Metric.closedBall (0 : E) r := by
+      ext z
+      constructor
+      · intro hz
+        obtain ⟨y, hy, heq⟩ := hz
+        have : z = y := (toWeakSpace ℂ E).injective heq.symm
+        rw [this]
+        exact hy
+      · intro hz
+        exact ⟨z, hz, rfl⟩
+    simpa [this] using Metric.isBounded_closedBall
+  have hrange :
+      closure (NormedSpace.inclusionInDoubleDualWeak ℂ E '' S) ⊆
+        range (NormedSpace.inclusionInDoubleDualWeak ℂ E) := by
+    rw [(quotient_image_closedUnitBall_of_reflexive_surjective_weak hE).range_eq]
+    exact subset_univ _
+  have hcomp := NormedSpace.isCompact_closure_of_isBounded (𝕜 := ℂ) (X := E) S hb hrange
+  simpa [S, hclosed.closure_eq] using hcomp
+
+private theorem quotient_image_closedUnitBall_of_reflexive_map_mkQ
+    (E₀ : Submodule ℂ E) [IsClosed (E₀ : Set E)] (w : WeakSpace ℂ E) :
+    WeakSpace.map E₀.mkQL w =
+      (E₀.mkQ ((toWeakSpace ℂ E).symm w) : WeakSpace ℂ (E ⧸ E₀)) := by
+  have hw : toWeakSpace ℂ E ((toWeakSpace ℂ E).symm w) = w :=
+    (toWeakSpace ℂ E).apply_symm_apply w
+  rw [← hw]
+  exact WeakSpace.map_apply E₀.mkQL ((toWeakSpace ℂ E).symm w)
+
+private theorem quotient_image_closedUnitBall_of_reflexive_isClosed_fiber
+    (E₀ : Submodule ℂ E) [IsClosed (E₀ : Set E)] (y : E ⧸ E₀) :
+    IsClosed {w : WeakSpace ℂ E | E₀.mkQ ((toWeakSpace ℂ E).symm w) = y} := by
+  have hpre : IsClosed
+      ((WeakSpace.map E₀.mkQL) ⁻¹' {toWeakSpace ℂ (E ⧸ E₀) y}) :=
+    isClosed_singleton.preimage (WeakSpace.map E₀.mkQL).continuous
+  have heq :
+      {w : WeakSpace ℂ E | E₀.mkQ ((toWeakSpace ℂ E).symm w) = y} =
+        (WeakSpace.map E₀.mkQL) ⁻¹' {toWeakSpace ℂ (E ⧸ E₀) y} := by
+    ext w
+    simp only [mem_ofPred_eq, mem_preimage, mem_singleton_iff]
+    rw [quotient_image_closedUnitBall_of_reflexive_map_mkQ]
+    exact (toWeakSpace ℂ (E ⧸ E₀)).injective.eq_iff
+  exact heq ▸ hpre
+
 /-- Paper: Remark 10.4.2.6, p. 463. In a reflexive Banach space the quotient
 map also takes the closed unit ball onto the closed unit ball. -/
 theorem quotient_image_closedUnitBall_of_reflexive
     (_hE : Surjective (NormedSpace.inclusionInDoubleDual ℂ E)) :
-    E₀.mkQ '' Metric.closedBall 0 1 = Metric.closedBall 0 1 := by sorry
+    E₀.mkQ '' Metric.closedBall 0 1 = Metric.closedBall 0 1 := by
+  classical
+  ext y
+  simp only [mem_image, Metric.mem_closedBall, dist_zero_right]
+  constructor
+  · rintro ⟨x, hx, rfl⟩
+    exact (Submodule.Quotient.norm_mk_le E₀ x).trans hx
+  · intro hy
+    by_cases hy1 : ‖y‖ < 1
+    · obtain ⟨m, hm, hlt⟩ := Submodule.Quotient.norm_mk_lt y (sub_pos.mpr hy1)
+      exact ⟨m, (lt_of_le_of_lt le_rfl (by linarith : ‖m‖ < 1)).le, hm⟩
+    · have hyeq : ‖y‖ = 1 := le_antisymm hy (le_of_not_gt hy1)
+      let S : ℕ → Set (WeakSpace ℂ E) := fun n =>
+        {w | E₀.mkQ ((toWeakSpace ℂ E).symm w) = y ∧
+          ‖(toWeakSpace ℂ E).symm w‖ ≤ 1 + 1 / (n + 1 : ℝ)}
+      have hSclosed (n : ℕ) : IsClosed (S n) := by
+        have hball : IsClosed
+            ((toWeakSpace ℂ E) '' Metric.closedBall (0 : E) (1 + 1 / (n + 1 : ℝ))) :=
+          quotient_image_closedUnitBall_of_reflexive_isClosed_ball _
+        have hfiber : IsClosed
+            {w : WeakSpace ℂ E | E₀.mkQ ((toWeakSpace ℂ E).symm w) = y} :=
+          quotient_image_closedUnitBall_of_reflexive_isClosed_fiber E₀ y
+        have heq : S n =
+            {w | E₀.mkQ ((toWeakSpace ℂ E).symm w) = y} ∩
+              ((toWeakSpace ℂ E) '' Metric.closedBall (0 : E) (1 + 1 / (n + 1 : ℝ))) := by
+          ext w
+          constructor
+          · rintro ⟨hmap, hnorm⟩
+            refine ⟨hmap, (toWeakSpace ℂ E).symm w, ?_, (toWeakSpace ℂ E).apply_symm_apply w⟩
+            rwa [Metric.mem_closedBall, dist_zero_right]
+          · rintro ⟨hmap, z, hnorm, hz⟩
+            have hmap' : E₀.mkQ ((toWeakSpace ℂ E).symm w) = y := by
+              simpa only [mem_ofPred_eq] using hmap
+            have hzE : (toWeakSpace ℂ E).symm w = z := by
+              have hsym := congrArg (toWeakSpace ℂ E).symm hz
+              rw [LinearEquiv.symm_apply_apply] at hsym
+              exact hsym.symm
+            rw [hzE] at hmap'
+            rw [Metric.mem_closedBall, dist_zero_right] at hnorm
+            change E₀.mkQ ((toWeakSpace ℂ E).symm w) = y ∧
+              ‖(toWeakSpace ℂ E).symm w‖ ≤ 1 + 1 / (n + 1 : ℝ)
+            rw [hzE]
+            exact ⟨hmap', hnorm⟩
+        exact heq ▸ hfiber.inter hball
+      have hradius (n : ℕ) : 1 + 1 / (n + 1 : ℝ) ≤ 2 := by
+        have hdiv : 1 / (n + 1 : ℝ) ≤ 1 := by
+          rw [div_le_one (by positivity)]
+          exact_mod_cast Nat.succ_le_succ (Nat.zero_le n)
+        linarith
+      have hScompact (n : ℕ) : IsCompact (S n) :=
+        (quotient_image_closedUnitBall_of_reflexive_isCompact_ball _hE 2).of_isClosed_subset
+          (hSclosed n) <| by
+          intro w hw
+          refine ⟨(toWeakSpace ℂ E).symm w, ?_, (toWeakSpace ℂ E).apply_symm_apply w⟩
+          rw [Metric.mem_closedBall, dist_zero_right]
+          exact hw.2.trans (hradius n)
+      have hSnonempty (n : ℕ) : (S n).Nonempty := by
+        obtain ⟨m, hm, hlt⟩ := Submodule.Quotient.norm_mk_lt y
+          (one_div_pos.mpr (Nat.cast_add_one_pos n))
+        rw [hyeq] at hlt
+        refine ⟨toWeakSpace ℂ E m, ?_, ?_⟩
+        · rw [LinearEquiv.symm_apply_apply]
+          exact hm
+        · rw [LinearEquiv.symm_apply_apply]
+          exact hlt.le
+      have hsucc (n : ℕ) : S (n + 1) ⊆ S n := by
+        intro w hw
+        refine ⟨hw.1, hw.2.trans ?_⟩
+        have hdiv : (1 : ℝ) / (↑(n + 1) + 1) ≤ 1 / (↑n + 1) :=
+          one_div_le_one_div_of_le
+            (by positivity : (0 : ℝ) < (↑n + 1))
+            (by exact_mod_cast Nat.le_succ (n + 1))
+        exact add_le_add_right hdiv 1
+      obtain ⟨x, hx⟩ :=
+        IsCompact.nonempty_iInter_of_sequence_nonempty_isCompact_isClosed S hsucc
+          hSnonempty (hScompact 0) hSclosed
+      have hxall (n : ℕ) :
+          E₀.mkQ ((toWeakSpace ℂ E).symm x) = y ∧
+            ‖(toWeakSpace ℂ E).symm x‖ ≤ 1 + 1 / (n + 1 : ℝ) :=
+        mem_iInter.mp hx n
+      refine ⟨(toWeakSpace ℂ E).symm x, ?_, (hxall 0).1⟩
+      refine le_of_forall_pos_le_add fun ε hε => ?_
+      obtain ⟨n, hn⟩ := exists_nat_one_div_lt hε
+      refine (hxall n).2.trans (le_of_lt ?_)
+      rw [add_comm (1 : ℝ) (1 / (n + 1 : ℝ)), add_comm (1 : ℝ) ε]
+      exact add_lt_add_left hn 1
 
 -- The Schauder conclusion of Lemma 10.4.2.5 is false even for a Schauder
 -- quotient basis. See the convergent-sequence example in the printed file.
