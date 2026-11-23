@@ -1965,6 +1965,34 @@ private theorem sLocalTrace_fundamentalDomain_radial (D : Set Iₛ)
 
 end RadialSection
 
+/-- Paper: (12.4.1.24), p. 518. The integral of dt/t over the part of (0, L] above a
+positive level a is the logarithmic width of the interval. -/
+private theorem sLocalTrace_integral_inv_Ici (a L : ℝ) (ha : 0 < a) :
+    ∫ t in Ioc 0 L, (Ici a).indicator (fun t : ℝ ↦ t⁻¹) t =
+      if a ≤ L then Real.log L - Real.log a else 0 := by
+  rw [integral_indicator measurableSet_Ici, Measure.restrict_restrict measurableSet_Ici]
+  have hset : Ici a ∩ Ioc 0 L = Icc a L := by
+    ext t
+    simp only [mem_inter_iff, mem_Ici, mem_Ioc, mem_Icc]
+    constructor
+    · rintro ⟨h1, -, h3⟩
+      exact ⟨h1, h3⟩
+    · rintro ⟨h1, h3⟩
+      exact ⟨h1, ha.trans_le h1, h3⟩
+  rw [hset]
+  split_ifs with h
+  · rw [integral_Icc_eq_integral_Ioc, ← intervalIntegral.integral_of_le h,
+      integral_inv_of_pos ha (ha.trans_le h), Real.log_div (ha.trans_le h).ne' ha.ne']
+  · rw [Icc_eq_empty h, Measure.restrict_empty, integral_zero_measure]
+
+/-- Paper: (12.4.1.24), p. 518. The Fourier transform of the translated test, weighted
+by the logarithm of the product norm, is integrable for additive Tamagawa measure.
+Deviation: The logarithm of zero is zero on the null locus with a zero coordinate. -/
+private theorem sLocalTrace_fourier_log_integrable (f : BruhatCompactSupport Iₛ) (ξ : Hₛ) :
+    Integrable (fun w ↦ fourierₛ (sLocalTraceEta f ξ) w * ((Real.log (modS(w)) : ℝ) : ℂ))
+      νₛ := by
+  sorry
+
 /-- Paper: (12.4.1.23)–(12.4.1.24), p. 518. Integrating the band integrals of the
 Fourier transform against dt/t on (0, L] gives the logarithmic width of the spatial
 norm interval, by Fubini; the nonunit locus is null.
@@ -1977,7 +2005,142 @@ private theorem sLocalTrace_band_log_fubini (f : BruhatCompactSupport Iₛ) (ξ 
       (volume₁ : ℂ) * ∫ t in Ioc 0 L,
           (∫ w in band(L' * t), fourierₛ (sLocalTraceEta f ξ) w ∂νₛ) / (t : ℂ) =
         sLocalTraceSharpMass f ξ (L * L') := by
-  sorry
+  let : BorelSpace Aₛ := sAdeleRing_borelSpace
+  let : (νₛ).IsAddHaarMeasure := sLocalTrace_additiveHaar
+  let (v : S) : ProperSpace (v.val.adicCompletion F) := properSpace_adicCompletion v.val
+  let (w : InfinitePlace F) : SecondCountableTopology w.Completion :=
+    (InfinitePlace.Completion.isometry_extensionEmbedding w).isEmbedding.secondCountableTopology
+  let : SecondCountableTopology Aₛ := inferInstanceAs (SecondCountableTopology
+    (((w : InfinitePlace F) → w.Completion) × ((v : S) → v.val.adicCompletion F)))
+  let : T2Space Aₛ := inferInstanceAs (T2Space
+    (((w : InfinitePlace F) → w.Completion) × ((v : S) → v.val.adicCompletion F)))
+  let : LocallyCompactSpace Aₛ := inferInstanceAs (LocallyCompactSpace
+    (((w : InfinitePlace F) → w.Completion) × ((v : S) → v.val.adicCompletion F)))
+  let g := fourierₛ (sLocalTraceEta f ξ)
+  have hgi : Integrable g νₛ := sLocalTraceEta_fourier_integrable f ξ
+  obtain ⟨η, hη⟩ := SLocalTraceEta.eta_test f ξ
+  have hgc : Continuous g := by
+    change Continuous (fourierₛ (sLocalTraceEta f ξ))
+    rw [← funext hη]
+    exact (schwartzBruhat_continuous (sAdeleSchwartzFourier η)).comp continuous_ofAdd
+  have hgl := sLocalTrace_fourier_log_integrable f ξ
+  let m : Aₛ → ℝ := fun w ↦ modS(w)
+  have hm : Continuous m :=
+    (continuous_finsetProd _ fun w _ ↦
+      (((continuous_apply w).comp continuous_fst).norm.pow _)).mul
+      (continuous_finsetProd _ fun v _ ↦ ((continuous_apply v).comp continuous_snd).norm)
+  have hband (r : ℝ) : MeasurableSet (band(r)) := (isClosed_le hm continuous_const).measurableSet
+  have hfull : ∀ᵐ u ∂νₛ, u ∈ range (Units.val : Iₛ → Aₛ) :=
+    measure_eq_zero_iff_ae_notMem.mp sLocalTrace_nonunits_null |>.mono fun _ h ↦ not_not.mp h
+  have hmpos : ∀ᵐ w ∂νₛ, 0 < m w := by
+    filter_upwards [hfull] with w hw
+    obtain ⟨u, rfl⟩ := hw
+    have h : m u.val = normS(u) := by simp [m, sIdeleNorm, Units.coe_prod]
+    rw [h]
+    exact NNReal.coe_pos.mpr (Units.zero_lt _)
+  -- The logarithmic width, and the joint integrand.
+  let φ : Aₛ → ℝ := fun w ↦ if m w / L' ≤ L then Real.log L - Real.log (m w / L') else 0
+  have hφ (w : Aₛ) (hw : 0 < m w) :
+      φ w = (band(L * L')).indicator (fun w ↦ Real.log (L * L') - Real.log (m w)) w := by
+    have hiff : m w / L' ≤ L ↔ w ∈ band(L * L') := div_le_iff₀ hL'
+    by_cases h : w ∈ band(L * L')
+    · rw [indicator_of_mem h]
+      simp only [φ, if_pos (hiff.2 h)]
+      rw [Real.log_div hw.ne' hL'.ne', Real.log_mul hL.ne' hL'.ne']
+      ring
+    · rw [indicator_of_notMem h]
+      simp only [φ, if_neg (mt hiff.1 h)]
+  let μt := (volume : Measure ℝ).restrict (Ioc 0 L)
+  let T : Set (ℝ × Aₛ) := {p | m p.2 / L' ≤ p.1}
+  have hT : MeasurableSet T :=
+    measurableSet_le ((hm.measurable.comp measurable_snd).div_const _) measurable_fst
+  let K : ℝ × Aₛ → ℂ := fun p ↦ g p.2 * ((T.indicator (fun p ↦ p.1⁻¹) p : ℝ) : ℂ)
+  have hKm : Measurable K := (hgc.measurable.comp measurable_snd).mul
+    (Complex.measurable_ofReal.comp (measurable_fst.inv.indicator hT))
+  have hKt (t : ℝ) (w : Aₛ) : K (t, w) = g w * (((Ici (m w / L')).indicator
+      (fun t : ℝ ↦ t⁻¹) t : ℝ) : ℂ) := rfl
+  have hind_nonneg (w : Aₛ) (hw : 0 < m w) (t : ℝ) :
+      0 ≤ (Ici (m w / L')).indicator (fun t : ℝ ↦ t⁻¹) t := by
+    by_cases ht : t ∈ Ici (m w / L')
+    · rw [indicator_of_mem ht]
+      exact inv_nonneg.mpr ((div_pos hw hL').le.trans ht)
+    · rw [indicator_of_notMem ht]
+  have hinner (w : Aₛ) (hw : 0 < m w) : ∫ t, K (t, w) ∂μt = g w * (φ w : ℂ) := by
+    simp_rw [hKt]
+    rw [integral_const_mul, integral_complex_ofReal,
+      sLocalTrace_integral_inv_Ici _ L (div_pos hw hL')]
+  have hinnerN (w : Aₛ) (hw : 0 < m w) : ∫ t, ‖K (t, w)‖ ∂μt = ‖g w‖ * φ w := by
+    have h (t : ℝ) : ‖K (t, w)‖ = ‖g w‖ * (Ici (m w / L')).indicator (fun t : ℝ ↦ t⁻¹) t := by
+      rw [hKt, norm_mul, Complex.norm_real, Real.norm_eq_abs, abs_of_nonneg (hind_nonneg w hw t)]
+    simp_rw [h]
+    rw [integral_const_mul, sLocalTrace_integral_inv_Ici _ L (div_pos hw hL')]
+  -- The logarithmic weight against the transform is integrable.
+  have hgφ : Integrable (fun w ↦ ‖g w‖ * φ w) νₛ := by
+    have hlog : Integrable (fun w ↦ ‖g w‖ * Real.log (m w)) νₛ :=
+      hgl.norm.mono' ((hgc.norm.measurable.mul (Real.measurable_log.comp hm.measurable)).aestronglyMeasurable)
+        (ae_of_all _ fun w ↦ by
+          rw [Real.norm_eq_abs, abs_mul, abs_norm, norm_mul, Complex.norm_real, Real.norm_eq_abs])
+    have hi : Integrable ((band(L * L')).indicator
+        (fun w ↦ ‖g w‖ * (Real.log (L * L') - Real.log (m w)))) νₛ := by
+      refine Integrable.indicator ?_ (hband _)
+      simp_rw [mul_sub]
+      exact (hgi.norm.mul_const _).sub hlog
+    refine hi.congr ?_
+    filter_upwards [hmpos] with w hw
+    rw [hφ w hw]
+    by_cases h : w ∈ band(L * L')
+    · rw [indicator_of_mem h, indicator_of_mem h]
+    · rw [indicator_of_notMem h, indicator_of_notMem h, mul_zero]
+  have hKi : Integrable K (μt.prod νₛ) := by
+    rw [integrable_prod_iff' hKm.aestronglyMeasurable]
+    refine ⟨?_, hgφ.congr ?_⟩
+    · filter_upwards [hmpos] with w hw
+      have ha : 0 < m w / L' := div_pos hw hL'
+      have hb : Integrable (fun t ↦ (Ici (m w / L')).indicator (fun t : ℝ ↦ t⁻¹) t) μt := by
+        rw [integrable_indicator_iff measurableSet_Ici, IntegrableOn,
+          Measure.restrict_restrict measurableSet_Ici]
+        refine (ContinuousOn.integrableOn_compact (isCompact_Icc : IsCompact (Icc (m w / L') L))
+          (continuousOn_inv₀.mono fun t ht ↦ (ha.trans_le ht.1).ne')).mono_set ?_
+        rintro t ⟨h1, -, h3⟩
+        exact ⟨h1, h3⟩
+      simp_rw [hKt]
+      exact (hb.ofReal).const_mul _
+    · filter_upwards [hmpos] with w hw
+      exact (hinnerN w hw).symm
+  -- The band integral at a positive radius is the inner integral in w.
+  have hlhs (t : ℝ) (ht : 0 < t) :
+      (∫ w in band(L' * t), g w ∂νₛ) / (t : ℂ) = ∫ w, K (t, w) ∂νₛ := by
+    rw [← integral_indicator (hband _), ← integral_div]
+    refine integral_congr_ae (ae_of_all _ fun w ↦ ?_)
+    change (band(L' * t)).indicator g w / (t : ℂ) = K (t, w)
+    rw [hKt]
+    have hiff : w ∈ band(L' * t) ↔ t ∈ Ici (m w / L') := by
+      rw [mem_Ici, div_le_iff₀ hL', mul_comm]
+      rfl
+    by_cases h : w ∈ band(L' * t)
+    · rw [indicator_of_mem h, indicator_of_mem (hiff.1 h), Complex.ofReal_inv, div_eq_mul_inv]
+    · rw [indicator_of_notMem h, indicator_of_notMem (mt hiff.2 h), zero_div,
+        Complex.ofReal_zero, mul_zero]
+  have hcongr : ∀ᵐ t ∂μt, (∫ w in band(L' * t), g w ∂νₛ) / (t : ℂ) = ∫ w, K (t, w) ∂νₛ := by
+    filter_upwards [ae_restrict_mem measurableSet_Ioc] with t ht
+    exact hlhs t ht.1
+  refine ⟨hKi.integral_prod_left.congr (hcongr.mono fun _ h ↦ h.symm), ?_⟩
+  change (volume₁ : ℂ) * ∫ t, _ ∂μt = _
+  rw [integral_congr_ae hcongr, integral_integral_swap (f := fun t w ↦ K (t, w)) hKi]
+  unfold sLocalTraceSharpMass
+  congr 1
+  have ho : Topology.IsOpenEmbedding (Units.val : Iₛ → Aₛ) := IsOpenUnits.isOpenEmbedding_unitsVal
+    (M := ((w : InfinitePlace F) → w.Completion) × ((v : S) → v.val.adicCompletion F))
+  rw [← integral_indicator ((hband _).inter ho.isOpen_range.measurableSet)]
+  refine integral_congr_ae ?_
+  filter_upwards [hmpos, hfull] with w hw hu
+  rw [hinner w hw, hφ w hw]
+  by_cases h : w ∈ band(L * L')
+  · rw [indicator_of_mem h, indicator_of_mem
+      (show w ∈ band(L * L') ∩ range (Units.val : Iₛ → Aₛ) from ⟨h, hu⟩)]
+  · rw [indicator_of_notMem h, indicator_of_notMem
+      (show w ∉ band(L * L') ∩ range (Units.val : Iₛ → Aₛ) from fun h' ↦ h h'.1),
+      Complex.ofReal_zero, mul_zero]
 
 /-- Paper: (12.4.1.22), p. 518. The slab of norm at most L in an S-unit fundamental
 domain is null measurable for additive Tamagawa measure on the S-ideles, which has the
