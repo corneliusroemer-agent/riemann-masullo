@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Tests for pr_schedule.py and the PR check / PR schedule / Stop workflow wiring."""
 from pathlib import Path
+import os
 import re
 import unittest
+from unittest import mock
 
 import pr_schedule
 
@@ -114,6 +116,9 @@ class ScheduleTest(unittest.TestCase):
 
     def setUp(self):
         self.api = FakeApi()
+        environment = mock.patch.dict(os.environ, clear=True)
+        environment.start()
+        self.addCleanup(environment.stop)
 
     def run_scheduler(self, max_concurrent=28, now=None):
         sched = pr_schedule.Scheduler(self.api, max_concurrent=max_concurrent,
