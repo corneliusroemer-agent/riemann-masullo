@@ -9384,6 +9384,47 @@ theorem idelicExplicitFormula_mellinMatching (τ : ℝ≥0ˣ →ₜ* C[F])
           (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F) (s - 1 / 2) := by
   sorry
 
+section ExplicitFormulaPoles
+
+/-- A twist `χ |·|^0 = |·|^(-it)` of a character trivial on the image of a section of the class
+norm forces `t = 0`. -/
+private theorem explicitFormula_twist_param_eq_zero (σ : ℝ≥0ˣ → C[F])
+    (hσ : ∀ r, ideleClassNorm F (σ r) = r) (χ : U[F])
+    (hχ : ∀ r, χ (σ r) = 1) (t : ℝ)
+    (h : ideleClassNormTwist χ 0 = ideleClassNormTwist 1 (-Complex.I * (t : ℂ))) : t = 0 := by
+  by_contra ht
+  let x : ℝ := Real.pi / t
+  let r : ℝ≥0ˣ := Units.mk0 ⟨Real.exp x, (Real.exp_pos x).le⟩
+    (by intro h0; exact (Real.exp_pos x).ne' (congrArg Subtype.val h0))
+  have hg := congrArg (fun φ ↦ φ (σ r)) h
+  change ((χ (σ r) : Circle) : ℂ) * (((ideleClassNorm F (σ r) : ℝ≥0) : ℝ) : ℂ) ^ (0 : ℂ) =
+    (((1 : U[F]) (σ r) : Circle) : ℂ) *
+      (((ideleClassNorm F (σ r) : ℝ≥0) : ℝ) : ℂ) ^ (-Complex.I * (t : ℂ)) at hg
+  rw [hχ, hσ] at hg
+  have hr : (((r : ℝ≥0) : ℝ) : ℂ) = ((Real.exp x : ℝ) : ℂ) := rfl
+  have h1c : (((1 : U[F]) (σ r) : Circle) : ℂ) = 1 := rfl
+  rw [hr, h1c, Complex.cpow_zero, Complex.cpow_def_of_ne_zero
+    (Complex.ofReal_ne_zero.mpr (Real.exp_pos x).ne'), ← Complex.ofReal_log (Real.exp_pos x).le,
+    Real.log_exp] at hg
+  have h1 : (x : ℂ) * (-Complex.I * t) = -(Real.pi * Complex.I) := by
+    have htc : (t : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr ht
+    simp only [x]; push_cast; field_simp
+  simp only [Circle.coe_one, one_mul, mul_one, h1] at hg
+  rw [Complex.exp_neg, Complex.exp_pi_mul_I] at hg
+  norm_num at hg
+
+/-- At a point of analyticity the divisor of a function in normal form is nonnegative. -/
+private theorem explicitFormula_divisor_nonneg_of_analyticAt {L : ℂ → ℂ} (hL : MeromorphicNFOn L univ) (ρ : ℂ) (h : AnalyticAt ℂ L ρ) :
+    0 ≤ MeromorphicOn.divisor L univ ρ := by
+  rw [MeromorphicOn.divisor_apply hL.meromorphicOn (mem_univ ρ)]
+  have h0 := h.meromorphicOrderAt_nonneg
+  generalize meromorphicOrderAt L ρ = o at h0 ⊢
+  cases o with
+  | top => simp
+  | coe n => simpa using h0
+
+end ExplicitFormulaPoles
+
 /-- Paper: Theorem B.4.4.7, p. 624, with Proposition 3.2.1.3, p. 123. For a character trivial
 on the image of the norm section `τ`, the continued completed Hecke L-function has a pole only
 when the character is trivial, and then only at `0` and `1`. -/
@@ -9391,14 +9432,37 @@ theorem idelicExplicitFormula_chart_poles (τ : ℝ≥0ˣ →ₜ* C[F])
     (_hτ : RightInverse τ (ideleClassNorm F)) (χ : U[F]) (_hχ : ∀ t : ℝ≥0ˣ, χ (τ t) = 1)
     (ρ : ℂ) (_hρ : MeromorphicOn.divisor (explicitFormulaCompletedHeckeL χ) univ ρ < 0) :
     χ = 1 ∧ (ρ = 0 ∨ ρ = 1) := by
-  sorry
+  obtain ⟨hL, hAgree⟩ := explicitFormulaCompletedHeckeL_spec χ
+  by_cases hχ : χ.toMonoidHom.comp (ideleClassNorm F).ker.subtype = 1
+  · obtain ⟨t, ⟨ht, -, -, han⟩, -⟩ := completedHeckeL_continuation_simplePoles χ _ hL hAgree hχ
+    obtain rfl := explicitFormula_twist_param_eq_zero τ _hτ χ _hχ t ht
+    refine ⟨ContinuousMonoidHom.ext fun g ↦ Circle.ext ?_, ?_⟩
+    · have hg := congrArg (fun φ ↦ φ g) ht
+      change (χ g : ℂ) * (((ideleClassNorm F g : ℝ≥0) : ℝ) : ℂ) ^ (0 : ℂ) =
+        (((1 : U[F]) g : Circle) : ℂ) *
+          (((ideleClassNorm F g : ℝ≥0) : ℝ) : ℂ) ^ (-Complex.I * ((0 : ℝ) : ℂ)) at hg
+      simp only [Complex.cpow_zero, mul_one, Complex.ofReal_zero, mul_zero] at hg
+      exact hg
+    · by_contra hne
+      have hA := han ρ (by simp only [Complex.ofReal_zero, mul_zero, add_zero]; simpa [not_or] using hne)
+      exact (not_le.mpr _hρ) (explicitFormula_divisor_nonneg_of_analyticAt hL ρ hA)
+  · exact absurd _hρ (not_lt.mpr (explicitFormula_divisor_nonneg_of_analyticAt hL ρ
+      ((completedHeckeL_continuation_entire χ _ hL hAgree hχ).analyticAt ρ)))
 
 /-- Paper: Theorem B.4.4.7, p. 624, with Proposition 3.2.1.3, p. 123. The continued completed
 Dedekind zeta function has simple poles at `0` and `1`. -/
 theorem idelicExplicitFormula_trivial_poles :
     MeromorphicOn.divisor (explicitFormulaCompletedHeckeL (1 : U[F])) univ 0 = -1 ∧
       MeromorphicOn.divisor (explicitFormulaCompletedHeckeL (1 : U[F])) univ 1 = -1 := by
-  sorry
+  obtain ⟨hL, hAgree⟩ := explicitFormulaCompletedHeckeL_spec (1 : U[F])
+  obtain ⟨t, ⟨ht, h0, h1, -⟩, -⟩ := completedHeckeL_continuation_simplePoles _ _ hL hAgree
+    (MonoidHom.ext fun _ ↦ rfl)
+  obtain ⟨_, _, _, _, _, _, _, _, _, _, ⟨σ, -, hσ⟩, _⟩ := ideleGroup_quotient.{_, 0} F
+  obtain rfl := explicitFormula_twist_param_eq_zero σ hσ 1 (fun _ ↦ rfl) t ht
+  simp only [Complex.ofReal_zero, mul_zero, add_zero] at h0 h1
+  rw [MeromorphicOn.divisor_apply hL.meromorphicOn (mem_univ _),
+    MeromorphicOn.divisor_apply hL.meromorphicOn (mem_univ _), h0, h1]
+  exact ⟨rfl, rfl⟩
 
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (finite places). Let `Φ_χ` be the
 radial profiles of a test `f` (Mellin transforms matching the idelic Mellin integrals, as in
