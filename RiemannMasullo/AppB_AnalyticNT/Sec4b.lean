@@ -8279,6 +8279,216 @@ theorem explicitFormulaCompletedHeckeL_summable_divisor_div_sq (χ : U[F]) :
         (1 + |s.val.im|) ^ 2) := by
   sorry
 
+section ExplicitFormulaMellinDecay
+
+open scoped Pointwise in
+/-- The integral of the derivative of a compactly supported function along a one-parameter
+subgroup vanishes: the integral of each right translate is the same, and the derivative may be
+taken under the integral since the translates over `|t| < 1` stay in one compact set. -/
+private theorem explicitFormula_integral_flowDeriv_eq_zero {G : Type*} [CommGroup G]
+    [TopologicalSpace G] [IsTopologicalGroup G] [T2Space G] [LocallyCompactSpace G]
+    [MeasurableSpace G] [BorelSpace G] (μ : Measure G) [μ.IsHaarMeasure]
+    (b : Multiplicative ℝ →ₜ* G) {H H' : G → ℂ} (hH : Continuous H) (hHc : HasCompactSupport H)
+    (hH' : Continuous H') (hH'c : HasCompactSupport H')
+    (hd : ∀ x, HasDerivAt (fun t : ℝ ↦ H (x * b (Multiplicative.ofAdd t))) (H' x) 0) :
+    ∫ x, H' x ∂μ = 0 := by
+  let β : ℝ → G := fun t ↦ b (Multiplicative.ofAdd t)
+  have hβ : Continuous β := b.continuous.comp continuous_ofAdd
+  have hβadd (t u : ℝ) : β (t + u) = β t * β u := by
+    simp only [β, ofAdd_add, map_mul]
+  have hdt (x : G) (t : ℝ) : HasDerivAt (fun u : ℝ ↦ H (x * β u)) (H' (x * β t)) t := by
+    have h0 : HasDerivAt (fun u ↦ H (x * β t * β u)) (H' (x * β t)) (t - t) := by
+      rw [sub_self]
+      exact hd _
+    have h := h0.comp_sub_const t t
+    refine h.congr_of_eventuallyEq (.of_forall fun u ↦ ?_)
+    change H (x * β u) = H (x * β t * β (u - t))
+    rw [mul_assoc, ← hβadd, add_sub_cancel]
+  obtain ⟨C, hC⟩ := hH'.bounded_above_of_compact_support hH'c
+  let L : Set G := β '' Metric.closedBall 0 1
+  have hL : IsCompact L := (isCompact_closedBall 0 1).image hβ
+  let S : Set G := tsupport H' * L
+  have hS : IsCompact S := hH'c.isCompact.mul hL
+  let bound : G → ℝ := S.indicator fun _ ↦ C
+  have hbound : Integrable bound μ :=
+    (integrable_indicator_iff hS.measurableSet).mpr (integrableOn_const hS.measure_lt_top.ne)
+  have hmain := hasDerivAt_integral_of_dominated_loc_of_deriv_le (μ := μ)
+    (F := fun t x ↦ H (x * β t)) (F' := fun t x ↦ H' (x * β t)) (x₀ := (0 : ℝ))
+    (bound := bound) (Metric.ball_mem_nhds 0 one_pos)
+    (.of_forall fun t ↦ (hH.comp (continuous_id.mul continuous_const)).aestronglyMeasurable)
+    (by simpa [β] using hH.integrable_of_hasCompactSupport hHc)
+    ((hH'.comp (continuous_id.mul continuous_const)).aestronglyMeasurable)
+    (.of_forall fun x t ht ↦ ?_) hbound (.of_forall fun x t _ ↦ hdt x t)
+  · have hconst : (fun t : ℝ ↦ ∫ x, H (x * β t) ∂μ) = fun _ ↦ ∫ x, H x ∂μ :=
+      funext fun t ↦ integral_mul_right_eq_self H (β t)
+    have h0 := hmain.2
+    rw [hconst] at h0
+    have h1 := h0.unique (hasDerivAt_const (0 : ℝ) (∫ x, H x ∂μ))
+    simpa [β] using h1
+  · by_cases hx : x * β t ∈ tsupport H'
+    · have hxS : x ∈ S := ⟨x * β t, hx, β (-t), ⟨-t, by simpa using (Metric.mem_ball.mp ht).le, rfl⟩,
+        show x * β t * β (-t) = x by rw [mul_assoc, ← hβadd, add_neg_cancel]; simp [β]⟩
+      simp only [bound, indicator_of_mem hxS]
+      exact hC _
+    · simp only [image_eq_zero_of_notMem_tsupport hx, norm_zero, bound]
+      exact indicator_nonneg (fun _ _ ↦ (norm_nonneg _).trans (hC 1)) x
+
+/-- The derivative of a test along a one-parameter subgroup is a test: it is Bruhat smooth,
+and it vanishes off the support of the test. -/
+private theorem explicitFormula_flowDeriv_mem (b : Multiplicative ℝ →ₜ* C[F]) (f : 𝒟(C[F])) :
+    bruhatDirectionalDeriv b f.val ∈ bruhatCompactSupportSubmodule C[F] := by
+  refine ⟨bruhatDirectionalDeriv_mem_smooth b ⟨f.val, f.property.1⟩,
+    HasCompactSupport.intro f.property.2 fun x hx ↦ ?_⟩
+  have hev : (fun t : ℝ ↦ f.val (x * b (Multiplicative.ofAdd t))) =ᶠ[𝓝 0] fun _ ↦ 0 := by
+    have ht : Tendsto (fun t : ℝ ↦ x * b (Multiplicative.ofAdd t)) (𝓝 0) (𝓝 x) := by
+      have hc : Continuous (fun t : ℝ ↦ x * b (Multiplicative.ofAdd t)) :=
+        continuous_const.mul (b.continuous.comp continuous_ofAdd)
+      simpa using hc.tendsto 0
+    exact ht.eventually (notMem_tsupport_iff_eventuallyEq.mp hx)
+  change deriv _ 0 = 0
+  rw [hev.deriv_eq, deriv_const]
+
+/-- Integration by parts along a one-parameter subgroup against a quasi-character: if the
+quasi-character has derivative `σ` at the identity along the subgroup, then the derivative of a
+test integrates against it to `-σ` times the test. -/
+private theorem explicitFormula_integral_flowDeriv_mul (b : Multiplicative ℝ →ₜ* C[F])
+    (c : C[F] →ₜ* ℂ) {σ : ℂ}
+    (hσ : HasDerivAt (fun t : ℝ ↦ c (b (Multiplicative.ofAdd t))) σ 0) (f : 𝒟(C[F])) :
+    ∫ x, bruhatDirectionalDeriv b f.val x * c x ∂classMeasure =
+      -(σ * ∫ x, f.val x * c x ∂classMeasure) := by
+  let : BorelSpace C[F] := ⟨rfl⟩
+  let : (classMeasure).IsHaarMeasure := (ideleClassTamagawaMeasure_isWeil F).1
+  have hf1 : IsBruhatContDiff 1 f.val := (mem_bruhatSmoothSubmodule_iff _).mp f.property.1 1
+  have hfc : Continuous f.val := explicitTest_continuous f
+  have hDc : Continuous (bruhatDirectionalDeriv b f.val) := bruhatDirectionalDeriv_continuous b hf1
+  have hDs : HasCompactSupport (bruhatDirectionalDeriv b f.val) :=
+    (explicitFormula_flowDeriv_mem b f).2
+  have hcc : Continuous c := c.continuous
+  have h := explicitFormula_integral_flowDeriv_eq_zero classMeasure b
+    (H := fun x ↦ f.val x * c x)
+    (H' := fun x ↦ bruhatDirectionalDeriv b f.val x * c x + σ * (f.val x * c x))
+    (hfc.mul hcc) f.property.2.mul_right
+    ((hDc.mul hcc).add (continuous_const.mul (hfc.mul hcc)))
+    ((hDs.mul_right).add (f.property.2.mul_right.mul_left)) fun x ↦ ?_
+  · have hi1 : Integrable (fun x ↦ bruhatDirectionalDeriv b f.val x * c x) classMeasure :=
+      (hDc.mul hcc).integrable_of_hasCompactSupport hDs.mul_right
+    have hi2 : Integrable (fun x ↦ σ * (f.val x * c x)) classMeasure :=
+      (continuous_const.mul (hfc.mul hcc)).integrable_of_hasCompactSupport
+        f.property.2.mul_right.mul_left
+    rw [integral_add hi1 hi2, integral_const_mul] at h
+    exact eq_neg_of_add_eq_zero_left h
+  · have hfd := hasDerivAt_bruhatDirectionalDeriv b hf1 x
+    have hcd : HasDerivAt (fun t : ℝ ↦ c (x * b (Multiplicative.ofAdd t))) (c x * σ) 0 := by
+      simp only [map_mul]
+      exact hσ.const_mul (c x)
+    have := hfd.mul hcd
+    simp only [ofAdd_zero, map_one, mul_one] at this
+    convert this using 1
+    ring
+/-- Differentiation along a one-parameter subgroup lifting the norm (`t ↦ τ(eᵗ)` for a section
+`τ` of the class norm): for a unitary character `χ` there is a constant `κ` such that every test
+has a test whose centered Mellin transform is that of the test times `s - 1/2 + κ`. -/
+private theorem explicitFormula_mellin_flowDeriv (χ : U[F]) :
+    ∃ κ : ℂ, ∀ f : 𝒟(C[F]), ∃ f' : 𝒟(C[F]), ∀ s : ℂ,
+      ∫ g, classMellinIntegrand(f', ideleClassNormTwist χ s, -1 / 2) g ∂classMeasure =
+        (s - 1 / 2 + κ) *
+          ∫ g, classMellinIntegrand(f, ideleClassNormTwist χ s, -1 / 2) g ∂classMeasure := by
+  obtain ⟨_, _, _, _, _, _, _, _, _, _, ⟨τ, hτc, hτ⟩, _⟩ := ideleGroup_quotient.{_, 0} F
+  let b : Multiplicative ℝ →ₜ* C[F] :=
+    ⟨τ.comp positiveRealLogEquiv.symm.toMulEquiv.toMonoidHom,
+      hτc.comp positiveRealLogEquiv.symm.continuous⟩
+  have hN (t : ℝ) : ((ideleClassNorm F (b (Multiplicative.ofAdd t))).val : ℝ) = Real.exp t := by
+    change ((ideleClassNorm F (τ (positiveRealLogEquiv.symm (Multiplicative.ofAdd t)))).val : ℝ) = _
+    rw [hτ]
+    have h := positiveRealLogEquiv_apply (positiveRealLogEquiv.symm (Multiplicative.ofAdd t))
+    rw [ContinuousMulEquiv.apply_symm_apply, toAdd_ofAdd] at h
+    exact (Real.exp_log (NNReal.coe_pos.mpr (Units.zero_lt _))).symm.trans
+      (congrArg Real.exp h.symm)
+  have hχ1 : IsBruhatContDiff 1 (fun x : C[F] ↦ (χ x : ℂ)) :=
+    (mem_bruhatSmoothSubmodule_iff _).mp (pontryaginDual_mem_bruhatSmooth χ) 1
+  let κ := bruhatDirectionalDeriv b (fun x : C[F] ↦ (χ x : ℂ)) 1
+  have hκ : HasDerivAt (fun t : ℝ ↦ (χ (b (Multiplicative.ofAdd t)) : ℂ)) κ 0 := by
+    simpa only [one_mul] using hasDerivAt_bruhatDirectionalDeriv b hχ1 1
+  refine ⟨κ, fun f ↦ ⟨⟨fun x ↦ -bruhatDirectionalDeriv b f.val x,
+    neg_mem (explicitFormula_flowDeriv_mem b f)⟩, fun s ↦ ?_⟩⟩
+  let w : ℂ := s - 1 / 2
+  let c : C[F] →ₜ* ℂ := ideleClassNormTwist χ w
+  have hc (g : C[F]) : ideleClassNormTwist χ s g * classWeight(g, -1 / 2) = c g := by
+    have hpos : (((ideleClassNorm F g).val : ℝ) : ℂ) ≠ 0 :=
+      Complex.ofReal_ne_zero.mpr (NNReal.coe_pos.mpr (Units.zero_lt _)).ne'
+    change ((χ g : Circle) : ℂ) * (((ideleClassNorm F g).val : ℝ) : ℂ) ^ s *
+        (((ideleClassNorm F g).val : ℝ) : ℂ) ^ (-1 / 2 : ℂ) =
+      ((χ g : Circle) : ℂ) * (((ideleClassNorm F g).val : ℝ) : ℂ) ^ w
+    rw [mul_assoc, ← Complex.cpow_add _ _ hpos]
+    congr 2
+    simp only [w]
+    ring
+  have hσ : HasDerivAt (fun t : ℝ ↦ c (b (Multiplicative.ofAdd t))) (κ + w) 0 := by
+    have he : HasDerivAt (fun t : ℝ ↦ Complex.exp ((t : ℂ) * w)) w 0 := by
+      have := ((hasDerivAt_id (0 : ℝ)).ofReal_comp.mul_const w).cexp
+      simpa using this
+    have hprod := hκ.mul he
+    simp only [ofAdd_zero, map_one, Circle.coe_one, Complex.ofReal_zero, zero_mul,
+      Complex.exp_zero, mul_one, one_mul] at hprod
+    refine hprod.congr_of_eventuallyEq (.of_forall fun t ↦ ?_)
+    change ((χ (b (Multiplicative.ofAdd t)) : Circle) : ℂ) *
+        (((ideleClassNorm F (b (Multiplicative.ofAdd t))).val : ℝ) : ℂ) ^ w = _
+    rw [hN, Complex.ofReal_exp, Complex.cpow_def_of_ne_zero (Complex.exp_ne_zero _),
+      Complex.log_exp (by simp [Real.pi_pos]) (by simp [Real.pi_pos.le])]
+    rfl
+  have hIBP := explicitFormula_integral_flowDeriv_mul b c hσ f
+  have hM (h : C[F] → ℂ) : ∫ g, h g * ideleClassNormTwist χ s g * classWeight(g, -1 / 2)
+      ∂classMeasure = ∫ g, h g * c g ∂classMeasure :=
+    integral_congr_ae (.of_forall fun g ↦ by
+      change h g * ideleClassNormTwist χ s g * classWeight(g, -1 / 2) = h g * c g
+      rw [mul_assoc, hc])
+  change ∫ g, (-bruhatDirectionalDeriv b f.val g) * ideleClassNormTwist χ s g *
+      classWeight(g, -1 / 2) ∂classMeasure = _
+  rw [hM, hM]
+  simp only [neg_mul]
+  rw [integral_neg, hIBP]
+  simp only [w]
+  ring
+
+/-- On the closed critical strip, the centered idelic Mellin transform of a test is bounded:
+the twisted weight `|g|^(Re s - 1/2)` is at most `|g|^(1/2) + |g|^(-1/2)`, which is integrable
+against the compactly supported test. -/
+private theorem explicitFormula_mellin_strip_bounded (f : 𝒟(C[F])) (χ : U[F]) :
+    ∃ B : ℝ, 0 ≤ B ∧ ∀ s : ℂ, s.re ∈ Icc (0 : ℝ) 1 →
+      ‖∫ g, classMellinIntegrand(f, ideleClassNormTwist χ s, -1 / 2) g ∂classMeasure‖ ≤ B := by
+  let : BorelSpace C[F] := ⟨rfl⟩
+  let : (classMeasure).IsHaarMeasure := (ideleClassTamagawaMeasure_isWeil F).1
+  let N : C[F] → ℝ := fun g ↦ ((ideleClassNorm F g).val : ℝ)
+  have hNpos (g : C[F]) : 0 < N g := NNReal.coe_pos.mpr (Units.zero_lt _)
+  have hNc : Continuous N := NNReal.continuous_coe.comp
+    (Units.continuous_val.comp (isProperMap_ideleClassNorm F).continuous)
+  let w : C[F] → ℝ := fun g ↦ ‖f.val g‖ * (N g ^ (1 / 2 : ℝ) + N g ^ (-1 / 2 : ℝ))
+  have hwc : Continuous w := (explicitTest_continuous f).norm.mul
+    ((hNc.rpow_const fun g ↦ Or.inl (hNpos g).ne').add (hNc.rpow_const fun g ↦ Or.inl (hNpos g).ne'))
+  have hwi : Integrable w classMeasure :=
+    hwc.integrable_of_hasCompactSupport f.property.2.norm.mul_right
+  refine ⟨∫ g, w g ∂classMeasure, integral_nonneg fun g ↦ ?_, fun s hs ↦ ?_⟩
+  · exact mul_nonneg (norm_nonneg _) (add_nonneg (Real.rpow_nonneg (hNpos g).le _)
+      (Real.rpow_nonneg (hNpos g).le _))
+  refine norm_integral_le_of_norm_le hwi (.of_forall fun g ↦ ?_)
+  have hχ : ‖ideleClassNormTwist χ s g‖ = N g ^ s.re := by
+    change ‖((χ g : Circle) : ℂ) * ((N g : ℂ) ^ s)‖ = _
+    rw [norm_mul, Circle.norm_coe, one_mul, Complex.norm_cpow_eq_rpow_re_of_pos (hNpos g)]
+  have hw : ‖((N g : ℂ) ^ (-1 / 2 : ℂ))‖ = N g ^ (-1 / 2 : ℝ) := by
+    rw [Complex.norm_cpow_eq_rpow_re_of_pos (hNpos g)]
+    norm_num
+  rw [norm_mul, norm_mul, hχ]
+  change ‖f.val g‖ * N g ^ s.re * ‖((N g : ℂ) ^ (-1 / 2 : ℂ))‖ ≤ w g
+  rw [hw, mul_assoc, ← Real.rpow_add (hNpos g)]
+  refine mul_le_mul_of_nonneg_left ?_ (norm_nonneg _)
+  rcases le_total 1 (N g) with h1 | h1
+  · exact (Real.rpow_le_rpow_of_exponent_le h1 (by linarith [hs.2])).trans
+      (le_add_of_nonneg_right (Real.rpow_nonneg (hNpos g).le _))
+  · exact (Real.rpow_le_rpow_of_exponent_ge (hNpos g) h1 (by linarith [hs.1])).trans
+      (le_add_of_nonneg_left (Real.rpow_nonneg (hNpos g).le _))
+
+end ExplicitFormulaMellinDecay
+
 /-- Paper: Lemma B.4.4.9, pp. 624–625. For a fixed test and a fixed unitary character, the
 centered idelic Mellin transform of the test decays like the inverse square of the height in
 the closed critical strip. The test is smooth and compactly supported along the norm, so this
@@ -8287,7 +8497,42 @@ theorem idelicExplicitFormula_mellin_decay (f : 𝒟(C[F])) (χ : U[F]) :
     ∃ K : ℝ, ∀ s : ℂ, s.re ∈ Icc (0 : ℝ) 1 →
       ‖∫ g, classMellinIntegrand(f, ideleClassNormTwist χ s, -1 / 2) g ∂classMeasure‖ ≤
         K / (1 + |s.im|) ^ 2 := by
-  sorry
+  obtain ⟨κ, hκ⟩ := explicitFormula_mellin_flowDeriv χ
+  obtain ⟨f₁, h₁⟩ := hκ f
+  obtain ⟨f₂, h₂⟩ := hκ f₁
+  obtain ⟨B₀, hB₀, hb₀⟩ := explicitFormula_mellin_strip_bounded f χ
+  obtain ⟨B₂, hB₂, hb₂⟩ := explicitFormula_mellin_strip_bounded f₂ χ
+  refine ⟨B₀ * (2 * |κ.im| + 2) ^ 2 + 4 * B₂, fun s hs ↦ ?_⟩
+  set M := ∫ g, classMellinIntegrand(f, ideleClassNormTwist χ s, -1 / 2) g ∂classMeasure
+  set z : ℂ := s - 1 / 2 + κ
+  have hM2 : ‖z‖ ^ 2 * ‖M‖ ≤ B₂ := by
+    have h := hb₂ s hs
+    rw [h₂, h₁, ← mul_assoc, norm_mul, norm_mul] at h
+    change ‖z‖ * ‖z‖ * ‖M‖ ≤ B₂ at h
+    rwa [sq]
+  have hκ0 : 0 ≤ |κ.im| := abs_nonneg _
+  have ht : 0 ≤ |s.im| := abs_nonneg _
+  rw [le_div_iff₀ (by positivity)]
+  rcases le_or_gt |s.im| (2 * |κ.im| + 1) with h | h
+  · have hp : (1 + |s.im|) ^ 2 ≤ (2 * |κ.im| + 2) ^ 2 := pow_le_pow_left₀ (by positivity) (by linarith) 2
+    calc ‖M‖ * (1 + |s.im|) ^ 2 ≤ B₀ * (2 * |κ.im| + 2) ^ 2 :=
+          mul_le_mul (hb₀ s hs) hp (by positivity) hB₀
+      _ ≤ _ := le_add_of_nonneg_right (by positivity)
+  · have hzim : z.im = s.im + κ.im := by simp [z]
+    have hsub : |s.im| ≤ |s.im + κ.im| + |κ.im| := by
+      have := abs_add_le (s.im + κ.im) (-κ.im)
+      rwa [add_neg_cancel_right, abs_neg] at this
+    have hz : (1 + |s.im|) / 2 ≤ ‖z‖ := by
+      refine le_trans ?_ (Complex.abs_im_le_norm z)
+      rw [hzim]
+      linarith
+    have hz2 : (1 + |s.im|) ^ 2 ≤ 4 * ‖z‖ ^ 2 := by
+      nlinarith [hz, norm_nonneg z]
+    calc ‖M‖ * (1 + |s.im|) ^ 2 ≤ ‖M‖ * (4 * ‖z‖ ^ 2) :=
+          mul_le_mul_of_nonneg_left hz2 (norm_nonneg _)
+      _ = 4 * (‖z‖ ^ 2 * ‖M‖) := by ring
+      _ ≤ 4 * B₂ := by linarith
+      _ ≤ _ := le_add_of_nonneg_left (by positivity)
 
 /-- Paper: Lemma B.4.4.9, pp. 624–625, for one character. For a fixed unitary character `χ`,
 the spectral terms of the idelic explicit formula at the zeros of the completed Hecke
