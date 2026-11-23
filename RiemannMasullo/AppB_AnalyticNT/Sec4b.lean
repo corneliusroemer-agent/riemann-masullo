@@ -7953,13 +7953,124 @@ theorem idelicExplicitFormula_finiteTestMap (v : Primes(F)) :
         (⟨p.val.comp R, fun a e C ↦ p.property.comp (hstage a e C)⟩ : P)
   exact ⟨⟨R, hR⟩, fun _ _ ↦ rfl⟩
 
+/-- The units of an archimedean completion embed properly into the idele classes: the class
+norm restricts to a power of the local norm, which is proper on the units. -/
+private theorem explicitFormula_infiniteClassMap_isCompact_preimage (w : InfinitePlace F)
+    {C : Set C[F]} (hC : IsCompact C) : IsCompact (infiniteClassMap(w) ⁻¹' C) := by
+  have hi := InfinitePlace.Completion.isometry_extensionEmbedding w
+  let : ProperSpace w.Completion :=
+    LipschitzWith.properSpace hi.isClosedEmbedding.isProperMap hi.lipschitzWith
+  have hp := isProperMap_units_nnNorm_pow (K := w.Completion) w.mult w.mult_ne_zero
+  have hN : Continuous (ideleClassNorm F) := (isProperMap_ideleClassNorm F).continuous
+  refine (hp.isCompact_preimage (hC.image hN)).of_isClosed_subset
+    (hC.isClosed.preimage (continuous_ideleClass_ofCompletion F w)) fun x hx ↦ ?_
+  refine ⟨_, hx, ?_⟩
+  rw [ideleClassNorm_ofCompletion]
+  rfl
+
+/-- Pullback of a Bruhat `Cᵖ` function along a continuous homomorphism is Bruhat `Cᵖ`: the
+good subgroup is pulled back, and on each structural quotient the induced homomorphism of
+elementary groups is affine on the covers (`contDiff_comp_elementaryHom`). -/
+private theorem explicitFormula_isBruhatContDiff_comp {G H : Type*} [CommGroup G] [CommGroup H]
+    [TopologicalSpace G] [TopologicalSpace H] [IsTopologicalGroup G] [IsTopologicalGroup H]
+    [T2Space G] [T2Space H] [LocallyCompactSpace G] [LocallyCompactSpace H]
+    (ι : G →ₜ* H) {p : ℕ} {f : H → ℂ} (hf : IsBruhatContDiff p f) :
+    IsBruhatContDiff p (f ∘ ι) := by
+  obtain ⟨k, hk, hinv, hdesc⟩ := hf
+  have hkc : IsCompact (k : Set H) := hk.isCompact
+  obtain ⟨J₀, hkJ₀⟩ := exists_openCompactlyGeneratedSubgroup_contains hkc
+  let b₀ : BruhatStructuralPair H :=
+    ⟨(J₀.val, OrderDual.toDual k), J₀.property.1, J₀.property.2, hk, hkJ₀⟩
+  obtain ⟨k', hk', hk'k⟩ := exists_good_subgroup_image_in_kernel ι b₀
+  have hιk (h : G) (hh : h ∈ k') : ι h ∈ k := hk'k ⟨h, hh, rfl⟩
+  refine ⟨k', hk', fun h x ↦ ?_, fun a ha ↦ ?_⟩
+  · change f (ι (h.val * x)) = f (ι x)
+    rw [map_mul]
+    exact hinv ⟨_, hιk h.val h.property⟩ _
+  obtain ⟨U, -, hUc, hUgen⟩ := a.property.2.1
+  have hc : IsCompact ((fun u : a.val.1 ↦ ι u.val) '' U ∪ (k : Set H)) :=
+    (hUc.image (ι.continuous.comp continuous_subtype_val)).union hkc
+  obtain ⟨J, hJ⟩ := exists_openCompactlyGeneratedSubgroup_contains hc
+  let b : BruhatStructuralPair H :=
+    ⟨(J.val, OrderDual.toDual k), J.property.1, J.property.2, hk,
+      fun x hx ↦ hJ (Or.inr hx)⟩
+  have haJ : a.val.1.map ι.toMonoidHom ≤ J.val := by
+    have : (Subgroup.closure U).map (ι.toMonoidHom.comp a.val.1.subtype) ≤ J.val := by
+      rw [MonoidHom.map_closure, Subgroup.closure_le]
+      rintro _ ⟨u, hu, rfl⟩
+      exact hJ (Or.inl ⟨u, hu, rfl⟩)
+    rw [hUgen, Subgroup.map_top, MonoidHom.range_comp, Subgroup.range_subtype] at this
+    exact this
+  let i : a.val.1 →* b.val.1 :=
+    (ι.toMonoidHom.comp a.val.1.subtype).codRestrict _ fun x ↦ haJ ⟨x.val, x.property, rfl⟩
+  have hi : Continuous i := (ι.continuous.comp continuous_subtype_val).subtype_mk _
+  let j : a.quotient →* b.quotient := QuotientGroup.map _ _ i (fun x hx ↦ by
+    change ι x.val ∈ k
+    exact hιk _ (ha ▸ hx))
+  have hj : Continuous j := (QuotientGroup.isQuotientMap_mk _).continuous_iff.mpr
+    (QuotientGroup.continuous_mk.comp hi)
+  obtain ⟨f₀, hf₀, hSmooth⟩ := hdesc b rfl
+  refine ⟨f₀ ∘ j, fun x ↦ hf₀ (i x), fun e z d ↦ ?_⟩
+  obtain ⟨e'⟩ := b.elementary
+  let L := AddMonoidHom.toMultiplicative.symm
+    (e'.equiv.toMulEquiv.toMonoidHom.comp (j.comp e.equiv.symm.toMulEquiv.toMonoidHom))
+  have hL : Continuous L := e'.equiv.continuous.comp (hj.comp e.equiv.symm.continuous)
+  have hs := contDiff_comp_elementaryHom L hL
+    (f := fun y ↦ f₀ (e'.equiv.symm (Multiplicative.ofAdd y))) (hSmooth e') z d
+  convert hs using 1
+  funext u
+  change f₀ (j (e.equiv.symm _)) = f₀ (e'.equiv.symm (e'.equiv (j (e.equiv.symm _))))
+  rw [e'.equiv.symm_apply_apply]
+
+/-- Paper: Theorem B.4.4.7, p. 626. Restriction of test functions along a continuous
+homomorphism with compact preimages out of the units of an archimedean completion is
+continuous on every fixed-support stage `(a, e, C)` of `H`. The restricted functions are
+invariant under one good subgroup `k'` with `ι k' ≤ a.2`, vanish off the compact set
+`ι⁻¹ (C ∩ a.1)`, and descend to the elementary quotient of a structural pair `(J, k')` with
+`J ≤ ι⁻¹ a.1`, where the descent is the stage function composed with an elementary
+homomorphism. So the restriction factors through one stage of `𝒟(w.Completionˣ)`, and
+continuity into that Fréchet stage follows from the closed graph theorem, since point
+evaluations are continuous on both stages. -/
+theorem bruhatCompactSupport_infiniteRestrict_stage (w : InfinitePlace F) {H : Type*}
+    [CommGroup H] [TopologicalSpace H] [IsTopologicalGroup H] [T2Space H] [LocallyCompactSpace H]
+    (ι : w.Completionˣ →* H) (_hι : Continuous ι)
+    (_hpre : ∀ C : Set H, IsCompact C → IsCompact (ι ⁻¹' C))
+    (R : 𝒟(H) →ₗ[ℂ] 𝒟(w.Completionˣ)) (_hR : ∀ f u, (R f).val u = f.val (ι u))
+    (a : BruhatStructuralPair H) (e : ElementaryLCAPresentation a.quotient)
+    (C : TopologicalSpace.Compacts H) :
+    Continuous (R ∘ bruhatCompactSupportStageInclusion a e C) := by
+  sorry
+
 /-- Paper: Theorem B.4.4.7, p. 626. Restriction along the closed embedding of the
 units of an archimedean completion into the idele classes is a continuous linear map of
 compactly supported test spaces. -/
 theorem idelicExplicitFormula_infiniteTestMap (w : InfinitePlace F) :
     ∃ R : 𝒟(C[F]) →L[ℂ] 𝒟(w.Completionˣ),
       ∀ (f : 𝒟(C[F])) (u : w.Completionˣ), (R f).val u = f.val (infiniteClassMap(w) u) := by
-  sorry
+  let G := w.Completionˣ
+  let ι := infiniteClassMap(w)
+  have hmem (f : 𝒟(C[F])) : f.val ∘ ι ∈ bruhatCompactSupportSubmodule G :=
+    ⟨(mem_bruhatSmoothSubmodule_iff _).2 fun p ↦ explicitFormula_isBruhatContDiff_comp
+        ⟨ι, continuous_ideleClass_ofCompletion F w⟩
+        ((mem_bruhatSmoothSubmodule_iff _).1 f.property.1 p),
+      HasCompactSupport.intro (explicitFormula_infiniteClassMap_isCompact_preimage w
+        f.property.2) fun x hx ↦ show f.val (ι x) = 0 from image_eq_zero_of_notMem_tsupport hx⟩
+  let R : 𝒟(C[F]) →ₗ[ℂ] 𝒟(G) :=
+    { toFun := fun f ↦ ⟨f.val ∘ ι, hmem f⟩
+      map_add' := fun _ _ ↦ rfl
+      map_smul' := fun _ _ ↦ rfl }
+  have hstage := bruhatCompactSupport_infiniteRestrict_stage w (H := C[F]) ι
+    (continuous_ideleClass_ofCompletion F w)
+    (fun _ hC ↦ explicitFormula_infiniteClassMap_isCompact_preimage w hC) R fun _ _ ↦ rfl
+  let P := {q : Seminorm ℂ (bruhatCompactSupportSubmodule C[F]) //
+    ∀ (a : BruhatStructuralPair C[F]) (e : ElementaryLCAPresentation a.quotient)
+      (C : TopologicalSpace.Compacts C[F]),
+      Continuous (q ∘ bruhatCompactSupportStageInclusion a e C)}
+  have hR : Continuous R :=
+    (PolynormableSpace.withSeminorms ℂ 𝒟(G)).continuous_of_continuous_comp R fun p ↦
+      (withGeneratingSeminorms_spec _ (Subtype.val : P → _)).continuous_seminorm
+        (⟨p.val.comp R, fun a e C ↦ p.property.comp (hstage a e C)⟩ : P)
+  exact ⟨⟨R, hR⟩, fun _ _ ↦ rfl⟩
 
 /-- Paper: Theorem B.4.4.7, p. 626. Integration against a continuous function on the
 idele classes is a continuous linear functional on the compactly supported test space. -/
