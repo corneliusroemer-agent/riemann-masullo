@@ -35,6 +35,21 @@ An `abbrev`-size scan (`scripts/abbrev_sizes.sh` in the library) cannot see this
 
 Workarounds within a proof, when the definition cannot change: write `have h := term` and then `obtain … := h`, or use `.elim`/`.choose` instead of a case split. Both avoid `kabstract`.
 
+## Statement scan: finding the next family
+
+`scripts/scan_statements.sh lean/StatementSizes.lean` measures every public statement of a built library (about 35 s). It prints the statements of 10⁶ tree nodes or more, and the subterm heads that recur most among them. Then:
+- `lean/StatementBlowup.lean` lists, for chosen statements, the subterms with the largest multiplicity × tree size.
+- `lean/ShowSubterm.lean` pretty-prints the top one.
+
+The largest hits on `main` at 42d9a99 fall into two families:
+
+| family | example statement | distinct | as a tree | fixed by |
+|---|---|---|---|---|
+| the projected-diagonal subgroup of `SIdeleQuotient`, up to 2·10⁸ copies | `sLocalThetaSobolev_isotypeDecomposition` (Ch10 Sec1) | 20,263 | 3.2·10¹³ | [#6948](https://github.com/mccorvie/riemann-masullo/pull/6948) (−6.5% above Ch03 Sec1) |
+| the weighted measure of `CompactIntervalSobolev` with the `logNorm` lambda, 4.2·10⁶ copies | `primeOrbitalSobolevConvolution_traceNorm_continuous` (Ch11 Sec2b) | 7,430 | 2·10¹¹ | [#6986](https://github.com/mccorvie/riemann-masullo/pull/6986) (−22.7% above Ch09 Sec2) |
+
+The fix is the same in both: name the repeated term with an `abbrev` (`sProjectedDiagonal`, `intervalSobolevMeasure`, `logIdeleClassNorm`), and point the notations at the name. Instance arguments then mention one constant. Proofs that unfolded the term with `simp`, `dsimp` or `rw` need the name added to their simp set (4 proofs for #6948, 15 for #6986).
+
 ## Files
 
 - `scripts/profile.sh`: profile one module with the package options, parallel elaboration off.
@@ -43,3 +58,7 @@ Workarounds within a proof, when the definition cannot change: write `have h := 
 - `scripts/scratch_copy.py`: truncated copy of a module plus appended variants or probes.
 - `scripts/compare_builds.py`: per-module comparison of two `lake build -v` logs.
 - `lean/Probes.lean`: `probe_size`, `probe_gen`, `probe_blowup`. Scratch copies only: the library forbids new elaborators.
+- `scripts/scan_statements.sh`: runs a statement scan over the whole built library, generating the imports.
+- `lean/StatementSizes.lean`: every public statement's size, and the recurring subterm heads.
+- `lean/StatementBlowup.lean`: for chosen statements, the subterms that account for their size.
+- `lean/ShowSubterm.lean`: pretty-prints the dominant subterm with a given head.
