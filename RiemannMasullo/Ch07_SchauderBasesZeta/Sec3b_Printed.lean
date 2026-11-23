@@ -706,6 +706,369 @@ local notation "lexLe(" e ", " a ", " b ")" =>
   ((∀ i, a (e i).val = b (e i).val) ∨
     ∃ i, a (e i).val < b (e i).val ∧ ∀ j < i, a (e j).val = b (e j).val)
 
+section GammaAntitone
+
+variable {F : Type*} [Field F] [NumberField F] {S : Finset (HeightOneSpectrum (𝓞 F))}
+
+local notation "Xg" => QuasiCharacter (SIdeleQuotient F S)
+local notation "shiftg(" c ", " z ")" => quasiCharacterNormTwist (sIdeleQuotientNorm F S)
+  (isProperMap_sIdeleQuotientNorm F S).continuous c z
+local notation "archg(" c ")" => sLocalArchPolePlaces (F := F) (S := S) c
+local notation "Gg(" w ")" => (fun s : ℂ ↦ if (w : InfinitePlace F).IsReal then Complex.Gammaℝ s
+  else Complex.Gammaℂ s / 2)
+
+/-- A finite set of linearly independent functionals separates any one of them from the rest. -/
+private theorem sec3bP_exists_dual_single {E ι : Type*} [AddCommGroup E] [Module ℂ E] [Finite ι]
+    (L : ι → E →ₗ[ℂ] ℂ) (hL : LinearIndependent ℂ L) (i₀ : ι) :
+    ∃ x : E, L i₀ x ≠ 0 ∧ ∀ i, i ≠ i₀ → L i x = 0 := by
+  by_contra h
+  push Not at h
+  have hle : (⨅ i : {i // i ≠ i₀}, LinearMap.ker (L i.val)) ≤ LinearMap.ker (L i₀) := by
+    intro x hx
+    rw [Submodule.mem_iInf] at hx
+    by_contra hne
+    obtain ⟨i, hi, hix⟩ := h x hne
+    exact hix (hx ⟨i, hi⟩)
+  have hmem := mem_span_of_iInf_ker_le_ker hle
+  have hrange : Set.range (fun i : {i // i ≠ i₀} ↦ L i.val) = L '' {i | i ≠ i₀} := by
+    ext φ
+    simp
+  rw [hrange] at hmem
+  exact hL.notMem_span_image (s := {i | i ≠ i₀}) (by simp) hmem
+
+private theorem sec3bP_twist_twist (c : Xg) (a z : ℂ) :
+    shiftg(shiftg(c, a), z) = shiftg(c, z + a) := by
+  ext1 g
+  change c g * _ ^ a * _ ^ z = c g * _ ^ (z + a)
+  rw [add_comm, Complex.cpow_add _ _ (Complex.ofReal_ne_zero.mpr
+    (NNReal.coe_ne_zero.mpr (sIdeleQuotientNorm F S g).ne_zero)), mul_assoc]
+
+/-- Along the chart through the trivial character the archimedean Euler factors are
+`Γℝ` at real places and `Γℂ / 2` at complex places. -/
+private theorem sec3bP_archEuler (w : InfinitePlace F) (s : ℂ) :
+    infiniteLocalEulerFactor w (sLocalInfiniteRestriction w (shiftg((1 : Xg), s))) = Gg(w) s := by
+  have hres (g : w.Completionˣ) :
+      sLocalInfiniteRestriction w (shiftg((1 : Xg), s)) g =
+        ((((Units.map nnNormHom.toMonoidHom ^ w.mult : w.Completionˣ →* ℝ≥0ˣ) g : ℝ≥0) : ℝ) :
+          ℂ) ^ s := by
+    have h1 : shiftg((1 : Xg), s) = quasiCharacterNormTwist (sIdeleQuotientNorm F S)
+        (isProperMap_sIdeleQuotientNorm F S).continuous
+        ((⟨Circle.coeHom, continuous_subtype_val⟩ : Circle →ₜ* ℂ).comp
+          (1 : PontryaginDual (SIdeleQuotient F S))) s := by
+      ext1 x
+      change (1 : ℂ) * _ = ((1 : Circle) : ℂ) * _
+      rw [Circle.coe_one]
+      rfl
+    rw [h1]
+    exact sLocalInfiniteRestriction_normTwist w s g
+  by_cases hw : w.IsReal
+  · let e := (InfinitePlace.Completion.ringEquivRealOfIsReal hw).symm
+    have hshape : ∀ x : ℝˣ, sLocalInfiniteRestriction w (shiftg((1 : Xg), s))
+        (Units.map e.toMonoidHom x) =
+          (‖(x : ℝ)‖ : ℂ) ^ s * (if 0 < (x : ℝ) then 1 else (-1 : ℂ)) ^ (0 : Fin 2).val := by
+      intro x
+      have hn : ‖(e (x : ℝ) : w.Completion)‖ = ‖(x : ℝ)‖ :=
+        (InfinitePlace.Completion.isometryEquivRealOfIsReal hw).symm.isometry.norm_map_of_map_zero
+          (map_zero e) (x : ℝ)
+      have hm : (((Units.map nnNormHom.toMonoidHom ^ w.mult : w.Completionˣ →* ℝ≥0ˣ)
+          (Units.map e.toMonoidHom x) : ℝ≥0) : ℝ) = ‖(x : ℝ)‖ := by
+        simp [InfinitePlace.mult, hw, hn]
+      rw [hres, hm, Fin.val_zero, pow_zero, mul_one]
+    have hq := (realLocalEulerParameters w hw (sLocalInfiniteRestriction w
+      (shiftg((1 : Xg), s)))).unique (realLocalEulerParameters w hw
+        (sLocalInfiniteRestriction w (shiftg((1 : Xg), s)))).exists.choose_spec
+      (y₂ := (s, 0)) hshape
+    simp only [infiniteLocalEulerFactor, hw, ↓reduceDIte, hq, ite_true, Fin.val_zero,
+      Nat.cast_zero, add_zero]
+  · have hwc := InfinitePlace.not_isReal_iff_isComplex.mp hw
+    let e := (InfinitePlace.Completion.ringEquivComplexOfIsComplex hwc).symm
+    have hshape : ∀ x : ℂˣ, sLocalInfiniteRestriction w (shiftg((1 : Xg), s))
+        (Units.map e.toMonoidHom x) =
+          ((‖(x : ℂ)‖ ^ 2 : ℝ) : ℂ) ^ s * ((x : ℂ) / (‖(x : ℂ)‖ : ℂ)) ^ (0 : ℤ) := by
+      intro x
+      have hn : ‖(e (x : ℂ) : w.Completion)‖ = ‖(x : ℂ)‖ :=
+        (InfinitePlace.Completion.isometryEquivComplexOfIsComplex
+          hwc).symm.isometry.norm_map_of_map_zero (map_zero e) (x : ℂ)
+      have hm : (((Units.map nnNormHom.toMonoidHom ^ w.mult : w.Completionˣ →* ℝ≥0ˣ)
+          (Units.map e.toMonoidHom x) : ℝ≥0) : ℝ) = ‖(x : ℂ)‖ ^ 2 := by
+        simp [InfinitePlace.mult, hw, hn]
+      rw [hres, hm, zpow_zero, mul_one]
+    have hq := (complexLocalEulerParameters w hwc (sLocalInfiniteRestriction w
+      (shiftg((1 : Xg), s)))).unique (complexLocalEulerParameters w hwc
+        (sLocalInfiniteRestriction w (shiftg((1 : Xg), s)))).exists.choose_spec
+      (y₂ := (s, 0)) hshape
+    simp only [infiniteLocalEulerFactor, hw, ↓reduceDIte, hq, ite_false, Int.natAbs_zero,
+      Nat.cast_zero, zero_div, add_zero]
+
+private theorem sec3bP_mem_arch (a : ℂ) (w : InfinitePlace F) :
+    w ∈ archg(shiftg((1 : Xg), a)) ↔ meromorphicOrderAt (fun z ↦ Gg(w) (z + a)) 0 < 0 := by
+  simp only [sLocalArchPolePlaces, Finset.mem_filter, Finset.mem_univ, true_and]
+  refine iff_of_eq (congrArg (· < 0) (congrArg (meromorphicOrderAt · 0) ?_))
+  funext z
+  rw [sec3bP_twist_twist, sec3bP_archEuler]
+
+omit [NumberField F] in
+private theorem sec3bP_G_inv (w : InfinitePlace F) : Differentiable ℂ (fun s ↦ (Gg(w) s)⁻¹) := by
+  by_cases hw : w.IsReal
+  · simpa only [hw, ite_true] using Complex.differentiable_Gammaℝ_inv
+  · simp only [hw, ite_false, inv_div]
+    exact Complex.differentiable_Gammaℂ_inv.const_mul 2
+
+omit [NumberField F] in
+private theorem sec3bP_G_one (w : InfinitePlace F) : Gg(w) 1 ≠ 0 := by
+  by_cases hw : w.IsReal
+  · simpa only [hw, ite_true] using Complex.Gammaℝ_ne_zero_of_re_pos (by simp)
+  · simp only [hw, ite_false, Complex.Gammaℂ_def]
+    refine div_ne_zero (mul_ne_zero (mul_ne_zero two_ne_zero ?_) ?_) two_ne_zero
+    · exact (Complex.cpow_ne_zero_iff_of_exponent_ne_zero (by simp)).mpr
+        (mul_ne_zero two_ne_zero (Complex.ofReal_ne_zero.mpr Real.pi_ne_zero))
+    · exact Complex.Gamma_ne_zero_of_re_pos (by simp)
+
+omit [NumberField F] in
+private theorem sec3bP_G_even (w : InfinitePlace F) (n : ℕ) : Gg(w) (-(2 * (n : ℂ))) = 0 := by
+  by_cases hw : w.IsReal
+  · simpa only [hw, ite_true] using Complex.Gammaℝ_eq_zero_iff.mpr ⟨n, rfl⟩
+  · simp only [hw, ite_false, Complex.Gammaℂ_def]
+    have : Complex.Gamma (-(2 * (n : ℂ))) = 0 := by
+      simpa using Complex.Gamma_neg_nat_eq_zero (2 * n)
+    rw [this, mul_zero, zero_div]
+
+/-- A zero of the entire reciprocal is a pole. -/
+private theorem sec3bP_pole_of_zero {G : ℂ → ℂ} (hinv : Differentiable ℂ (fun s ↦ (G s)⁻¹))
+    (a : ℂ) (ha : G a = 0) (h1 : G 1 ≠ 0) :
+    meromorphicOrderAt (fun z ↦ G (z + a)) 0 < 0 := by
+  let g : ℂ → ℂ := fun z ↦ (G (z + a))⁻¹
+  have hg : AnalyticOnNhd ℂ g Set.univ := fun z _ ↦
+    ((hinv.comp (differentiable_id.add_const a)).analyticAt z)
+  have h1' : analyticOrderAt g (1 - a) ≠ ⊤ := by
+    rw [analyticOrderAt_eq_zero.mpr (Or.inr (by simpa [g] using h1))]
+    exact ENat.zero_ne_top
+  have hnt : analyticOrderAt g 0 ≠ ⊤ :=
+    hg.analyticOrderAt_ne_top_of_isPreconnected isPreconnected_univ (Set.mem_univ _)
+      (Set.mem_univ _) h1'
+  have hn0 : analyticOrderAt g 0 ≠ 0 := by
+    rw [Ne, analyticOrderAt_eq_zero]
+    push Not
+    exact ⟨hg 0 (Set.mem_univ _), by simp [g, ha]⟩
+  obtain ⟨n, hn⟩ := ENat.ne_top_iff_exists.mp hnt
+  have hpos : 0 < n := by
+    rcases Nat.eq_zero_or_pos n with h | h
+    · exact absurd (by rw [← hn, h]; rfl) hn0
+    · exact h
+  have hord : meromorphicOrderAt g 0 = (n : ℤ) := by
+    rw [(hg 0 (Set.mem_univ _)).meromorphicOrderAt_eq, ← hn]
+    rfl
+  have hinvg : (fun z ↦ G (z + a)) = g⁻¹ := by
+    funext z
+    simp [g]
+  rw [hinvg, meromorphicOrderAt_inv, hord]
+  exact_mod_cast (by omega : -(n : ℤ) < 0)
+
+/-- A nonzero value of the entire reciprocal is a regular point. -/
+private theorem sec3bP_reg_of_ne {G : ℂ → ℂ} (hinv : Differentiable ℂ (fun s ↦ (G s)⁻¹))
+    (a : ℂ) (ha : G a ≠ 0) :
+    ¬ meromorphicOrderAt (fun z ↦ G (z + a)) 0 < 0 := by
+  have han : AnalyticAt ℂ (fun z ↦ ((G (z + a))⁻¹)⁻¹) 0 :=
+    ((hinv.analyticAt _).comp (f := fun z : ℂ ↦ z + a) (by fun_prop)).inv
+      (by simpa using ha)
+  simp only [inv_inv] at han
+  exact not_lt.mpr han.meromorphicOrderAt_nonneg
+
+local notation "J₁g" => (sIdeleQuotientNorm F S).ker
+local notation "cutg(" N ")" => sLocalGammaPoleCutoff (F := F) (S := S) (1 : PontryaginDual J₁g) N
+
+/-- Every even nonpositive integer shift of the trivial character is a pole at every place. -/
+private theorem sec3bP_even_pole (w : InfinitePlace F) (n : ℕ) :
+    w ∈ archg(shiftg((1 : Xg), -(2 * (n : ℂ)))) := by
+  rw [sec3bP_mem_arch]
+  exact sec3bP_pole_of_zero (sec3bP_G_inv w) _ (sec3bP_G_even w n) (sec3bP_G_one w)
+
+/-- At a real place, the poles along the trivial chart are at even nonpositive integers. -/
+private theorem sec3bP_real_pole (w : InfinitePlace F) (hw : w.IsReal) (a : ℂ)
+    (h : w ∈ archg(shiftg((1 : Xg), a))) : ∃ n : ℕ, a = -(2 * (n : ℂ)) := by
+  rw [sec3bP_mem_arch] at h
+  by_contra hn
+  refine sec3bP_reg_of_ne (sec3bP_G_inv w) a ?_ h
+  simpa only [hw, ite_true, Ne, Complex.Gammaℝ_eq_zero_iff] using hn
+
+private theorem sec3bP_onComponent_shift (s : ℂ) :
+    normOneRestriction (sIdeleQuotientNorm F S) (shiftg((1 : Xg), s)) =
+      (⟨Circle.coeHom, continuous_subtype_val⟩ : Circle →ₜ* ℂ).comp (1 : PontryaginDual J₁g) := by
+  ext x
+  have hx : sIdeleQuotientNorm F S x.val = 1 := x.property
+  change (1 : Xg) x.val * ((((sIdeleQuotientNorm F S x.val : ℝ≥0ˣ) : ℝ≥0) : ℝ) : ℂ) ^ s =
+    ((1 : Circle) : ℂ)
+  rw [hx]
+  simp
+
+private theorem sec3bP_cut_mono {N N' : InfinitePlace F → ℕ} (hN : ∀ w, N w ≤ N' w) {c : Xg}
+    (hc : c ∈ cutg(N)) : c ∈ cutg(N') := by
+  obtain ⟨hc, w, hw, hcard⟩ := hc
+  exact ⟨hc, w, hw, hcard.trans (by exact_mod_cast hN w)⟩
+
+private theorem sec3bP_shift4 (t : ℝ) :
+    shiftg(shiftg((1 : Xg), (-4 : ℂ)), (t : ℂ)) = shiftg((1 : Xg), (t : ℂ) + -4) :=
+  sec3bP_twist_twist _ _ _
+
+private theorem sec3bP_pair_sub (w : InfinitePlace F) :
+    ({2, 4} : Set ℝ) ⊆ {t : ℝ | 0 < t ∧ w ∈ archg(shiftg(shiftg((1 : Xg), (-4 : ℂ)), (t : ℂ)))} := by
+  rintro t ht
+  simp only [Set.mem_insert_iff, Set.mem_singleton_iff] at ht
+  rcases ht with rfl | rfl
+  · refine ⟨by norm_num, ?_⟩
+    rw [sec3bP_shift4, show ((2 : ℝ) : ℂ) + -4 = -(2 * ((1 : ℕ) : ℂ)) by push_cast; ring]
+    exact sec3bP_even_pole w 1
+  · refine ⟨by norm_num, ?_⟩
+    rw [sec3bP_shift4,
+      show ((4 : ℝ) : ℂ) + -4 = -(2 * ((0 : ℕ) : ℂ)) by push_cast; ring]
+    exact sec3bP_even_pole w 0
+
+private theorem sec3bP_sub_pair (w : InfinitePlace F) (hw : w.IsReal) :
+    {t : ℝ | 0 < t ∧ w ∈ archg(shiftg(shiftg((1 : Xg), (-4 : ℂ)), (t : ℂ)))} ⊆ ({2, 4} : Set ℝ) := by
+  rintro t ⟨ht, hmem⟩
+  rw [sec3bP_shift4] at hmem
+  obtain ⟨n, hn⟩ := sec3bP_real_pole w hw _ hmem
+  have hr : t + -4 = -(2 * (n : ℝ)) := by
+    have := congrArg Complex.re hn
+    simpa using this
+  have hn2 : n < 2 := by
+    by_contra h
+    have : (2 : ℝ) ≤ n := by exact_mod_cast not_lt.mp h
+    linarith
+  interval_cases n
+  · right; simp only [Set.mem_singleton_iff]; push_cast at hr; linarith
+  · left; push_cast at hr; linarith
+
+local notation "fullPVg" => (sLocalHomogeneousThetaPrincipalValue (F := F)
+  (Finset.Subset.refl S) (1 : PontryaginDual J₁g)).range
+
+private theorem sec3bP_mem_filt (N : InfinitePlace F → ℕ) (x : fullPVg) :
+    x ∈ sLocalGammaFiltration (F := F) (S := S) (1 : PontryaginDual J₁g) N ↔
+      ∀ j : {j : Xg × ℕ // normOneRestriction (sIdeleQuotientNorm F S) j.1 =
+          (⟨Circle.coeHom, continuous_subtype_val⟩ : Circle →ₜ* ℂ).comp (1 : PontryaginDual J₁g) ∧
+          j.1 ∈ cutg(N) ∧ 0 < j.2 ∧ j.2 ≤ (archg(j.1)).card},
+        sLocalThetaPrincipalPartCoeff (F := F) (S := S) (1 : PontryaginDual J₁g) j.val.1
+          j.property.1 j.val.2 x.val = 0 :=
+  Submodule.mem_iInf _
+
+private theorem sec3bP_gamma_not_le (u₁ u₂ : InfinitePlace F) (h2 : u₂.IsReal) :
+    ¬ sLocalGammaFiltration (F := F) (S := S) (1 : PontryaginDual J₁g)
+        (fun w ↦ if w = u₁ then 1 else 0) ≤
+      sLocalGammaFiltration (F := F) (S := S) (1 : PontryaginDual J₁g)
+        (fun w ↦ if w = u₂ then 2 else 0) := by
+  intro hle
+  let a : InfinitePlace F → ℕ := fun w ↦ if w = u₂ then 2 else 0
+  let b : InfinitePlace F → ℕ := fun w ↦ if w = u₁ then 1 else 0
+  let N' : InfinitePlace F → ℕ := fun w ↦ max (a w) (b w)
+  let c4 : Xg := shiftg((1 : Xg), (-4 : ℂ))
+  have hcomp := sec3bP_onComponent_shift (F := F) (S := S) (-4 : ℂ)
+  have hpair : ({2, 4} : Set ℝ).encard = 2 := Set.encard_pair (by norm_num)
+  have hc4b : c4 ∉ cutg(b) := by
+    rintro ⟨-, w, -, hcard⟩
+    have h1 := (Set.encard_le_encard (sec3bP_pair_sub (S := S) w)).trans hcard
+    rw [hpair] at h1
+    have h3 : b w ≤ 1 := by simp only [b]; split_ifs <;> omega
+    have h4 : ((b w : ℕ) : ℕ∞) ≤ 1 := by exact_mod_cast h3
+    exact absurd (h1.trans h4) (by decide)
+  have hc4a : c4 ∈ cutg(a) := by
+    refine ⟨hcomp, u₂, ?_, ?_⟩
+    · have := sec3bP_even_pole (S := S) u₂ 2
+      rwa [show -(2 * ((2 : ℕ) : ℂ)) = (-4 : ℂ) by push_cast; ring] at this
+    · refine (Set.encard_le_encard (sec3bP_sub_pair (S := S) u₂ h2)).trans ?_
+      rw [hpair]
+      simp [a]
+  obtain ⟨hfin, hind⟩ := sLocalGammaFiltration_coeff_independent (F := F) (S := S)
+    (1 : PontryaginDual J₁g) N'
+  have hmono_a := fun c (hc : c ∈ cutg(a)) ↦ sec3bP_cut_mono (N' := N') (fun w ↦ le_max_left _ _) hc
+  have hmono_b := fun c (hc : c ∈ cutg(b)) ↦ sec3bP_cut_mono (N' := N') (fun w ↦ le_max_right _ _) hc
+  have hcard : 1 ≤ (archg(c4)).card :=
+    Finset.card_pos.mpr ⟨u₂, by
+      have := sec3bP_even_pole (S := S) u₂ 2
+      rwa [show -(2 * ((2 : ℕ) : ℂ)) = (-4 : ℂ) by push_cast; ring] at this⟩
+  obtain ⟨x, hx0, hxo⟩ := sec3bP_exists_dual_single _
+    (hind.map' (ContinuousLinearMap.coeLM ℂ)
+      (LinearMap.ker_eq_bot.mpr ContinuousLinearMap.coe_injective))
+    ⟨(c4, 1), hcomp, hmono_a c4 hc4a, one_pos, hcard⟩
+  have hxb : x ∈ sLocalGammaFiltration (F := F) (S := S) (1 : PontryaginDual J₁g) b := by
+    refine (sec3bP_mem_filt b x).mpr fun j ↦ ?_
+    refine hxo ⟨j.val, j.property.1, hmono_b _ j.property.2.1, j.property.2.2⟩ ?_
+    intro h
+    apply hc4b
+    have := congrArg (fun k ↦ k.val.1) h
+    simp only at this
+    rw [← this]
+    exact j.property.2.1
+  exact hx0 ((sec3bP_mem_filt a x).mp (hle hxb) ⟨(c4, 1), hcomp, hc4a, one_pos, hcard⟩)
+
+end GammaAntitone
+
+section QSqrtTwo
+
+open Polynomial
+
+/-- Two is not the square of a rational number. -/
+private theorem sec3bP_sq_ne_two (b : ℚ) : b ^ 2 ≠ 2 := by
+  intro hb
+  have hd : (b.den : ℚ) ≠ 0 := by exact_mod_cast b.den_nz
+  have h1 : (b.num : ℚ) ^ 2 = 2 * (b.den : ℚ) ^ 2 := by
+    have := Rat.num_div_den b
+    rw [← this, div_pow, div_eq_iff (pow_ne_zero 2 hd)] at hb
+    exact hb
+  have h2 : b.num ^ 2 = 2 * (b.den : ℤ) ^ 2 := by exact_mod_cast h1
+  have hn : Even b.num := (Int.even_pow.mp ⟨b.den ^ 2, by rw [h2]; ring⟩).1
+  obtain ⟨k, hk⟩ := hn
+  have h3 : (b.den : ℤ) ^ 2 = 2 * k ^ 2 := by
+    rw [hk] at h2
+    nlinarith [h2]
+  have hdn : Even (b.den : ℤ) := (Int.even_pow.mp ⟨k ^ 2, by rw [h3]; ring⟩).1
+  have h4 : 2 ∣ b.num.natAbs := Int.ofNat_dvd_left.mp ⟨k, by rw [hk]; ring⟩
+  have h5 : 2 ∣ b.den := by
+    obtain ⟨m, hm⟩ := hdn
+    exact Int.natCast_dvd_natCast.mp ⟨m, by rw [hm]; push_cast; ring⟩
+  have h6 := Nat.dvd_gcd h4 h5
+  rw [b.reduced.gcd_eq_one] at h6
+  norm_num at h6
+
+private theorem sec3bP_irred_sqrt_two : Irreducible (X ^ 2 - C 2 : ℚ[X]) :=
+  irreducible_X_pow_sub_C_of_prime Nat.prime_two sec3bP_sq_ne_two
+
+/-- A real embedding as a real infinite place. -/
+private theorem sec3bP_mk_real {K : Type*} [Field K] (φ : K →+* ℝ) :
+    (InfinitePlace.mk (Complex.ofRealHom.comp φ)).IsReal := by
+  rw [InfinitePlace.isReal_mk_iff, ComplexEmbedding.isReal_iff]
+  ext x
+  simp [ComplexEmbedding.conjugate_coe_eq]
+
+/-- Two real embeddings with different absolute values give two real places. -/
+private theorem sec3bP_two_real {K : Type*} [Field K] (φ ψ : K →+* ℝ) (x : K)
+    (hx : |φ x| ≠ |ψ x|) :
+    ∃ w₁ w₂ : InfinitePlace K, w₁ ≠ w₂ ∧ w₁.IsReal ∧ w₂.IsReal := by
+  refine ⟨_, _, fun h ↦ hx ?_, sec3bP_mk_real φ, sec3bP_mk_real ψ⟩
+  have := congrArg (fun w : InfinitePlace K ↦ w x) h
+  simpa [InfinitePlace.apply] using this
+
+private theorem sec3bP_qsqrt2_two_real :
+    letI : Fact (Irreducible (X ^ 2 - C 2 : ℚ[X])) := ⟨sec3bP_irred_sqrt_two⟩
+    ∃ w₁ w₂ : InfinitePlace (AdjoinRoot (X ^ 2 - C 2 : ℚ[X])),
+      w₁ ≠ w₂ ∧ w₁.IsReal ∧ w₂.IsReal := by
+  have : Fact (Irreducible (X ^ 2 - C 2 : ℚ[X])) := ⟨sec3bP_irred_sqrt_two⟩
+  have hs : (Real.sqrt 2) ^ 2 = 2 := Real.sq_sqrt (by norm_num)
+  have h1 : (X ^ 2 - C 2 : ℚ[X]).eval₂ (algebraMap ℚ ℝ) (Real.sqrt 2) = 0 := by
+    simp [hs]
+  have h2 : (X ^ 2 - C 2 : ℚ[X]).eval₂ (algebraMap ℚ ℝ) (-Real.sqrt 2) = 0 := by
+    simp [hs]
+  refine sec3bP_two_real (AdjoinRoot.lift _ _ h1) (AdjoinRoot.lift _ _ h2)
+    (AdjoinRoot.root _ + 1) ?_
+  simp only [map_add, map_one, AdjoinRoot.lift_root]
+  have hgt : 1 < Real.sqrt 2 := by
+    rw [show (1 : ℝ) = Real.sqrt 1 by simp]
+    exact Real.sqrt_lt_sqrt (by norm_num) (by norm_num)
+  rw [abs_of_pos (by linarith), abs_of_neg (by linarith)]
+  intro h
+  linarith
+
+end QSqrtTwo
+
 /-- Paper: Notation 7.3.4.1, p. 364.
 The printed lexicographic orders on the real and complex cutoff tuples make
 the no-pole spaces a decreasing filtration. -/
@@ -725,7 +1088,36 @@ the Euler differential polynomial s²(s+2)² in the Mellin variable to the
 product Gaussian. Its double pole at −4 remains, while the poles at 0 and
 −2 are canceled. Its class is in the stage (1,0) and outside (0,2). -/
 theorem Printed.sLocalGammaFiltration_antitone_false :
-    ¬ Printed.sLocalGammaFiltration_antitone := by sorry
+    ¬ Printed.sLocalGammaFiltration_antitone := by
+  intro h
+  have : Fact (Irreducible (Polynomial.X ^ 2 - Polynomial.C 2 : Polynomial ℚ)) :=
+    ⟨sec3bP_irred_sqrt_two⟩
+  let K := AdjoinRoot (Polynomial.X ^ 2 - Polynomial.C 2 : Polynomial ℚ)
+  let : NumberField K :=
+    { to_charZero := inferInstance
+      to_finiteDimensional :=
+        (AdjoinRoot.powerBasis (Fact.out : Irreducible
+          (Polynomial.X ^ 2 - Polynomial.C 2 : Polynomial ℚ)).ne_zero).finite }
+  obtain ⟨w₁, w₂, hne, hr₁, hr₂⟩ := sec3bP_qsqrt2_two_real
+  let e := (Fintype.equivFin {w : InfinitePlace K // w.IsReal}).symm
+  let e' := (Fintype.equivFin {w : InfinitePlace K // w.IsComplex}).symm
+  have hcard : 1 < Fintype.card {w : InfinitePlace K // w.IsReal} :=
+    Fintype.one_lt_card_iff.mpr ⟨⟨w₁, hr₁⟩, ⟨w₂, hr₂⟩, fun h' ↦ hne (congrArg Subtype.val h')⟩
+  let u₁ : InfinitePlace K := (e ⟨0, by omega⟩).val
+  let u₂ : InfinitePlace K := (e ⟨1, hcard⟩).val
+  have hu : u₁ ≠ u₂ := by
+    intro h'
+    have := e.injective (Subtype.ext h')
+    simp [Fin.ext_iff] at this
+  have hreal (u : InfinitePlace K) (hu : u.IsReal) (v : {w : InfinitePlace K // w.IsComplex}) :
+      v.val ≠ u := by
+    intro h'
+    exact InfinitePlace.not_isReal_iff_isComplex.mpr v.property (h' ▸ hu)
+  have hle := h K ∅ 1 _ _ e e' (fun w ↦ if w = u₂ then 2 else 0) (fun w ↦ if w = u₁ then 1 else 0)
+    (Or.inr ⟨⟨0, by omega⟩, show (if u₁ = u₂ then 2 else 0) < (if u₁ = u₁ then 1 else 0) by
+      simp [hu], fun j hj ↦ absurd hj (by simp [Fin.lt_def])⟩)
+    (Or.inl fun i ↦ by simp [hreal u₁ (e _).property (e' i), hreal u₂ (e _).property (e' i)])
+  exact sec3bP_gamma_not_le (S := ∅) u₁ u₂ (e _).property hle
 
 /-- Paper: Theorem 7.3.4.1(2), pp. 364–365.
 On the signed Laurent convention of Definition 7.1.2.1, the displayed positive-index
