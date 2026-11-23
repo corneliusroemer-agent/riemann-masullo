@@ -1,4 +1,5 @@
 name: PR check
+run-name: PR check #${{ inputs.pr }} ${{ inputs.head_sha }}
 
 # Builds every pull request on top of main and says what should happen to it:
 #
@@ -10,29 +11,38 @@ name: PR check
 # scripts/ci/verdict.py has the exact rules; they are those of scripts/triage_prs.sh. The verdict
 # is shown in the run's summary and uploaded as the artifact `verdict-<verdict>`.
 #
+# Dispatched by .github/workflows/pr_schedule.yml (scripts/ci/pr_schedule.py) so active PR checks
+# stay within a concurrency cap (leaving runner headroom for main and CI PRs) and at most one
+# check runs at a time per touched library file.
+#
 # The pull request is only ever data here. The checker (scripts/, lakefile, lean-toolchain,
 # lake-manifest.json) is main's: main is what gets checked out, the pull request's commit is
 # fetched next to it, and only its Lean files under RiemannMasullo/ are merged in, after
 # verdict.py has refused anything else. They are built in a sandbox with no network.
 #
-# This workflow runs with a read-only token, on pull requests from forks too. A pull request can
-# change its own copy of this file, so nothing here is trusted by Auto-merge: see
-# scripts/ci/auto_merge.py. Keep `branches: [main]`: a pull request against another branch
-# would run that branch's copy of this file.
+# This workflow runs with a read-only token, on pull requests from forks too. Because it runs via
+# workflow_dispatch on main, it always executes main's copy of this file.
 
 on:
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number to check
+        required: true
+        type: string
+      head_sha:
+        description: Full 40-hex head commit SHA of the pull request
+        required: true
+        type: string
 
 permissions:
   contents: read
   actions: read   # to download what the Main state workflow saved
 
-# Per commit, not per pull request: Auto-merge runs a check again when main has moved, and that
-# must not cancel the check of a newer commit pushed in the meantime.
+# Per commit, not per pull request: must match .github/workflows/stop_pr_check.yml so merging
+# cancels an in-flight check, while pushing a newer commit does not cancel an older check's run.
 concurrency:
-  group: pr-check-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+  group: pr-check-${{ inputs.pr }}-${{ inputs.head_sha }}
   cancel-in-progress: true
 
 jobs:
@@ -41,8 +51,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
-      PR: ${{ github.event.pull_request.number }}
-      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      PR: ${{ inputs.pr }}
+      HEAD_SHA: ${{ inputs.head_sha }}
     steps:
       - name: Check out main
         uses: actions/checkout@v4

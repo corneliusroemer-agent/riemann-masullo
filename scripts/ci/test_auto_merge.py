@@ -95,6 +95,10 @@ class FakeApi:
             return [p for p in self.prs.values() if p["state"] == "open"] if "page=1" in path else []
         if m := re.fullmatch(r"pulls/(\d+)", path):
             return self.prs[int(m.group(1))]
+        if path.startswith(f"actions/workflows/{auto_merge.CHECK_WORKFLOW_FILE}/runs?"):
+            return dict(workflow_runs=list(self.runs.values()))
+        if m := re.fullmatch(r"actions/runs/(\d+)", path):
+            return self.runs[int(m.group(1))]
         if path.startswith("actions/runs?"):
             sha = re.search(r"head_sha=([0-9a-f]+)", path).group(1)
             return dict(workflow_runs=[r for r in self.runs.values() if r["head_sha"] == sha])
@@ -230,7 +234,11 @@ class AutoMerge(unittest.TestCase):
         self.api.main_files = ["README.md", LEAN]
         self.assertIn("checking again", self.drain()[7])
         self.assertEqual(self.merged(), [])
-        self.assertTrue(self.api.did("POST", r"actions/runs/1007/rerun"))
+        statuses = self.api.did("POST", r"statuses/.*")
+        self.assertEqual(statuses[0][2]["context"], auto_merge.PR_CHECK_CONTEXT)
+        self.assertEqual(statuses[0][2]["state"], "pending")
+        self.assertIn("Queued for re-check (after 1007):", statuses[0][2]["description"])
+        self.assertTrue(self.api.did("POST", r"actions/workflows/pr_schedule\.yml/dispatches"))
         self.assertFalse(self.api.artifacts)
 
     def test_main_changed_the_checker(self):
@@ -253,7 +261,7 @@ class AutoMerge(unittest.TestCase):
         self.api.pull_request(7, {LEAN: (OLD, NEW)})
         self.api.main_files = ["scripts/progress/template.html", "scripts/review.sh"]
         self.assertEqual(self.drain(), {7: "merged"})
-        self.assertFalse(self.api.did("POST", r"actions/runs/\d+/rerun"))
+        self.assertFalse(self.api.did("POST", r"actions/workflows/pr_schedule\.yml/dispatches"))
 
     def test_two_pull_requests_for_one_file_are_not_merged_on_one_check(self):
         self.api.pull_request(7, {LEAN: (OLD, NEW)})
@@ -269,7 +277,7 @@ class AutoMerge(unittest.TestCase):
         self.api.pull_request(7, {LEAN: (OLD, NEW)}, run=dict(run_attempt=auto_merge.MAX_ATTEMPTS))
         self.api.main_files = [LEAN]
         self.assertIn("given up", self.drain()[7])
-        self.assertFalse(self.api.did("POST", r"actions/runs/\d+/rerun"))
+        self.assertFalse(self.api.did("POST", r"actions/workflows/pr_schedule\.yml/dispatches"))
 
     def test_left_alone(self):
         self.api.pull_request(7, {LEAN: (OLD, NEW)}, draft=True)
@@ -318,7 +326,61 @@ class AutoMerge(unittest.TestCase):
         self.api.merge_errors[7] = (405, "At least 1 approving review is required by reviewers with write access.")
         self.api.prs[7]["mergeable_state"] = "blocked"
         self.assertIn("GitHub refused", self.drain()[7])
-        self.assertFalse(self.api.did("POST", r"actions/runs/\d+/rerun"))
+        self.assertFalse(self.api.did("POST", r"actions/workflows/pr_schedule\.yml/dispatches"))
+
+    def _make_dispatched(self, number, files, run_id=None, main_sha=BASE):
+        head = self.api.pull_request(number, files)
+        run_id = run_id or (3000 + number)
+        self.api.runs.pop(1000 + number)
+        self.api.runs[run_id] = dict(
+            id=run_id, path=auto_merge.CHECK_WORKFLOW, event="workflow_dispatch",
+            head_sha=main_sha, head_branch="main",
+            repository=dict(id=REPO_ID), head_repository=dict(id=REPO_ID),
+            display_title=f"PR check #{number} {head}",
+            status="completed", conclusion="success",
+            run_attempt=1, run_started_at="2026-01-01T00:00:00Z",
+        )
+        self.api.artifacts[-1]["workflow_run"] = dict(
+            id=run_id, repository_id=REPO_ID, head_repository_id=REPO_ID,
+            head_branch="main", head_sha=main_sha,
+        )
+        return head
+
+    def test_dispatched_checks_against_same_main_merge_independently(self):
+        self._make_dispatched(7, {LEAN: (OLD, NEW)})
+        self._make_dispatched(8, {"RiemannMasullo/AppB/Sec2.lean": (OLD, NEW)})
+        self.assertEqual(self.drain(), {7: "merged", 8: "merged"})
+        self.assertEqual(self.merged(), [7, 8])
+
+    def test_dispatched_attempts_are_counted_across_runs(self):
+        head = self._make_dispatched(7, {LEAN: (OLD, NEW)}, run_id=3007)
+        for i in range(auto_merge.MAX_ATTEMPTS - 1):
+            rid = 2000 + i
+            self.api.runs[rid] = dict(
+                id=rid, path=auto_merge.CHECK_WORKFLOW, event="workflow_dispatch",
+                head_sha=BASE, head_branch="main",
+                repository=dict(id=REPO_ID), head_repository=dict(id=REPO_ID),
+                display_title=f"PR check #7 {head}",
+                status="completed", conclusion="success",
+                run_attempt=1, run_started_at="2025-12-31T00:00:00Z",
+            )
+        self.api.main_files = [LEAN]
+        self.assertIn("given up", self.drain()[7])
+        self.assertFalse(self.api.did("POST", r"actions/workflows/pr_schedule\.yml/dispatches"))
+
+    def test_dispatched_artifact_from_wrong_branch_or_repo_is_ignored(self):
+        self._make_dispatched(7, {LEAN: (OLD, NEW)}, run_id=3007)
+        self.api.runs[3007]["head_branch"] = "feature"
+        self.api.artifacts[-1]["workflow_run"]["head_branch"] = "feature"
+        self.assertEqual(self.drain(), {})
+        self.assertEqual(self.merged(), [])
+
+        self.api = FakeApi()
+        self._make_dispatched(7, {LEAN: (OLD, NEW)}, run_id=3008)
+        self.api.runs[3008]["head_repository"] = dict(id=999)
+        self.api.artifacts[-1]["workflow_run"]["head_repository_id"] = 999
+        self.assertEqual(self.drain(), {})
+        self.assertEqual(self.merged(), [])
 
     def test_one_merge_denied_to_the_workflow_token_leaves_the_next_pr_eligible(self):
         self.api.pull_request(7, {LEAN: (OLD, NEW)})
@@ -371,6 +433,7 @@ class Paths(unittest.TestCase):
             self.assertTrue(auto_merge.matters_to_everyone(path), path)
         for path in ("RiemannMasullo/AppA/Sec1.lean", "ERRATA.md", "paper/paper.pdf", "prompts/prover.md",
                      "RiemannMasullo/External/ATTRIBUTION.md", ".github/workflows/claims.yml",
+                     ".github/workflows/pr_schedule.yml", "scripts/ci/pr_schedule.py", "scripts/ci/test_pr_schedule.py",
                      "scripts/ci/stale_claims.py", "scripts/ci/test_stale_claims.py",
                      "scripts/ci/auto_merge.py", "scripts/ci/test_auto_merge.py"):
             self.assertFalse(auto_merge.matters_to_everyone(path), path)

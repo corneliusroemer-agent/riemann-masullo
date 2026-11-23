@@ -52,7 +52,11 @@ import plain_proof
 TOOLS = Path(__file__).resolve().parent.parent.parent
 BRANCH = "main"
 CHECK_WORKFLOW = ".github/workflows/pr_check.yml"
+CHECK_WORKFLOW_FILE = "pr_check.yml"
+SCHEDULE_WORKFLOW = "pr_schedule.yml"
 MAIN_WORKFLOW = "main_state.yml"
+PR_CHECK_CONTEXT = "PR check"
+DISPATCH_TITLE = re.compile(r"^PR check #(\d+) ([0-9a-f]{40})$")
 HOLD_LABEL = "integrator"     # what the merger puts on a pull request it leaves for the integrator
 SHA = re.compile(r"[0-9a-f]{40}")
 REPO = re.compile(r"[A-Za-z0-9._-]+/[A-Za-z0-9._-]+")
@@ -74,6 +78,9 @@ BUILD_DIRS = ("scripts/ci/", ".github/workflows/", "RiemannMasullo/External/")
 NON_BUILD_FILES = (
     "RiemannMasullo/External/ATTRIBUTION.md",
     ".github/workflows/claims.yml",
+    ".github/workflows/pr_schedule.yml",
+    "scripts/ci/pr_schedule.py",
+    "scripts/ci/test_pr_schedule.py",
     "scripts/ci/stale_claims.py",
     "scripts/ci/test_stale_claims.py",
     "scripts/ci/auto_merge.py",
@@ -159,11 +166,19 @@ def read_verdict(data):
     return verdict
 
 
+def parse_dispatch_title(title):
+    m = DISPATCH_TITLE.fullmatch(title or "")
+    return (int(m.group(1)), m.group(2)) if m else None
+
+
 class Merger:
     def __init__(self, api, retry_errors=False):
         self.api, self.retry_errors = api, retry_errors
         self.rows = []       # (pull request, commit, what happened)
         self.merged = 0
+        self.rechecks = 0
+        self._dispatch_runs = None
+        self._runs_by_id = {}
         self.scanner = plain_proof.Scanner()
         run_id = os.environ.get("GITHUB_RUN_ID", "")
         self.url = (f"{os.environ.get('GITHUB_SERVER_URL', 'https://github.com')}/{api.repo}/actions/runs/{run_id}"
@@ -270,14 +285,20 @@ class Merger:
         except ApiError as problem:
             print(f"  could not delete artifact {artifact['id']}: {problem}")
 
-    def check_again(self, run, artifact, sha, why, limit=MAX_ATTEMPTS):
-        if run.get("run_attempt", 1) >= limit:
+    def check_again(self, run, artifact, sha, why, limit=MAX_ATTEMPTS, attempts=None):
+        used = run.get("run_attempt", 1) if attempts is None else attempts
+        if used >= limit:
             self.discard(artifact)
             self.status(sha, "error", f"Not merged automatically: {why}. Checked {limit} times; needs a person.")
             return f"given up after {limit} checks: {why}"
-        # No commit status here: the check shows as running, and its new verdict replaces this one.
-        self.api.change("run the check again", f"actions/runs/{run['id']}/rerun", "POST")
+        # Let pr_schedule.py dispatch the re-check within the concurrency cap and file lock.
+        desc = f"Queued for re-check (after {run['id']}): {why}"
+        body = dict(state="pending", context=PR_CHECK_CONTEXT, description=desc[:140])
+        if run.get("html_url"):
+            body["target_url"] = run["html_url"]
+        self.api.change(f"queue re-check on {sha[:12]}: {why}", f"statuses/{sha}", "POST", body)
         self.discard(artifact)
+        self.rechecks += 1
         return f"checking again: {why}"
 
     def refuse(self, artifact, sha, why):
@@ -313,24 +334,56 @@ class Merger:
 
     # -- one pull request ---------------------------------------------------------------------
 
-    def latest_run(self, sha, head_repo):
-        """The most recent run of the check for this commit."""
+    def dispatch_runs(self):
+        if self._dispatch_runs is None:
+            runs = self.api.call(
+                f"actions/workflows/{CHECK_WORKFLOW_FILE}/runs?" + query(per_page=100)
+            )["workflow_runs"]
+            self._dispatch_runs = runs
+            for r in runs:
+                self._runs_by_id[r["id"]] = r
+        return self._dispatch_runs
+
+    def check_run(self, run_id):
+        if run_id not in self._runs_by_id:
+            for r in self.dispatch_runs():
+                if r["id"] == run_id:
+                    return r
+            self._runs_by_id[run_id] = self.api.call(f"actions/runs/{run_id}")
+        return self._runs_by_id[run_id]
+
+    def latest_run(self, number, sha, head_repo, repo_id):
+        """The most recent run of the check for this commit, and total attempts across runs."""
         runs = self.api.call("actions/runs?" + query(head_sha=sha, event="pull_request", per_page=50))
         ours = [r for r in runs["workflow_runs"]
                 if r.get("path") == CHECK_WORKFLOW and r.get("event") == "pull_request"
                 and r.get("head_sha") == sha and (r.get("head_repository") or {}).get("id") == head_repo]
-        return max(ours, key=lambda r: (r.get("run_started_at") or "", r["id"])) if ours else None
+        title = f"PR check #{number} {sha}"
+        dispatched = [r for r in self.dispatch_runs()
+                      if r.get("path") == CHECK_WORKFLOW and r.get("event") == "workflow_dispatch"
+                      and r.get("head_branch") == BRANCH
+                      and (r.get("repository") or {}).get("id") == repo_id
+                      and (r.get("head_repository") or {}).get("id") == repo_id
+                      and r.get("display_title") == title]
+        by_id = {r["id"]: r for r in ours + dispatched}
+        all_runs = list(by_id.values())
+        if not all_runs:
+            return None, 0
+        latest = max(all_runs, key=lambda r: (r.get("run_started_at") or "", r["id"]))
+        attempts = sum(r.get("run_attempt", 1) for r in all_runs)
+        return latest, attempts
 
     def handle(self, artifact, pr, repo_id):
         run_info = artifact["workflow_run"]
-        sha, number = run_info["head_sha"], pr["number"]
+        sha, number = pr["head"]["sha"], pr["number"]
+        head_repo = pr["head"]["repo"]["id"]
         if run_info.get("repository_id") != repo_id:
             return "artifact of a run in another repository: ignored"
         if pr.get("draft"):
             return "draft: left alone"
         if HOLD_LABEL in [label["name"] for label in pr.get("labels", [])]:
             return f"labelled {HOLD_LABEL}: left alone"
-        run = self.latest_run(sha, run_info["head_repository_id"])
+        run, attempts = self.latest_run(number, sha, head_repo, repo_id)
         if run is None or run["id"] != run_info["id"]:
             if run is not None and run.get("status") == "completed":
                 self.discard(artifact)
@@ -341,7 +394,8 @@ class Merger:
             self.discard(artifact)
             return "verdict from an earlier attempt: dropped"
         if artifact["name"] == "verdict-error":
-            return self.check_again(run, artifact, sha, "the check could not be carried out", MAX_ERROR_ATTEMPTS)
+            return self.check_again(run, artifact, sha, "the check could not be carried out",
+                                    MAX_ERROR_ATTEMPTS, attempts=attempts)
         if run.get("conclusion") != "success":
             return self.refuse(artifact, sha, "the run that uploaded the verdict did not succeed")
         if artifact.get("size_in_bytes", MAX_ARTIFACT_BYTES + 1) > MAX_ARTIFACT_BYTES:
@@ -366,13 +420,13 @@ class Merger:
             return self.refuse(artifact, sha, "; ".join(reasons)[:400])
         why = self.moved(ahead, set(paths))
         if why:
-            return self.check_again(run, artifact, sha, why)
+            return self.check_again(run, artifact, sha, why, attempts=attempts)
         result = self.merge(number, sha)
         if result is True:
             self.merged += 1
             return "merged"
         if result == "conflict":
-            return self.check_again(run, artifact, sha, "it no longer merges cleanly into main")
+            return self.check_again(run, artifact, sha, "it no longer merges cleanly into main", attempts=attempts)
         if result.startswith("GitHub refused"):
             # A branch rule, most likely. Trying again will not help; someone has to look.
             self.discard(artifact)
@@ -383,7 +437,7 @@ class Merger:
     # -- everything that is waiting -----------------------------------------------------------
 
     def waiting(self):
-        """Verdict artifacts to act on, oldest first: the newest per head commit and kind."""
+        """Verdict artifacts to act on, oldest first: the newest per run (or head commit) and kind."""
         kinds = ["verdict-merge"] + (["verdict-error"] if self.retry_errors else [])
         found = []
         for kind in kinds:
@@ -391,8 +445,11 @@ class Merger:
             seen = set()
             for artifact in sorted(listing["artifacts"], key=lambda a: a["created_at"], reverse=True):
                 run = artifact.get("workflow_run") or {}
-                key = (run.get("head_repository_id"), run.get("head_branch"), run.get("head_sha"))
-                if artifact.get("expired") or key in seen or not SHA.fullmatch(str(run.get("head_sha"))):
+                if artifact.get("expired") or not SHA.fullmatch(str(run.get("head_sha"))):
+                    continue
+                key = (("run", run.get("id")) if run.get("head_branch") == BRANCH
+                       else (run.get("head_repository_id"), run.get("head_branch"), run.get("head_sha")))
+                if key in seen:
                     continue
                 seen.add(key)
                 found.append(artifact)
@@ -418,9 +475,17 @@ class Merger:
         given = os.environ.get("GITHUB_REPOSITORY_ID", "")
         repo_id = int(given) if given.isdigit() else self.api.call("")["id"]
         prs = self.open_pull_requests()
+        by_num_sha = {(pr["number"], pr["head"]["sha"]): pr for pr in prs.values()}
         for artifact in artifacts:
             run = artifact["workflow_run"]
             pr = prs.get((run["head_repository_id"], run["head_branch"], run["head_sha"]))
+            if (pr is None and run.get("repository_id") == repo_id
+                    and run.get("head_repository_id") == repo_id and run.get("head_branch") == BRANCH):
+                full_run = self.check_run(run["id"])
+                if full_run and full_run.get("path") == CHECK_WORKFLOW and full_run.get("event") == "workflow_dispatch":
+                    parsed = parse_dispatch_title(full_run.get("display_title"))
+                    if parsed:
+                        pr = by_num_sha.get(parsed)
             if pr is None:
                 continue          # merged, closed or pushed to since; the artifact expires by itself
             if self.merged >= MAX_MERGES:
@@ -431,12 +496,12 @@ class Merger:
             except ApiError as problem:
                 outcome = f"GitHub API error, left for the next run ({problem})"
                 if problem.status in (401, 403, 429):
-                    self.rows.append((pr["number"], run["head_sha"], outcome))
-                    print(f"#{pr['number']} {run['head_sha'][:12]}: {outcome}")
+                    self.rows.append((pr["number"], pr["head"]["sha"], outcome))
+                    print(f"#{pr['number']} {pr['head']['sha'][:12]}: {outcome}")
                     print("::error::the token was refused or rate-limited; stopping")
                     break
-            self.rows.append((pr["number"], run["head_sha"], outcome))
-            print(f"#{pr['number']} {run['head_sha'][:12]}: {outcome}")
+            self.rows.append((pr["number"], pr["head"]["sha"], outcome))
+            print(f"#{pr['number']} {pr['head']['sha'][:12]}: {outcome}")
         if self.merged:
             # A merge made with the workflow token starts no `push` workflow, so ask for main's
             # build (and the signatures the next checks start from) explicitly.
@@ -445,6 +510,13 @@ class Merger:
                                 "POST", dict(ref=BRANCH))
             except ApiError as problem:
                 print(f"::warning::could not start {MAIN_WORKFLOW}: {problem}")
+        if self.rechecks:
+            try:
+                self.api.change("start the PR schedule workflow",
+                                f"actions/workflows/{SCHEDULE_WORKFLOW}/dispatches",
+                                "POST", dict(ref=BRANCH))
+            except ApiError as problem:
+                print(f"::warning::could not start {SCHEDULE_WORKFLOW}: {problem}")
 
     def summary(self):
         target = os.environ.get("GITHUB_STEP_SUMMARY")
