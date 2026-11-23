@@ -2054,13 +2054,88 @@ theorem globalThetaTranspose_invariant (T : D(GlobalAdelicThetaSpace F))
   with_reducible_and_instances
     exact pull_ker_eq_of_map_eq (E := ℬ(𝔸[F])) (adelicThetaLinearMap F) T h
 
+/-- Vanishing normalized evaluations force the global zeta integral to vanish at exponent
+two: there it is the Gaussian factor times the normalized eigendistribution. -/
+private theorem globalThetaTranspose_range_integral (f : ℬ(𝔸[F]))
+    (hf : ∀ c, adelicNormalizedEigendistribution (F := F) c f = 0) (χ : PontryaginDual C𝔽) :
+    globalIdelicZetaIntegral f (ideleClassNormTwist χ 2) = 0 := by
+  have h2 : (1 : ℝ) < (2 : ℂ).re := by norm_num
+  have hD := (adelicEigendistribution_normalized (F := F) χ).choose_spec
+  have hs := (existsUnique_adelicNormalizedEigendistribution (F := F)
+    (ideleClassNormTwist χ 2)).exists.choose_spec
+  have he : adelicNormalizedEigendistribution (ideleClassNormTwist χ 2) =
+      (adelicEigendistribution_normalized (F := F) χ).choose 2 :=
+    (hD.2.1 2 _).mpr ⟨hs.1, hs.2 χ 2 rfl⟩
+  rw [globalIntegral_normalized_ratio χ h2 f, ← he, hf, mul_zero]
+
+/-- Character uniqueness on the convergent line `Re s = 2` separates global theta classes. -/
+private theorem globalThetaTranspose_range_separating (x : GlobalAdelicThetaSpace F)
+    (hx : ∀ c, globalThetaEigendistribution (F := F) c x = 0) : x = 0 := by
+  obtain ⟨f, rfl⟩ := (K𝔽).mkQ_surjective x
+  have hf (c : QuasiCharacter C𝔽) : adelicNormalizedEigendistribution c f = 0 :=
+    (globalThetaEigendistribution_mk c f).symm.trans (hx c)
+  let : MeasurableSpace C𝔽 := borel _
+  let : BorelSpace C𝔽 := ⟨rfl⟩
+  let : T2Space C𝔽 := (ideleGroup_quotient.{_, 0} F).2.2.2.2.2.1
+  let : LocallyCompactSpace C𝔽 := (ideleGroup_quotient.{_, 0} F).2.2.2.2.2.2.1
+  let μ := ideleClassTamagawaMeasure F
+  let : μ.IsHaarMeasure := (ideleClassTamagawaMeasure_isWeil F).1
+  let : μ.Regular := (ideleClassTamagawaMeasure_isWeil F).2.1
+  have h2 : (1 : ℝ) < (2 : ℂ).re := by norm_num
+  let w := ideleClassNormTwist (1 : PontryaginDual C𝔽) 2
+  have hθ : adelicTheta f = 0 := by
+    refine eq_zero_of_weighted_integrals μ _ w
+      (globalThetaMellinIntegral_integrable f w (globalTwist_mem_rightHalf 1 h2)) fun χ ↦ ?_
+    have heval := globalThetaTranspose_range_integral f hf χ
+    rw [(globalIdelicZetaIntegral_eq_thetaIntegral f _ (globalTwist_mem_rightHalf χ h2)).2]
+      at heval
+    refine (MeasureTheory.integral_congr_ae (Filter.Eventually.of_forall fun g ↦ ?_)).trans heval
+    change adelicTheta f g * (1 * _ ^ (2 : ℂ)) * (χ g : ℂ) =
+      adelicTheta f g * ((χ g : ℂ) * _ ^ (2 : ℂ))
+    rw [one_mul, mul_right_comm, mul_assoc]
+  exact (Submodule.Quotient.mk_eq_zero _).mpr (LinearMap.mem_ker.mpr hθ)
+
+/-- A continuous linear map with closed range that sends a family with dense span onto another
+family has the closed span of the second family as its range. -/
+private theorem globalThetaTranspose_range_of_dense {X Y I : Type*} [AddCommGroup X]
+    [Module ℂ X] [TopologicalSpace X] [AddCommGroup Y] [Module ℂ Y] [TopologicalSpace Y]
+    (L : X →L[ℂ] Y) (D : I → X) (G : I → Y)
+    (hd : Dense (Submodule.span ℂ (Set.range D) : Set X)) (hG : ∀ i, L (D i) = G i)
+    (hcl : IsClosed (Set.range L)) :
+    Set.range L = closure (Submodule.span ℂ (Set.range G) : Set Y) := by
+  have hs : L.toLinearMap '' Set.range D = Set.range G :=
+    (Set.range_comp L.toLinearMap D).symm.trans (congrArg Set.range (funext hG))
+  have hi := congrArg (fun p : Submodule ℂ Y ↦ (p : Set Y))
+    ((Submodule.map_span L.toLinearMap (Set.range D)).trans (congrArg (Submodule.span ℂ) hs))
+  change L '' (Submodule.span ℂ (Set.range D) : Set X) = _ at hi
+  rw [← hi]
+  exact le_antisymm (L.continuous.range_subset_closure_image_dense hd)
+    (closure_minimal (Set.image_subset_range _ _) hcl)
+
 /-- Paper: Theorem 5.5.3.4(2), p. 285.
 The range of the ordinary global theta transpose is the strongly closed span of
 all normalized adelic eigendistributions pulled back from the theta quotient. -/
 theorem globalThetaTranspose_range :
     Set.range (pull(K𝔽)) =
       closure (Submodule.span ℂ (Set.range (adelicNormalizedEigendistribution (F := F))) :
-        Set D(ℬ(𝔸[F]))) := by sorry
+        Set D(ℬ(𝔸[F]))) := by
+  let E := GlobalAdelicThetaSpace F
+  let : UniformSpace E := IsTopologicalAddGroup.rightUniformSpace _
+  let : IsUniformAddGroup E := isUniformAddGroup_of_addCommGroup
+  let : T2Space E := globalAdelicThetaSpace_t2_of_isClosed adelicTheta_ker_isClosed
+  let : PolynormableSpace ℂ E := globalAdelicThetaSpace_polynormable
+  let : MontelSpace ℂ E := globalAdelicThetaSpace_montel
+  have hN : IsNuclearTVS.{0} (StrongDual ℂ E) := globalAdelicThetaSpace_strongDual_nuclear (F := F)
+  let : PolynormableSpace ℂ (StrongDual ℂ E) := hN.2.1
+  have hd : Dense (Submodule.span ℂ (Set.range (globalThetaEigendistribution (F := F))) :
+      Set (StrongDual ℂ E)) := by
+    with_reducible_and_instances
+      exact dense_span_of_separating_strongDual (globalThetaEigendistribution (F := F))
+        globalThetaTranspose_range_separating
+  exact globalThetaTranspose_range_of_dense (pull(K𝔽))
+    (globalThetaEigendistribution (F := F)) (adelicNormalizedEigendistribution (F := F)) hd
+    (fun c ↦ ContinuousLinearMap.ext fun f ↦ globalThetaEigendistribution_mk c f)
+    (globalThetaQuotient_transpose_isClosed_range (F := F))
 
 end StructureTheorem
 
