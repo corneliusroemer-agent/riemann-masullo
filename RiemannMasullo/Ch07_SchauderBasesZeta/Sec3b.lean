@@ -2126,7 +2126,29 @@ private theorem sLocalGammaFiltration_coeff_independent_section :
       (∀ t : ℝ, Real.log (((m(S) (QuotientGroup.mk (u t) : J(S)) : ℝ≥0) : ℝ)) = t) ∧
       (∀ (c : Xₛ) (t : ℝ), c (QuotientGroup.mk (u t) : J(S)) = Complex.exp (s c * t)) ∧
       ∀ (ω : PontryaginDual J₁(S)) (c c' : Xₛ), onComponent(c, ω) → onComponent(c', ω) →
-        s c = s c' → c = c' := by sorry
+        s c = s c' → c = c' := by
+  classical
+  obtain ⟨σ, hσ⟩ := sIdeleQuotientNorm_exists_section (F := F) (S := S)
+  let E (t : ℝ) : ℝ≥0ˣ := Units.mk0 (Real.exp t).toNNReal (Real.toNNReal_pos.mpr (Real.exp_pos t)).ne'
+  have hE (t : ℝ) : (((E t : ℝ≥0ˣ) : ℝ≥0) : ℝ) = Real.exp t := Real.coe_toNNReal _ (Real.exp_pos t).le
+  choose u hu using fun t ↦ QuotientGroup.mk_surjective (σ (E t))
+  let s (c : Xₛ) : ℂ := (existsUnique_complexPower (c.comp σ)).exists.choose
+  have hs (c : Xₛ) (x : ℝ≥0ˣ) : c (σ x) = (((x : ℝ≥0) : ℝ) : ℂ) ^ s c :=
+    (existsUnique_complexPower (c.comp σ)).exists.choose_spec x
+  refine ⟨u, s, fun t ↦ ?_, fun c t ↦ ?_, fun ω c c' hc hc' hcc ↦ ?_⟩
+  · rw [hu, hσ (E t), hE, Real.log_exp]
+  · rw [hu, hs, hE, Complex.cpow_def_of_ne_zero (Complex.ofReal_ne_zero.mpr (Real.exp_pos t).ne'),
+      ← Complex.ofReal_log (Real.exp_pos t).le, Real.log_exp, mul_comm]
+  · have hk (k : J(S)) (hk : k ∈ J₁(S)) : c k = c' k :=
+      DFunLike.congr_fun (hc.trans hc'.symm) ⟨k, hk⟩
+    have hsec (x : ℝ≥0ˣ) : c (σ x) = c' (σ x) := by rw [hs, hs, hcc]
+    ext g
+    have hg : g * (σ (m(S) g))⁻¹ ∈ J₁(S) := by
+      rw [MonoidHom.mem_ker, map_mul, map_inv, hσ, mul_inv_cancel]
+    have hsplit : g = g * (σ (m(S) g))⁻¹ * σ (m(S) g) := by group
+    calc c g = c (g * (σ (m(S) g))⁻¹) * c (σ (m(S) g)) := by rw [← map_mul, ← hsplit]
+      _ = c' (g * (σ (m(S) g))⁻¹) * c' (σ (m(S) g)) := by rw [hk _ hg, hsec]
+      _ = c' g := by rw [← map_mul, ← hsplit]
 
 -- TODO(paper-gap): The test list (7.3.4.9) does not separate the two coefficients
 -- of a double real pole at cutoff (0,0). See ERRATA I169. Finite interpolation can
