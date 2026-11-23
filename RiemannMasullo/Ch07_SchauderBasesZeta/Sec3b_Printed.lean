@@ -320,7 +320,83 @@ five, with no added places. Translation by the local unit two preserves the test
 the moments and acts by minus one on the theta quotient. Half the difference from the
 translate represents the same class and has both moments zero. The two levels coincide. -/
 theorem Printed.sLocalAbsolutePW_zeroMoment_codim_false :
-    ¬ Printed.sLocalAbsolutePW_zeroMoment_codim := by sorry
+    ¬ Printed.sLocalAbsolutePW_zeroMoment_codim := by
+  intro h
+  obtain ⟨m, hm⟩ := Ideal.exists_maximal (𝓞 ℚ)
+  let p : Vℚ := ⟨m, hm.isPrime, NeZero.ne m⟩
+  let S : Finset Vℚ := ∅
+  let T : Finset Vℚ := {p}
+  have hsub : S ⊆ T := Finset.empty_subset _
+  have hpT : p ∈ T \ S := by simp [S, T]
+  have hu : NormOneCharacterUnramifiedOutside (1 : PontryaginDual (ideleClassNorm ℚ).ker) S :=
+    ⟨⟨1, (mem_unramifiedOutside_iff ℚ S 1).mpr (fun _ _ _ ↦ rfl)⟩, fun _ ↦ rfl⟩
+  let χ := sLocalNormOneCharacter (F := ℚ) T 1 (hu.mono hsub)
+  let K := sLocalPWBox S 1
+  let E := unitTests(ℚ, S, T, hsub, K)
+  let q := q(ℚ, T, χ)
+  let W := unitLevel(ℚ, S, T, hsub, K, ⊤, χ)
+  let W₀ := unitLevel(ℚ, S, T, hsub, K, zeroMoments(ℚ, T), χ)
+  have h2 : Module.finrank ℂ (W ⧸ W₀.comap W.subtype) = 2 :=
+    h ℚ S T T (by simp [S, T]) (Finset.disjoint_empty_left _) (sec3bP_saturated p) sec3bP_pic
+      1 hu hsub χ rfl 1 one_pos
+  -- Every inserted test vanishes at zero, so only the Fourier moment separates the levels.
+  let M := (sAdelePolarValues_isLinear (F := ℚ) (S := T)).mk' _
+  let L : B(ℚ, T) →ₗ[ℂ] ℂ := (LinearMap.snd ℂ ℂ ℂ).comp M
+  have hE0 (e : B(ℚ, T)) (he : e ∈ E) : e (Multiplicative.ofAdd 0) = 0 := by
+    obtain ⟨t, -, rfl⟩ := Submodule.mem_map.mp he
+    exact sec3bP_sPV_zero Finset.sdiff_subset hpT 0 rfl t
+  have hpol (e : B(ℚ, T)) (he : e ∈ E) (hL : L e = 0) : e ∈ zeroMoments(ℚ, T) :=
+    (mem_sAdelePolarSubspace _).mpr ⟨hE0 e he, hL⟩
+  obtain ⟨R, hRE, hR1, hRfd, hsplit⟩ : ∃ R : Submodule ℂ (B(ℚ, T)), R ≤ E ∧
+      Module.finrank ℂ R ≤ 1 ∧ FiniteDimensional ℂ R ∧ E ≤ (E ⊓ zeroMoments(ℚ, T)) ⊔ R := by
+    by_cases hex : ∃ e₀ ∈ E, L e₀ ≠ 0
+    · obtain ⟨e₀, he₀, hL₀⟩ := hex
+      refine ⟨ℂ ∙ e₀, (Submodule.span_singleton_le_iff_mem _ _).mpr he₀,
+        (finrank_span_le_card ({e₀} : Set (B(ℚ, T)))).trans (by simp), inferInstance,
+        fun e he ↦ ?_⟩
+      have hm : e - (L e / L e₀) • e₀ ∈ E := E.sub_mem he (E.smul_mem _ he₀)
+      have hd : e - (L e / L e₀) • e₀ ∈ E ⊓ zeroMoments(ℚ, T) := by
+        refine ⟨hm, hpol _ hm ?_⟩
+        rw [map_sub, map_smul, smul_eq_mul, div_mul_cancel₀ _ hL₀, sub_self]
+      have he' : e = (e - (L e / L e₀) • e₀) + (L e / L e₀) • e₀ := by abel
+      rw [he']
+      exact Submodule.add_mem_sup hd (Submodule.smul_mem _ _ (Submodule.mem_span_singleton_self e₀))
+    · push Not at hex
+      exact ⟨⊥, bot_le, by simp, inferInstance,
+        fun e he ↦ Submodule.mem_sup_left ⟨he, hpol e he (hex e he)⟩⟩
+  -- The closure of the inserted tests lies in the closed zero-moment level plus one line.
+  let Rq := R.map q
+  have : FiniteDimensional ℂ Rq := inferInstance
+  have hcl : IsClosed ((W₀ ⊔ Rq : Submodule ℂ (Θ(ℚ, T, χ))) : Set (Θ(ℚ, T, χ))) :=
+    Submodule.isClosed_sup_finiteDimensional W₀ Rq (Submodule.isClosed_topologicalClosure _)
+  have hWle : W ≤ W₀ ⊔ Rq := by
+    refine Submodule.topologicalClosure_minimal _ ?_ hcl
+    intro x hx
+    obtain ⟨e, ⟨he, -⟩, rfl⟩ := Submodule.mem_map.mp hx
+    obtain ⟨a, ha, r, hr, rfl⟩ := Submodule.mem_sup.mp (hsplit he)
+    rw [map_add]
+    exact Submodule.add_mem_sup (Submodule.le_topologicalClosure _ (Submodule.mem_map_of_mem ha))
+      (Submodule.mem_map_of_mem hr)
+  have hRW : Rq ≤ W := (Submodule.map_mono (le_inf hRE le_top)).trans
+    (Submodule.le_topologicalClosure _)
+  -- Hence that line maps onto the quotient, which has dimension at most one.
+  let ψ : Rq →ₗ[ℂ] W ⧸ W₀.comap W.subtype :=
+    (W₀.comap W.subtype).mkQ ∘ₗ Submodule.inclusion hRW
+  have hψ : Function.Surjective ψ := by
+    intro y
+    obtain ⟨w, rfl⟩ := Submodule.mkQ_surjective _ y
+    obtain ⟨a, ha, r, hr, hw⟩ := Submodule.mem_sup.mp (hWle w.property)
+    refine ⟨⟨r, hr⟩, ?_⟩
+    change Submodule.Quotient.mk _ = Submodule.Quotient.mk _
+    rw [Submodule.Quotient.eq, Submodule.mem_comap]
+    have hrw : (r : _) - w = -a := by rw [← hw]; abel
+    change (r : _) - (w : _) ∈ W₀
+    rw [hrw]
+    exact W₀.neg_mem ha
+  have hle : Module.finrank ℂ (W ⧸ W₀.comap W.subtype) ≤ Module.finrank ℂ Rq :=
+    LinearMap.finrank_le_finrank_of_surjective hψ
+  have hRq : Module.finrank ℂ Rq ≤ Module.finrank ℂ R := Submodule.finrank_map_le q R
+  omega
 
 /-- Paper: Proposition 7.3.3.2, pp. 357–358.
 The diagram of inclusions and restrictions of the continuous ambient PV operator
