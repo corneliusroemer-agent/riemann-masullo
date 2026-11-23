@@ -8264,7 +8264,10 @@ vanish for `Re s > 1`, and the functional equation reflects this to `Re s < 0`. 
 theorem explicitFormulaCompletedHeckeL_zero_re_mem (χ : U[F]) {s : ℂ}
     (_hs : 0 < MeromorphicOn.divisor (explicitFormulaCompletedHeckeL χ) univ s) :
     s.re ∈ Icc (0 : ℝ) 1 := by
-  sorry
+  obtain ⟨hL, hAgree⟩ := explicitFormulaCompletedHeckeL_spec χ
+  refine hasSum_heckeAsymptoticResidue_re_mem χ _ hL hAgree s fun h0 ↦ ?_
+  rw [MeromorphicOn.divisor_apply hL.meromorphicOn (mem_univ s), h0] at _hs
+  exact lt_irrefl _ _hs
 
 /-- Paper: Lemma B.4.4.9, pp. 624–625. The zeros of the completed Hecke L-function of a
 fixed unitary character, counted with multiplicity, satisfy `∑ ord(ρ) / (1 + |Im ρ|)² < ∞`.
