@@ -1412,6 +1412,202 @@ theorem sLocalTraceSharpMass_zero (ξ : Hₛ) (R : ℝ) :
     funext w; simp [tamagawaFourier]
   simp [sLocalTraceSharpMass, h0, h1]
 
+/-- Paper: (12.4.1.22), p. 518. On the spatial slab the skew diagonal of the sharp
+kernel is the measure factor times the Fourier transform of the translated test,
+integrated over the frequency band and dilated by the spatial variable. -/
+private theorem sLocalTraceSharp_diag (f : BruhatCompactSupport Iₛ) (ξ : Hₛ) (L L' : ℝ)
+    (x : Iₛ) (hx : normS(x) ≤ L) :
+    sLocalTraceCutoffKernel f (indicator {x : Iₛ | normS(x) ≤ L} (fun _ ↦ 1))
+        (indicator band(L') (fun _ ↦ 1)) (ξ.val * x) x.val =
+      (sLocalTraceMeasureFactor S : ℂ) *
+        ∫ u in band(L'), fourierₛ (sLocalTraceEta f ξ) (x.val * u) ∂νₛ := by
+  have : BorelSpace Aₛ := sAdeleRing_borelSpace
+  have hm : Continuous fun t : Aₛ ↦ modS(t) :=
+    (continuous_finsetProd _ fun w _ ↦
+      (((continuous_apply w).comp continuous_fst).norm.pow _)).mul
+      (continuous_finsetProd _ fun v _ ↦ ((continuous_apply v).comp continuous_snd).norm)
+  have hband : MeasurableSet (band(L')) := (isClosed_le hm continuous_const).measurableSet
+  have hmeas : Measurable (indicator band(L') (fun _ : Aₛ ↦ (1 : ℂ))) :=
+    measurable_const.indicator hband
+  have hbd : ∃ C : ℝ, ∀ u, ‖indicator band(L') (fun _ : Aₛ ↦ (1 : ℂ)) u‖ ≤ C :=
+    ⟨1, fun u ↦ by by_cases h : u ∈ band(L') <;> simp [h]⟩
+  have hneg (u : Aₛ) : -u ∈ band(L') ↔ u ∈ band(L') := by
+    have h1 (w : InfinitePlace F) : ‖(-u.1) w‖ = ‖u.1 w‖ := by
+      rw [show (-u.1) w = -(u.1 w) from rfl, norm_neg]
+    simp [sLocalPWProductRegion, h1]
+  have heven (u : Aₛ) : indicator band(L') (fun _ : Aₛ ↦ (1 : ℂ)) (-u) =
+      indicator band(L') (fun _ ↦ 1) u := by
+    by_cases h : u ∈ band(L')
+    · rw [indicator_of_mem ((hneg u).2 h), indicator_of_mem h]
+    · rw [indicator_of_notMem (mt (hneg u).1 h), indicator_of_notMem h]
+  have hξ : sIdeleNorm F S ξ.val = 1 := by
+    obtain ⟨γ, hγ, he⟩ := Subgroup.mem_map.mp ξ.property
+    rw [← he]
+    exact (sIdeleNorm_spec F S).2 hγ
+  have hn : normS(ξ.val * x) ≤ L := by rwa [map_mul, hξ, one_mul]
+  rw [(sLocalTraceCutoffKernel_skew f _ _ hmeas hbd heven ξ x).2,
+    indicator_of_mem (show ξ.val * x ∈ {x : Iₛ | normS(x) ≤ L} from hn), one_mul,
+    ← integral_indicator hband]
+  congr 1
+  refine integral_congr_ae (ae_of_all _ fun u ↦ ?_)
+  by_cases h : u ∈ band(L')
+  · simp [indicator_of_mem h]
+  · simp [indicator_of_notMem h]
+
+/-- The S-idelic norm is continuous. -/
+private theorem sLocalTrace_sIdeleNorm_continuous : Continuous (sIdeleNorm F S) := by
+  apply Units.isEmbedding_val₀.continuous_iff.mpr
+  change Continuous (fun g : Iₛ ↦ ((sIdeleNorm F S g).val))
+  simp only [sIdeleNorm, MonoidHom.mul_apply, MonoidHom.finsetProd_apply, MonoidHom.pow_apply,
+    Units.val_mul, Units.coe_prod, Units.val_pow_eq_pow_val]
+  change Continuous (fun g : Iₛ ↦ (∏ w : InfinitePlace F, ‖g.val.1 w‖₊ ^ w.mult) *
+    ∏ v : S, ‖g.val.2 v‖₊)
+  fun_prop
+
+/-- Paper: (12.4.1.17), p. 518. On the S-ideles, multiplicative Tamagawa measure is
+additive Tamagawa measure with density the measure factor over the norm. -/
+private theorem sLocalTrace_mult_eq_withDensity :
+    μₛ = ((νₛ).comap (Units.val : Iₛ → Aₛ)).withDensity
+      (fun x ↦ ENNReal.ofReal (sLocalTraceMeasureFactor S / normS(x))) := by
+  have : BorelSpace Aₛ := sAdeleRing_borelSpace
+  have : BorelSpace Iₛ := sIdeleGroup_borelSpace
+  have ho : Topology.IsOpenEmbedding (Units.val : Iₛ → Aₛ) := IsOpenUnits.isOpenEmbedding_unitsVal
+    (M := ((w : InfinitePlace F) → w.Completion) × ((v : S) → v.val.adicCompletion F))
+  have he := ho.measurableEmbedding
+  let n (t : Aₛ) := modS(t)
+  have hn (t : Iₛ) : normS(t) = n t.val := by simp [n, sIdeleNorm, Units.coe_prod]
+  have hm : Continuous n :=
+    (continuous_finsetProd _ fun w _ ↦
+      (((continuous_apply w).comp continuous_fst).norm.pow _)).mul
+      (continuous_finsetProd _ fun v _ ↦ ((continuous_apply v).comp continuous_snd).norm)
+  let d (t : Aₛ) := ENNReal.ofReal (sLocalTraceMeasureFactor S / n t)
+  have hd : Measurable d := (measurable_const.div hm.measurable).ennreal_ofReal
+  have hdens : (fun x : Iₛ ↦ ENNReal.ofReal (sLocalTraceMeasureFactor S / normS(x))) =
+      fun x ↦ d x.val := funext fun x ↦ by simp only [d, hn]
+  rw [hdens]
+  refine he.map_injective ?_
+  rw [sLocalTrace_measure_density]
+  ext t ht
+  rw [he.map_apply, withDensity_apply _ (he.measurable ht), withDensity_apply _ ht,
+    ← setLIntegral_map ht hd he.measurable, he.map_comap]
+
+/-- Paper: (12.4.1.22)–(12.4.1.23), p. 518. The change of variable w = xu by an S-idele
+scales additive Tamagawa measure by the S-idelic norm and the frequency band by the same
+factor. -/
+private theorem sLocalTrace_integral_band_dilate (g : Aₛ → ℂ) (x : Iₛ) (L' : ℝ) :
+    ∫ u in band(L'), g (x.val * u) ∂νₛ =
+      ((normS(x))⁻¹ : ℂ) * ∫ w in band(L' * normS(x)), g w ∂νₛ := by
+  sorry
+
+/-- Additive Tamagawa measure pulled back to the S-ideles is s-finite. -/
+private theorem sLocalTrace_comap_sFinite :
+    SFinite ((νₛ).comap (Units.val : Iₛ → Aₛ)) := by
+  have : BorelSpace Aₛ := sAdeleRing_borelSpace
+  have : BorelSpace Iₛ := sIdeleGroup_borelSpace
+  have : (νₛ).IsAddHaarMeasure := sLocalTrace_additiveHaar
+  let (v : S) : ProperSpace (v.val.adicCompletion F) := properSpace_adicCompletion v.val
+  let (w : InfinitePlace F) : SecondCountableTopology w.Completion :=
+    (InfinitePlace.Completion.isometry_extensionEmbedding w).isEmbedding.secondCountableTopology
+  let : SecondCountableTopology Aₛ := inferInstanceAs (SecondCountableTopology
+    (((w : InfinitePlace F) → w.Completion) × ((v : S) → v.val.adicCompletion F)))
+  let : SecondCountableTopology Iₛ := (sIdeleGroup_description F S).1.secondCountableTopology
+  let : LocallyCompactSpace Iₛ := (sIdeleGroup_description F S).2.2.1
+  have ho : Topology.IsOpenEmbedding (Units.val : Iₛ → Aₛ) := IsOpenUnits.isOpenEmbedding_unitsVal
+    (M := ((w : InfinitePlace F) → w.Completion) × ((v : S) → v.val.adicCompletion F))
+  have : IsFiniteMeasureOnCompacts ((νₛ).comap (Units.val : Iₛ → Aₛ)) :=
+    .comap' _ Units.continuous_val ho.measurableEmbedding
+  infer_instance
+
+/-- Paper: (12.4.1.17) and (12.4.1.23), p. 518. On any set of S-ideles, additive
+Tamagawa measure weighted by the measure factor over the norm is multiplicative
+Tamagawa measure. -/
+private theorem sLocalTrace_setIntegral_comap_density (s : Set Iₛ) (H : Iₛ → ℂ)
+    (hH : IntegrableOn H s μₛ) :
+    IntegrableOn (fun x ↦ (sLocalTraceMeasureFactor S : ℂ) * ((normS(x))⁻¹ : ℂ) * H x) s
+        ((νₛ).comap (Units.val : Iₛ → Aₛ)) ∧
+      ∫ x in s, (sLocalTraceMeasureFactor S : ℂ) * ((normS(x))⁻¹ : ℂ) * H x
+          ∂((νₛ).comap (Units.val : Iₛ → Aₛ)) = ∫ x in s, H x ∂μₛ := by
+  have : BorelSpace Aₛ := sAdeleRing_borelSpace
+  have : BorelSpace Iₛ := sIdeleGroup_borelSpace
+  have hc : 0 ≤ sLocalTraceMeasureFactor (F := F) S := by
+    apply Finset.prod_nonneg
+    intro v _
+    have hv : (1 : ℝ) < v.asIdeal.absNorm := by exact_mod_cast HeightOneSpectrum.one_lt_absNorm v
+    exact div_nonneg (Nat.cast_nonneg _) (sub_nonneg.mpr hv.le)
+  have hnm : Measurable fun x : Iₛ ↦ normS(x) :=
+    (NNReal.continuous_coe.comp (Units.continuous_val.comp
+      sLocalTrace_sIdeleNorm_continuous)).measurable
+  let dd (x : Iₛ) := ENNReal.ofReal (sLocalTraceMeasureFactor S / normS(x))
+  have hdd : Measurable dd := (measurable_const.div hnm).ennreal_ofReal
+  have hreal (x : Iₛ) : (dd x).toReal • H x =
+      (sLocalTraceMeasureFactor S : ℂ) * ((normS(x))⁻¹ : ℂ) * H x := by
+    have hpos : 0 < normS(x) := NNReal.coe_pos.mpr (Units.zero_lt (sIdeleNorm F S x))
+    simp only [dd, Complex.real_smul]
+    rw [ENNReal.toReal_ofReal (div_nonneg hc hpos.le)]
+    push_cast
+    ring
+  have := sLocalTrace_comap_sFinite (F := F) (S := S)
+  rw [sLocalTrace_mult_eq_withDensity] at hH ⊢
+  change Integrable H ((((νₛ).comap Units.val).withDensity dd).restrict s) at hH
+  rw [restrict_withDensity' s, integrable_withDensity_iff_integrable_smul' hdd
+    (ae_of_all _ fun _ ↦ ENNReal.ofReal_lt_top)] at hH
+  refine ⟨hH.congr (ae_of_all _ hreal), ?_⟩
+  rw [setIntegral_withDensity_eq_setIntegral_toReal_smul₀' s hdd.aemeasurable
+    (ae_of_all _ fun _ ↦ ENNReal.ofReal_lt_top)]
+  exact integral_congr_ae (ae_of_all _ fun x ↦ (hreal x).symm)
+
+/-- Paper: (12.4.1.23)–(12.4.1.24), p. 518. On the part of an S-unit fundamental
+domain of norm at most L, a function of the norm integrates to the norm-one volume
+times its integral against dt/t on (0, L]. -/
+private theorem sLocalTrace_fundamentalDomain_radial (D : Set Iₛ)
+    (hD : IsFundamentalDomain Hₛ D μₛ) (L : ℝ) (hL : 0 < L) (h : ℝ → ℂ)
+    (hh : IntegrableOn (fun t ↦ h t / (t : ℂ)) (Ioc 0 L)) :
+    IntegrableOn (fun x : Iₛ ↦ h (normS(x))) (D ∩ {x : Iₛ | normS(x) ≤ L}) μₛ ∧
+      ∫ x in D ∩ {x : Iₛ | normS(x) ≤ L}, h (normS(x)) ∂μₛ =
+        (volume₁ : ℂ) * ∫ t in Ioc 0 L, h t / (t : ℂ) := by
+  sorry
+
+/-- Paper: (12.4.1.23)–(12.4.1.24), p. 518. Integrating the band integrals of the
+Fourier transform against dt/t on (0, L] gives the logarithmic width of the spatial
+norm interval, by Fubini; the nonunit locus is null.
+Deviation: The integrability of the logarithmic weight against the transform over
+the band is part of the statement. -/
+private theorem sLocalTrace_band_log_fubini (f : BruhatCompactSupport Iₛ) (ξ : Hₛ)
+    (L L' : ℝ) (hL : 0 < L) (hL' : 0 < L') :
+    IntegrableOn (fun t ↦ (∫ w in band(L' * t), fourierₛ (sLocalTraceEta f ξ) w ∂νₛ) /
+        (t : ℂ)) (Ioc 0 L) ∧
+      (volume₁ : ℂ) * ∫ t in Ioc 0 L,
+          (∫ w in band(L' * t), fourierₛ (sLocalTraceEta f ξ) w ∂νₛ) / (t : ℂ) =
+        sLocalTraceSharpMass f ξ (L * L') := by
+  sorry
+
+/-- Paper: (12.4.1.22), p. 518. The slab of norm at most L in an S-unit fundamental
+domain is null measurable for additive Tamagawa measure on the S-ideles, which has the
+same null sets as multiplicative Tamagawa measure there. -/
+private theorem sLocalTrace_fundamentalDomain_slab_nullMeasurable (D : Set Iₛ)
+    (hD : IsFundamentalDomain Hₛ D μₛ) (L : ℝ) :
+    NullMeasurableSet (D ∩ {x : Iₛ | normS(x) ≤ L}) ((νₛ).comap (Units.val : Iₛ → Aₛ)) := by
+  have : BorelSpace Iₛ := sIdeleGroup_borelSpace
+  have hnm : Measurable fun x : Iₛ ↦ normS(x) :=
+    (NNReal.continuous_coe.comp (Units.continuous_val.comp
+      sLocalTrace_sIdeleNorm_continuous)).measurable
+  have hpos (x : Iₛ) : 0 < sLocalTraceMeasureFactor S / normS(x) := by
+    refine div_pos (Finset.prod_pos fun v _ ↦ ?_)
+      (NNReal.coe_pos.mpr (Units.zero_lt (sIdeleNorm F S x)))
+    have hv : (1 : ℝ) < v.asIdeal.absNorm := by exact_mod_cast HeightOneSpectrum.one_lt_absNorm v
+    exact div_pos (by linarith) (sub_pos.mpr hv)
+  have hac : (νₛ).comap (Units.val : Iₛ → Aₛ) ≪ μₛ := by
+    rw [sLocalTrace_mult_eq_withDensity]
+    intro t ht
+    have hdm : Measurable fun x : Iₛ ↦ ENNReal.ofReal (sLocalTraceMeasureFactor S / normS(x)) :=
+      (measurable_const.div hnm).ennreal_ofReal
+    rw [withDensity_apply_eq_zero hdm] at ht
+    have hall : {x : Iₛ | ENNReal.ofReal (sLocalTraceMeasureFactor S / normS(x)) ≠ 0} = univ :=
+      eq_univ_of_forall fun x ↦ (ENNReal.ofReal_pos.mpr (hpos x)).ne'
+    rwa [hall, univ_inter] at ht
+  exact (hD.nullMeasurableSet.inter (measurableSet_le hnm measurable_const).nullMeasurableSet).mono_ac
+    hac
+
 /-- Paper: (12.4.1.22)–(12.4.1.24), p. 518. With sharp upper cutoffs the orbital
 mass is the skew-diagonal integral on an S-unit fundamental domain. The change
 of variable w = xu converts the integral to the log-weighted Fourier integral.
@@ -1426,7 +1622,22 @@ theorem sLocalTraceSharpMass_eq_integral (f : BruhatCompactSupport Iₛ) (ξ : H
     let diag := fun x : Iₛ ↦ K (ξ.val * x) x.val
     IntegrableOn diag d ((νₛ).comap (Units.val : Iₛ → Aₛ)) ∧
       (∫ x in d, diag x ∂((νₛ).comap (Units.val : Iₛ → Aₛ))) =
-        sLocalTraceSharpMass f ξ (L * L') := by sorry
+        sLocalTraceSharpMass f ξ (L * L') := by
+  intro d K diag
+  let h : ℝ → ℂ := fun t ↦ ∫ w in band(L' * t), fourierₛ (sLocalTraceEta f ξ) w ∂νₛ
+  obtain ⟨hti, hte⟩ := sLocalTrace_band_log_fubini f ξ L L' _hL _hL'
+  obtain ⟨hri, hre⟩ := sLocalTrace_fundamentalDomain_radial D _hD L _hL h hti
+  obtain ⟨hci, hce⟩ := sLocalTrace_setIntegral_comap_density d (fun x ↦ h (normS(x))) hri
+  have hd (x : Iₛ) (hx : x ∈ d) :
+      (sLocalTraceMeasureFactor S : ℂ) * ((normS(x))⁻¹ : ℂ) * h (normS(x)) = diag x := by
+    have hk := sLocalTraceSharp_diag f ξ L L' x hx.2
+    rw [sLocalTrace_integral_band_dilate] at hk
+    exact (hk.trans (mul_assoc _ _ _).symm).symm
+  have hdm : NullMeasurableSet d ((νₛ).comap (Units.val : Iₛ → Aₛ)) :=
+    sLocalTrace_fundamentalDomain_slab_nullMeasurable D _hD L
+  refine ⟨hci.congr_fun_ae ?_, ?_⟩
+  · exact (ae_restrict_iff'₀ hdm).2 (ae_of_all _ hd)
+  · rw [← setIntegral_congr_ae₀ hdm (ae_of_all _ hd), hce, hre, hte]
 
 local notation "archTest" => ((w : InfinitePlace F) → BruhatCompactSupport w.Completionˣ)
 local notation "finiteTest" => ((v : S) → BruhatCompactSupport (v.val.adicCompletion F)ˣ)
