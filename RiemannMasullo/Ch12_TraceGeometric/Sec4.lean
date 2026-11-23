@@ -1672,16 +1672,157 @@ private theorem sLocalTrace_setIntegral_comap_density (s : Set Iₛ) (H : Iₛ �
     (ae_of_all _ fun _ ↦ ENNReal.ofReal_lt_top)]
   exact integral_congr_ae (ae_of_all _ fun x ↦ (hreal x).symm)
 
+section RadialSection
+
+attribute [-instance] Quotient.instMeasurableSpace
+
+/-- Paper: (12.4.1.23), p. 518. The image in the S-idele quotient of multiplicative
+Tamagawa measure restricted to an S-unit fundamental domain is the quotient Tamagawa
+measure. -/
+private theorem sLocalTrace_fundamentalDomain_map (D : Set Iₛ)
+    (hD : IsFundamentalDomain Hₛ D μₛ) :
+    ((μₛ).restrict D).map (QuotientGroup.mk : Iₛ → Jₛ) = μJ := by
+  sorry
+
+/-- A continuous section of the S-idelic norm, through one infinite place. -/
+private theorem sLocalTrace_exists_normSection :
+    ∃ τ : ℝ≥0ˣ →ₜ* Iₛ, RightInverse τ (sIdeleNorm F S) := by
+  obtain ⟨w⟩ := (inferInstance : Nonempty (InfinitePlace F))
+  let s := singlePlaceIdeleNormSection F w
+  let p := Units.map (adeleProjection F S).toMonoidHom
+  have hp : Continuous p := (continuous_fst.prodMk (continuous_pi fun v : S ↦
+    (RestrictedProduct.continuous_eval v.val).comp continuous_snd)).units_map _
+  refine ⟨⟨p.comp s, hp.comp (singlePlaceIdeleNormSection_continuous F w)⟩, fun t ↦ ?_⟩
+  let A := integralAdelesOutside F S
+  have hmem (u : ℝ≥0ˣ) : (s u).val ∈ A := by
+    simp only [A, integralAdelesOutside, Subring.mem_iInf]
+    intro v _
+    exact (v.adicCompletionIntegers F).one_mem
+  have ht : s t ∈ A.toSubmonoid.units :=
+    ⟨hmem t, by
+      change ((s t)⁻¹).val ∈ A
+      rw [← map_inv]
+      exact hmem t⁻¹⟩
+  let g := A.toSubmonoid.unitsEquivUnitsType ⟨s t, ht⟩
+  exact ((sIdeleNorm_spec F S).1 g).symm.trans (singlePlaceIdeleNormSection_rightInverse F w t)
+
 /-- Paper: (12.4.1.23)–(12.4.1.24), p. 518. On the part of an S-unit fundamental
-domain of norm at most L, a function of the norm integrates to the norm-one volume
-times its integral against dt/t on (0, L]. -/
+domain of norm at most L, a measurable function of the norm integrates to the norm-one
+volume times its integral against dt/t on (0, L]. -/
 private theorem sLocalTrace_fundamentalDomain_radial (D : Set Iₛ)
-    (hD : IsFundamentalDomain Hₛ D μₛ) (L : ℝ) (hL : 0 < L) (h : ℝ → ℂ)
+    (hD : IsFundamentalDomain Hₛ D μₛ) (L : ℝ) (h : ℝ → ℂ) (hm : Measurable h)
     (hh : IntegrableOn (fun t ↦ h t / (t : ℂ)) (Ioc 0 L)) :
     IntegrableOn (fun x : Iₛ ↦ h (normS(x))) (D ∩ {x : Iₛ | normS(x) ≤ L}) μₛ ∧
       ∫ x in D ∩ {x : Iₛ | normS(x) ≤ L}, h (normS(x)) ∂μₛ =
         (volume₁ : ℂ) * ∫ t in Ioc 0 L, h t / (t : ℂ) := by
-  sorry
+  have : BorelSpace Iₛ := sIdeleGroup_borelSpace
+  have : BorelSpace Jₛ := ⟨rfl⟩
+  have : BorelSpace (sIdeleQuotientNorm F S).ker := ⟨rfl⟩
+  have : BorelSpace ℝ≥0ˣ := borelSpace_units_of_continuousInv₀ _
+  have : SecondCountableTopology ℝ≥0ˣ := Units.isEmbedding_val₀.secondCountableTopology
+  have : SFinite positiveRealHaar := by unfold positiveRealHaar; infer_instance
+  have : CompactSpace (sIdeleQuotientNorm F S).ker := isCompact_iff_compactSpace.mp
+    ((isProperMap_sIdeleQuotientNorm F S).isCompact_preimage (isCompact_singleton (x := 1)))
+  have : (sLocalNormOneQuotientMeasure F S).IsHaarMeasure :=
+    (sLocalNormOneQuotientMeasure_normProduct (F := F) (S := S)).1
+  have : IsFiniteMeasure (sLocalNormOneQuotientMeasure F S) := CompactSpace.isFiniteMeasure
+  obtain ⟨τ, hτ⟩ := sLocalTrace_exists_normSection (F := F) (S := S)
+  have hprod := (sLocalNormOneQuotientMeasure_normProduct (F := F) (S := S)).2 τ hτ
+  let nb : Jₛ → ℝ := fun y ↦ ((sIdeleQuotientNorm F S y : ℝ≥0) : ℝ)
+  have hnb : Continuous nb := NNReal.continuous_coe.comp (Units.continuous_val.comp
+    (isProperMap_sIdeleQuotientNorm F S).continuous)
+  let ht : ℝ → ℂ := (Iic L).indicator h
+  have htm : Measurable ht := hm.indicator measurableSet_Iic
+  let P : (sIdeleQuotientNorm F S).ker × ℝ≥0ˣ → Jₛ :=
+    fun x ↦ (x.1 : Jₛ) * (QuotientGroup.mk (τ x.2) : Jₛ)
+  have hP : Continuous P := (continuous_subtype_val.comp continuous_fst).mul
+    (continuous_quotient_mk'.comp (τ.continuous.comp continuous_snd))
+  have hnP (x : (sIdeleQuotientNorm F S).ker × ℝ≥0ˣ) : nb (P x) = ((x.2 : ℝ≥0) : ℝ) := by
+    change ((sIdeleQuotientNorm F S ((x.1 : Jₛ) * QuotientGroup.mk (τ x.2)) : ℝ≥0) : ℝ) = _
+    rw [map_mul, MonoidHom.mem_ker.mp x.1.property, one_mul]
+    change ((sIdeleNorm F S (τ x.2) : ℝ≥0) : ℝ) = _
+    rw [hτ x.2]
+  let e : ℝ → ℝ≥0ˣ := fun x ↦ Units.mk0 (Real.exp x).toNNReal
+    (Real.toNNReal_eq_zero.not.mpr (not_le_of_gt (Real.exp_pos x)))
+  have he : Measurable e :=
+    measurable_comap_iff.mpr (continuous_real_toNNReal.comp Real.continuous_exp).measurable
+  have hev (x : ℝ) : (((e x : ℝ≥0ˣ) : ℝ≥0) : ℝ) = Real.exp x :=
+    Real.coe_toNNReal _ (Real.exp_pos x).le
+  have hpush : ((μₛ).restrict D).map (QuotientGroup.mk : Iₛ → Jₛ) = μJ :=
+    sLocalTrace_fundamentalDomain_map D hD
+  have hπ : Measurable (QuotientGroup.mk : Iₛ → Jₛ) :=
+    Continuous.measurable (f := (QuotientGroup.mk : Iₛ → Jₛ)) continuous_quotient_mk'
+  have hsnd : Measurable fun t : ℝ≥0ˣ ↦ ((t : ℝ≥0) : ℝ) :=
+    (NNReal.continuous_coe.comp Units.continuous_val).measurable
+  -- The integrand on the slab is the cut-off function of the norm.
+  have hslab : MeasurableSet {x : Iₛ | normS(x) ≤ L} :=
+    measurableSet_le (hnb.comp continuous_quotient_mk').measurable measurable_const
+  have hind (x : Iₛ) : {x : Iₛ | normS(x) ≤ L}.indicator (fun x ↦ h (normS(x))) x =
+      ht (nb (QuotientGroup.mk x)) := by
+    by_cases hx : normS(x) ≤ L
+    · rw [indicator_of_mem (show x ∈ {x : Iₛ | normS(x) ≤ L} from hx)]
+      exact (indicator_of_mem (show normS(x) ∈ Iic L from hx) h).symm
+    · rw [indicator_of_notMem (show x ∉ {x : Iₛ | normS(x) ≤ L} from hx)]
+      exact (indicator_of_notMem (show normS(x) ∉ Iic L from hx) h).symm
+  -- The radial integrand on the positive reals.
+  have hdiv (y : ℝ) : ht y / (y : ℂ) = (Iic L).indicator (fun t ↦ h t / (t : ℂ)) y := by
+    by_cases hy : y ∈ Iic L
+    · simp only [ht, indicator_of_mem hy]
+    · simp only [ht, indicator_of_notMem hy, zero_div]
+  have hexp (x : ℝ) : (Real.exp x) • (ht (Real.exp x) / (Real.exp x : ℂ)) = ht (Real.exp x) := by
+    rw [Complex.real_smul, mul_div_cancel₀ _ (Complex.ofReal_ne_zero.mpr (Real.exp_pos x).ne')]
+  have hIoi : IntegrableOn (fun y ↦ ht y / (y : ℂ)) (Ioi 0) := by
+    simp_rw [hdiv]
+    rw [IntegrableOn, integrable_indicator_iff measurableSet_Iic, IntegrableOn,
+      Measure.restrict_restrict measurableSet_Iic, Iic_inter_Ioi]
+    exact hh
+  have hR : Integrable (fun x : ℝ ↦ ht (Real.exp x)) := by
+    have := (integrable_comp_exp (fun y ↦ ht y / (y : ℂ))).mpr hIoi
+    simpa only [hexp] using this
+  have hpos : Integrable (fun t : ℝ≥0ˣ ↦ ht ((t : ℝ≥0) : ℝ)) positiveRealHaar := by
+    change Integrable (fun t : ℝ≥0ˣ ↦ ht ((t : ℝ≥0) : ℝ)) (Measure.map e volume)
+    rw [integrable_map_measure (g := fun t : ℝ≥0ˣ ↦ ht ((t : ℝ≥0) : ℝ))
+      (htm.comp hsnd).aestronglyMeasurable he.aemeasurable]
+    exact hR.congr (ae_of_all _ fun x ↦ by simp only [Function.comp, hev])
+  have hprodI : Integrable (fun x : (sIdeleQuotientNorm F S).ker × ℝ≥0ˣ ↦ ht (nb (P x)))
+      ((sLocalNormOneQuotientMeasure F S).prod positiveRealHaar) := by
+    simp_rw [hnP]
+    exact hpos.comp_snd _
+  have hJ : Integrable (fun y : Jₛ ↦ ht (nb y)) μJ := by
+    rw [← hprod]
+    exact (integrable_map_measure (g := fun y : Jₛ ↦ ht (nb y))
+      (htm.comp hnb.measurable).aestronglyMeasurable hP.measurable.aemeasurable).mpr hprodI
+  have hD' : Integrable (fun x : Iₛ ↦ ht (nb (QuotientGroup.mk x))) ((μₛ).restrict D) := by
+    rw [← hpush] at hJ
+    exact (integrable_map_measure (g := fun y : Jₛ ↦ ht (nb y))
+      (htm.comp hnb.measurable).aestronglyMeasurable hπ.aemeasurable).mp hJ
+  have hint : IntegrableOn (fun x : Iₛ ↦ h (normS(x))) (D ∩ {x : Iₛ | normS(x) ≤ L}) μₛ := by
+    have h2 : Integrable ({x : Iₛ | normS(x) ≤ L}.indicator (fun x ↦ h (normS(x))))
+        ((μₛ).restrict D) := hD'.congr (ae_of_all _ fun x ↦ (hind x).symm)
+    rw [integrable_indicator_iff hslab, IntegrableOn, Measure.restrict_restrict hslab,
+      inter_comm] at h2
+    exact h2
+  refine ⟨hint, ?_⟩
+  rw [← setIntegral_indicator hslab]
+  simp_rw [hind]
+  rw [← integral_map (f := fun y : Jₛ ↦ ht (nb y)) hπ.aemeasurable
+      (htm.comp hnb.measurable).aestronglyMeasurable, hpush, ← hprod,
+    integral_map (f := fun y : Jₛ ↦ ht (nb y)) hP.measurable.aemeasurable
+      (htm.comp hnb.measurable).aestronglyMeasurable]
+  simp_rw [hnP]
+  rw [integral_fun_snd (f := fun t : ℝ≥0ˣ ↦ ht ((t : ℝ≥0) : ℝ))]
+  change _ * ∫ t : ℝ≥0ˣ, ht ((t : ℝ≥0) : ℝ) ∂(Measure.map e volume) = _
+  rw [integral_map (f := fun t : ℝ≥0ˣ ↦ ht ((t : ℝ≥0) : ℝ)) he.aemeasurable
+    (htm.comp hsnd).aestronglyMeasurable]
+  simp only [hev]
+  have hcv := integral_comp_exp (fun y ↦ ht y / (y : ℂ))
+  simp only [hexp] at hcv
+  rw [hcv]
+  simp_rw [hdiv]
+  rw [setIntegral_indicator measurableSet_Iic, Ioi_inter_Iic]
+  rfl
+
+end RadialSection
 
 /-- Paper: (12.4.1.23)–(12.4.1.24), p. 518. Integrating the band integrals of the
 Fourier transform against dt/t on (0, L] gives the logarithmic width of the spatial
@@ -1724,6 +1865,44 @@ private theorem sLocalTrace_fundamentalDomain_slab_nullMeasurable (D : Set Iₛ)
   exact (hD.nullMeasurableSet.inter (measurableSet_le hnm measurable_const).nullMeasurableSet).mono_ac
     hac
 
+/-- The band integral of the Fourier transform of the translated test is measurable in
+the radius. -/
+private theorem sLocalTrace_band_integral_measurable (f : BruhatCompactSupport Iₛ) (ξ : Hₛ)
+    (L' : ℝ) :
+    Measurable fun t : ℝ ↦ ∫ w in band(L' * t), fourierₛ (sLocalTraceEta f ξ) w ∂νₛ := by
+  let : BorelSpace Aₛ := sAdeleRing_borelSpace
+  let : (νₛ).IsAddHaarMeasure := sLocalTrace_additiveHaar
+  let (v : S) : ProperSpace (v.val.adicCompletion F) := properSpace_adicCompletion v.val
+  let (w : InfinitePlace F) : SecondCountableTopology w.Completion :=
+    (InfinitePlace.Completion.isometry_extensionEmbedding w).isEmbedding.secondCountableTopology
+  let : SecondCountableTopology Aₛ := inferInstanceAs (SecondCountableTopology
+    (((w : InfinitePlace F) → w.Completion) × ((v : S) → v.val.adicCompletion F)))
+  let : T2Space Aₛ := inferInstanceAs (T2Space
+    (((w : InfinitePlace F) → w.Completion) × ((v : S) → v.val.adicCompletion F)))
+  let : LocallyCompactSpace Aₛ := inferInstanceAs (LocallyCompactSpace
+    (((w : InfinitePlace F) → w.Completion) × ((v : S) → v.val.adicCompletion F)))
+  obtain ⟨η, hη⟩ := SLocalTraceEta.eta_test f ξ
+  have hg : Continuous (fourierₛ (sLocalTraceEta f ξ)) := by
+    rw [← funext hη]
+    exact (schwartzBruhat_continuous (sAdeleSchwartzFourier η)).comp continuous_ofAdd
+  have hm : Continuous fun t : Aₛ ↦ modS(t) :=
+    (continuous_finsetProd _ fun w _ ↦
+      (((continuous_apply w).comp continuous_fst).norm.pow _)).mul
+      (continuous_finsetProd _ fun v _ ↦ ((continuous_apply v).comp continuous_snd).norm)
+  let T : Set (ℝ × Aₛ) := {p | modS(p.2) ≤ L' * p.1}
+  have hT : MeasurableSet T :=
+    measurableSet_le (hm.measurable.comp measurable_snd) (measurable_const.mul measurable_fst)
+  let G : ℝ × Aₛ → ℂ := T.indicator fun p ↦ fourierₛ (sLocalTraceEta f ξ) p.2
+  have hG : Measurable G := (hg.measurable.comp measurable_snd).indicator hT
+  have hband (r : ℝ) : MeasurableSet (band(r)) := (isClosed_le hm continuous_const).measurableSet
+  have heq : (fun t : ℝ ↦ ∫ w in band(L' * t), fourierₛ (sLocalTraceEta f ξ) w ∂νₛ) =
+      fun t ↦ ∫ w, G (t, w) ∂νₛ := by
+    funext t
+    rw [← integral_indicator (hband _)]
+    rfl
+  rw [heq]
+  exact (hG.stronglyMeasurable.integral_prod_right' (ν := νₛ)).measurable
+
 /-- Paper: (12.4.1.22)–(12.4.1.24), p. 518. With sharp upper cutoffs the orbital
 mass is the skew-diagonal integral on an S-unit fundamental domain. The change
 of variable w = xu converts the integral to the log-weighted Fourier integral.
@@ -1742,7 +1921,8 @@ theorem sLocalTraceSharpMass_eq_integral (f : BruhatCompactSupport Iₛ) (ξ : H
   intro d K diag
   let h : ℝ → ℂ := fun t ↦ ∫ w in band(L' * t), fourierₛ (sLocalTraceEta f ξ) w ∂νₛ
   obtain ⟨hti, hte⟩ := sLocalTrace_band_log_fubini f ξ L L' _hL _hL'
-  obtain ⟨hri, hre⟩ := sLocalTrace_fundamentalDomain_radial D _hD L _hL h hti
+  obtain ⟨hri, hre⟩ := sLocalTrace_fundamentalDomain_radial D _hD L h
+    (sLocalTrace_band_integral_measurable f ξ L') hti
   obtain ⟨hci, hce⟩ := sLocalTrace_setIntegral_comap_density d (fun x ↦ h (normS(x))) hri
   have hd (x : Iₛ) (hx : x ∈ d) :
       (sLocalTraceMeasureFactor S : ℂ) * ((normS(x))⁻¹ : ℂ) * h (normS(x)) = diag x := by
