@@ -7,7 +7,7 @@ public import RiemannMasullo.Ch07_SchauderBasesZeta.Sec3b
 @[expose] public noncomputable section
 
 open Classical Filter Function IsDedekindDomain NumberField Set Topology
-open scoped BigOperators NNReal NumberField.AdeleRing
+open scoped BigOperators NNReal NumberField.AdeleRing TensorProduct
 
 namespace RiemannMasullo
 
@@ -46,11 +46,150 @@ def Printed.sLocalPWTransition_eq_units : Prop :=
           tsupport (sAdeleSchwartzFourier f).val ⊆ Multiplicative.toAdd ⁻¹' K →
           sAdeleSchwartzTransition F hST f = unitPV(F, S, T) (sAdeleSchwartzTransition F hST f)
 
+open MeasureTheory in
+/-- The local principal value of a test vanishes at zero. -/
+private theorem sec3bP_localPV_zero {F : Type*} [Field F] [NumberField F] (v : HeightOneSpectrum (𝓞 F))
+    (g : SchwartzBruhat (Multiplicative (v.adicCompletion F))) :
+    finitePlacePrincipalValue v g (Multiplicative.ofAdd 0) = 0 := by
+  let val : Valuation (v.adicCompletion F) (WithZero (Multiplicative ℤ)) := Valued.v
+  obtain ⟨π, hπ⟩ := val.exists_isUniformizer_of_isCyclic_of_nontrivial
+  let π' := Units.mk0 (π : v.adicCompletion F) hπ.ne_zero
+  rw [finitePlacePrincipalValue_spec v π' hπ g]
+  have hm := (finitePlacePrincipalValue_integrable v π' g (Multiplicative.ofAdd 0)).1
+  unfold finitePlacePrincipalValueFun
+  simp only [toAdd_ofAdd, mul_zero]
+  rw [setIntegral_const, Complex.real_smul, ← mul_assoc,
+    inv_mul_cancel₀ (Complex.ofReal_ne_zero.mpr hm.ne'), one_mul, sub_self]
+
+/-- The S-local principal value vanishes at every point whose coordinate at a selected
+place is zero. -/
+private theorem sec3bP_sPV_zero {F : Type*} [Field F] [NumberField F]
+    {S S₀ : Finset (HeightOneSpectrum (𝓞 F))} (h₀ : S₀ ⊆ S) {p : HeightOneSpectrum (𝓞 F)}
+    (hp : p ∈ S₀) (x : SAdeleRing F S) (hx : x.2 ⟨p, h₀ hp⟩ = 0)
+    (h : SchwartzBruhat (Multiplicative (SAdeleRing F S))) :
+    sAdelePrincipalValue F h₀ h (Multiplicative.ofAdd x) = 0 := by
+  let e := (sAdeleSchwartz_inductiveTensor_equiv F S).choose
+  have he := (sAdeleSchwartz_inductiveTensor_equiv F S).choose_spec
+  let A := SchwartzBruhat (Multiplicative (InfiniteAdeleRing F))
+  let P := ⨂[ℂ] w : S, SchwartzBruhat (Multiplicative (w.val.adicCompletion F))
+  let evL : SchwartzBruhat (Multiplicative (SAdeleRing F S)) →ₗ[ℂ] ℂ :=
+    { toFun := fun k ↦ k (Multiplicative.ofAdd x)
+      map_add' := fun _ _ ↦ rfl
+      map_smul' := fun _ _ ↦ rfl }
+  let Φ : A ⊗[ℂ] FinestLocallyConvex P →ₗ[ℂ] ℂ :=
+    (evL.comp (sAdelePrincipalValue F h₀)).comp e.toLinearMap
+  have hpure (a : A) (g : ∀ w : S, SchwartzBruhat (Multiplicative (w.val.adicCompletion F))) :
+      Φ (a ⊗ₜ[ℂ] (⨂ₜ[ℂ] w, g w)) = 0 := by
+    change sAdelePrincipalValue F h₀ (e (a ⊗ₜ[ℂ] (⨂ₜ[ℂ] w, g w))) (Multiplicative.ofAdd x) = 0
+    rw [sAdelePrincipalValue_tmul h₀ a g, he]
+    refine mul_eq_zero_of_right _ (Finset.prod_eq_zero (Finset.mem_univ ⟨p, h₀ hp⟩) ?_)
+    simp only [hp, if_true, hx]
+    exact sec3bP_localPV_zero p (g ⟨p, h₀ hp⟩)
+  have hΦ (t : A ⊗[ℂ] FinestLocallyConvex P) : Φ t = 0 := by
+    induction t using TensorProduct.induction_on with
+    | zero => exact map_zero Φ
+    | add x y hx hy => rw [map_add, hx, hy, add_zero]
+    | tmul a w =>
+      let Ψ : P →ₗ[ℂ] ℂ := Φ.comp (TensorProduct.mk ℂ A (FinestLocallyConvex P) a)
+      change Ψ w = 0
+      induction w using PiTensorProduct.induction_on with
+      | smul_tprod r g =>
+        rw [map_smul, smul_eq_mul]
+        exact mul_eq_zero_of_right _ (hpure a g)
+      | add x y hx hy => rw [map_add, hx, hy, add_zero]
+  have := hΦ (e.symm h)
+  change sAdelePrincipalValue F h₀ (e (e.symm h)) (Multiplicative.ofAdd x) = 0 at this
+  rwa [e.apply_symm_apply] at this
+
+/-- Over the rationals with no finite places the S-integers have trivial Picard group. -/
+private theorem sec3bP_pic :
+    Subsingleton (CommRing.Pic (((∅ : Finset Vℚ) : Set Vℚ).integer ℚ)) := by
+  rw [Finset.coe_empty, integer_empty]
+  let e := (Algebra.botEquivOfInjective (IsFractionRing.injective (𝓞 ℚ) ℚ)).toRingEquiv
+  let i := Rat.ringOfIntegersEquiv.symm.trans e.symm
+  let := IsPrincipalIdealRing.of_surjective i i.surjective
+  infer_instance
+
+/-- Over the rationals a single finite place is a saturated set. -/
+private theorem sec3bP_saturated (p : Vℚ) : IsSaturatedPlaceSet (F := ℚ) {p} := by
+  intro v w hv hw
+  rw [Finset.mem_singleton] at hv ⊢
+  subst hv
+  apply HeightOneSpectrum.ext
+  have h := congrArg HeightOneSpectrum.asIdeal hw
+  change Ideal.comap (algebraMap (𝓞 ℚ) (𝓞 ℚ)) w.asIdeal =
+    Ideal.comap (algebraMap (𝓞 ℚ) (𝓞 ℚ)) v.asIdeal at h
+  rwa [Algebra.algebraMap_self, Ideal.comap_id, Ideal.comap_id] at h
+
 /-- Paper: Equations (7.3.2.2) and (7.3.2.13), pp. 351, 355.
 Over the rationals add one prime and choose an inverse Fourier bump with positive
 integral. At the zero tuple integer insertion gives its nonzero value at zero,
 while unit insertion gives zero. -/
-theorem Printed.sLocalPWTransition_eq_units_false : ¬ Printed.sLocalPWTransition_eq_units := by sorry
+theorem Printed.sLocalPWTransition_eq_units_false : ¬ Printed.sLocalPWTransition_eq_units := by
+  intro h
+  obtain ⟨m, hm⟩ := Ideal.exists_maximal (𝓞 ℚ)
+  let p : Vℚ := ⟨m, hm.isPrime, NeZero.ne m⟩
+  let S : Finset Vℚ := ∅
+  let T : Finset Vℚ := {p}
+  let A := SAdeleRing ℚ S
+  let G := Multiplicative A
+  let : T2Space G := inferInstanceAs (T2Space
+    (((w : InfinitePlace ℚ) → w.Completion) × ((v : S) → v.val.adicCompletion ℚ)))
+  let : LocallyCompactSpace G := inferInstanceAs (LocallyCompactSpace
+    (((w : InfinitePlace ℚ) → w.Completion) × ((v : S) → v.val.adicCompletion ℚ)))
+  -- A bump equal to one near zero, supported where every archimedean coordinate is small.
+  let U : Set G := {x | ∀ w : InfinitePlace ℚ, ‖x.toAdd.1 w‖ < 1 / 2}
+  have hU : IsOpen U := by
+    simp only [U, setOf_forall]
+    exact isOpen_iInter_of_finite fun w ↦ isOpen_lt
+      ((continuous_apply w).comp (continuous_fst.comp continuous_toAdd)).norm continuous_const
+  have h1U : (1 : G) ∈ U := fun w ↦ by
+    change ‖(0 : A).1 w‖ < 1 / 2
+    rw [show (0 : A).1 w = 0 from rfl, norm_zero]
+    norm_num
+  obtain ⟨g, hgc, hgs, hg1⟩ := schwartzBruhat_exists_local_unit hU h1U
+  let f := sAdeleSchwartzFourier g
+  have hFf (y : G) : sAdeleSchwartzFourier f y = g y⁻¹ := by
+    have := sLocal_fourier_inversion g y.toAdd
+    simpa [f] using this
+  have hFf' : (sAdeleSchwartzFourier f).val = g.val ∘ (Homeomorph.inv G) := funext hFf
+  have hcs : HasCompactSupport (sAdeleSchwartzFourier f).val := by
+    rw [hFf']
+    exact hgc.comp_homeomorph _
+  have hts : tsupport (sAdeleSchwartzFourier f).val ⊆
+      Multiplicative.toAdd ⁻¹' sLocalPWBox S 1 := by
+    rw [hFf', tsupport_comp_eq_preimage]
+    intro y hy
+    refine ⟨fun w ↦ ?_, fun v ↦ absurd v.property (Finset.notMem_empty v.val)⟩
+    have hw : ‖(Multiplicative.toAdd y⁻¹).1 w‖ < 1 / 2 := hgs hy w
+    rw [show (Multiplicative.toAdd y⁻¹).1 w = -((Multiplicative.toAdd y).1 w) from rfl,
+      norm_neg] at hw
+    exact pow_le_one₀ (norm_nonneg _) (by linarith)
+  -- The test is not identically zero, since its Fourier transform is one at the origin.
+  obtain ⟨y, hy⟩ : ∃ y : A, f (Multiplicative.ofAdd y) ≠ 0 := by
+    by_contra hall
+    push Not at hall
+    have h0 : sAdeleSchwartzFourier f 1 = 0 := by
+      let : MeasurableSpace A := instMeasurableSpaceSAdeleRing ℚ S
+      change tamagawaFourier _ _ (fun x ↦ f (Multiplicative.ofAdd x)) _ = 0
+      simp [hall, tamagawaFourier]
+    rw [hFf, inv_one, hg1.eq_of_nhds] at h0
+    exact one_ne_zero h0
+  -- Apply the printed identity at the point with the same archimedean part and zero at p.
+  have hsub : S ⊆ T := Finset.empty_subset _
+  have hpT : p ∈ T \ S := by simp [S, T]
+  have hEq := h ℚ S T T (by simp [S, T]) (Finset.disjoint_empty_left _) (sec3bP_saturated p)
+    sec3bP_pic hsub 1 one_pos (sLocalPWBox S 1) (by simp) f hcs hts
+  let z : SAdeleRing ℚ T := (y.1, 0)
+  have hval := congrArg (fun k : B(ℚ, T) ↦ k (Multiplicative.ofAdd z)) hEq
+  simp only at hval
+  rw [sec3bP_sPV_zero Finset.sdiff_subset hpT z rfl] at hval
+  rw [sAdeleSchwartzTransition_apply, if_pos (fun w _ ↦ (w.val.adicCompletionIntegers ℚ).zero_mem)]
+    at hval
+  apply hy
+  have hyz : (z.1, fun w : S ↦ z.2 ⟨w.val, hsub w.property⟩) = y :=
+    Prod.ext rfl (funext fun w ↦ absurd w.property (Finset.notMem_empty w.val))
+  rwa [hyz] at hval
 
 /-- Paper: Definitions 7.3.2.1(1) and 7.3.2.3(1), pp. 351, 355.
 Inside each printed test level the common kernel of the two evaluations has codimension two. -/
