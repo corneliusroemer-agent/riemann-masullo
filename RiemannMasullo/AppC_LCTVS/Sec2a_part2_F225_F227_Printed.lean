@@ -2,6 +2,9 @@ module
 
 public import RiemannMasullo.AppC_LCTVS.Sec2a_part2
 import Mathlib.Analysis.Normed.Lp.lpSpace
+import Mathlib.SetTheory.Cardinal.Aleph
+import Mathlib.SetTheory.Cardinal.Cofinality.Club
+import Mathlib.SetTheory.Cardinal.Regular
 
 /-! # Appendix C.2.3: printed claims on tensor operators, limits and bornological spaces -/
 
@@ -615,6 +618,202 @@ def Printed.completedInductiveTensor_bornological : Prop :=
     [PolynormableSpace ℂ F] [T2Space F],
     Printed.IsBornologicalTVS E → Printed.IsBornologicalTVS F →
       Printed.IsBornologicalTVS (Completion (InductiveTensor E F))
+
+
+section completedInductiveTensor_bornological_false_aux
+
+open Set Order Function
+open scoped Ordinal Cardinal
+
+/-- The scalar field is bornological: a seminorm bounded on the closed unit ball is continuous. -/
+private theorem completedInductiveTensor_bornological_false_complex :
+    Printed.IsBornologicalTVS ℂ := by
+  intro p hp
+  obtain ⟨M, hM⟩ := hp _ (NormedSpace.isVonNBounded_closedBall ℂ ℂ 1)
+  have hball : p.closedBall 0 (max M 0 + 1) ∈ 𝓝 (0 : ℂ) := by
+    refine Filter.mem_of_superset (Metric.closedBall_mem_nhds (0 : ℂ) zero_lt_one) ?_
+    intro x hx
+    rw [Seminorm.mem_closedBall_zero]
+    exact (hM ⟨x, hx, rfl⟩).trans (le_of_lt <| lt_of_le_of_lt (le_max_left M 0) (lt_add_one _))
+  exact p.continuous' hball
+
+/-- The inductive tensor with the scalar field is the space itself. -/
+private theorem completedInductiveTensor_bornological_false_scalar
+    (E : Type*) [AddCommGroup E] [Module ℂ E] [TopologicalSpace E]
+    [PolynormableSpace ℂ E] [T2Space E] :
+    Nonempty (InductiveTensor E ℂ ≃L[ℂ] E) := by
+  have := PolynormableSpace.isTopologicalAddGroup ℂ E
+  let e : InductiveTensor E ℂ ≃ₗ[ℂ] E := TensorProduct.rid ℂ E
+  have hsp := withGeneratingSeminorms_spec (E ⊗[ℂ] ℂ)
+    (fun p : {p : Seminorm ℂ (E ⊗[ℂ] ℂ) //
+      (∀ x : E, Continuous (fun y : ℂ ↦ p (x ⊗ₜ[ℂ] y))) ∧
+      (∀ y : ℂ, Continuous (fun x : E ↦ p (x ⊗ₜ[ℂ] y)))} ↦ p.val)
+  have hcont : Continuous (e : InductiveTensor E ℂ → E) := by
+    refine (continuous_inductiveTensor_iff e.toLinearMap).mpr ⟨fun x ↦ ?_, fun y ↦ ?_⟩
+    · have hscalar : Continuous (fun y : ℂ ↦ y • x) := continuous_id.smul continuous_const
+      have hfun : (fun y : ℂ ↦ (TensorProduct.rid ℂ E) (x ⊗ₜ[ℂ] y)) = fun y ↦ y • x :=
+        funext fun y ↦ TensorProduct.rid_tmul x y
+      exact hfun.symm ▸ hscalar
+    · have hscalar : Continuous (fun x : E ↦ y • x) := continuous_const.smul continuous_id
+      have hfun : (fun x : E ↦ (TensorProduct.rid ℂ E) (x ⊗ₜ[ℂ] y)) = fun x ↦ y • x :=
+        funext fun x ↦ TensorProduct.rid_tmul x y
+      exact hfun.symm ▸ hscalar
+  have hcont_inv : Continuous (e.symm : E → InductiveTensor E ℂ) :=
+    hsp.continuous_of_continuous_comp ((TensorProduct.mk ℂ E ℂ).flip (1 : ℂ))
+      fun p ↦ p.2.2 (1 : ℂ)
+  exact ⟨{ e with continuous_toFun := hcont, continuous_invFun := hcont_inv }⟩
+
+section ScalarCompletion
+
+variable {E : Type*} [AddCommGroup E] [Module ℂ E] [TopologicalSpace E]
+  [PolynormableSpace ℂ E] [T2Space E]
+
+local instance : IsTopologicalAddGroup E :=
+  PolynormableSpace.isTopologicalAddGroup ℂ E
+
+local instance : UniformSpace E :=
+  IsTopologicalAddGroup.rightUniformSpace E
+
+local instance : IsUniformAddGroup E :=
+  isUniformAddGroup_of_addCommGroup
+
+/-- Completion preserves the scalar identification. -/
+private theorem completedInductiveTensor_bornological_false_scalar_completion :
+    Nonempty (Completion (InductiveTensor E ℂ) ≃L[ℂ] Completion E) := by
+  obtain ⟨e⟩ := completedInductiveTensor_bornological_false_scalar E
+  let f := e.toContinuousLinearMap.completion
+  let g := e.symm.toContinuousLinearMap.completion
+  refine ⟨ContinuousLinearEquiv.equivOfInverse f g ?_ ?_⟩
+  · intro x
+    refine Completion.induction_on (p := fun x ↦ g (f x) = x) x ?_ ?_
+    · exact isClosed_eq (g.continuous.comp f.continuous) continuous_id
+    · intro a
+      rw [ContinuousLinearMap.completion_apply_coe, ContinuousLinearMap.completion_apply_coe]
+      apply congrArg (fun z : InductiveTensor E ℂ ↦ (z : Completion (InductiveTensor E ℂ)))
+      exact ContinuousLinearEquiv.symm_apply_apply e a
+  · intro y
+    refine Completion.induction_on (p := fun y ↦ f (g y) = y) y ?_ ?_
+    · exact isClosed_eq (f.continuous.comp g.continuous) continuous_id
+    · intro a
+      rw [ContinuousLinearMap.completion_apply_coe, ContinuousLinearMap.completion_apply_coe]
+      apply congrArg (fun z : E ↦ (z : Completion E))
+      exact ContinuousLinearEquiv.apply_symm_apply e a
+
+end ScalarCompletion
+
+/-- Bornology passes across a continuous linear equivalence. -/
+private theorem completedInductiveTensor_bornological_false_transfer
+    {E F : Type*} [AddCommGroup E] [Module ℂ E] [TopologicalSpace E]
+    [AddCommGroup F] [Module ℂ F] [TopologicalSpace F]
+    (e : E ≃L[ℂ] F) (hE : Printed.IsBornologicalTVS E) :
+    Printed.IsBornologicalTVS F := by
+  intro p hp
+  have hpe : ∀ s : Set E, IsVonNBounded ℂ s →
+      BddAbove ((p.comp e.toLinearMap) '' s) := by
+    intro s hs
+    obtain ⟨M, hM⟩ := hp _ (hs.image e.toContinuousLinearMap)
+    refine ⟨M, ?_⟩
+    rintro _ ⟨x, hx, rfl⟩
+    exact hM ⟨e x, ⟨x, hx, rfl⟩, rfl⟩
+  have hcont : Continuous (fun x : E ↦ (p.comp e.toLinearMap) x) := hE _ hpe
+  have hcomp : Continuous (fun y : F ↦ (p.comp e.toLinearMap) (e.symm y)) :=
+    hcont.comp e.symm.continuous
+  change Continuous (fun y : F ↦ p y)
+  have hfun : (fun y : F ↦ (p.comp e.toLinearMap) (e.symm y)) = fun y ↦ p y := by
+    funext y
+    show (p.comp e.toLinearMap) (e.symm y) = p y
+    have : p (e (e.symm y)) = p y := congrArg p (e.apply_symm_apply y)
+    rw [← this]
+    with_unfolding_all rfl
+  exact hfun ▸ hcomp
+
+open Set Order Function
+open scoped Ordinal Cardinal
+
+/-- Ulam's matrix splits the ordinals below `ω₁` into a stationary set with stationary complement. -/
+private theorem completedInductiveTensor_bornological_false_split :
+    ∃ S : Set (Iio (Ordinal.omega (1 : Ordinal.{0}))), IsStationary S ∧ IsStationary Sᶜ := by
+  let Ω : Type 1 := Iio (Ordinal.omega (1 : Ordinal.{0}))
+  have hcof : Order.cof Ω ≠ ℵ₀ := by
+    rw [Ordinal.cof_Iio, ← Ordinal.lift_cof, Cardinal.cof_omega_one]
+    exact (Cardinal.aleph0_lt_lift.mpr Cardinal.aleph0_lt_aleph_one).ne.symm
+  have : NoMaxOrder Ω := (Cardinal.isSuccLimit_omega 1).isSuccPrelimit.noMaxOrder_Iio
+  have : Nonempty Ω :=
+    ⟨⟨0, lt_of_le_of_lt (bot_le : (⊥ : Ordinal) ≤ Ordinal.omega 0)
+      (Ordinal.omega_lt_omega.mpr zero_lt_one)⟩⟩
+  have hC (a : Ω) : Countable (Iio a.1) :=
+    (Cardinal.countable_Iio_of_lt_omega_one a.2).to_subtype
+  let f (a : Ω) : Iio a.1 → ℕ :=
+    @Countable.exists_injective_nat _ (hC a) |>.choose
+  have hf (a : Ω) : Injective (f a) :=
+    @Countable.exists_injective_nat _ (hC a) |>.choose_spec
+  let A (n : ℕ) (ξ : Ω) : Set Ω :=
+    {α | ∃ h : ξ.1 < α.1, f α ⟨ξ.1, h⟩ = n}
+  have hdisj (n : ℕ) {ξ η : Ω} (hne : ξ ≠ η) : Disjoint (A n ξ) (A n η) := by
+    rw [Set.disjoint_left]
+    intro α ⟨hξ, hξn⟩ ⟨hη, hηn⟩
+    apply hne
+    exact Subtype.ext
+      (congrArg (Subtype.val : Iio α.1 → Ordinal) (hf α (hξn.trans hηn.symm)))
+  have hsome : ∃ n : ℕ, ¬ ({ξ : Ω | IsStationary (A n ξ)}).Countable := by
+    by_contra hnone
+    push Not at hnone
+    let U : Set Ω := ⋃ n, {ξ | IsStationary (A n ξ)}
+    have hUc : U.Countable := countable_iUnion hnone
+    have hCcount : Countable U := hUc.to_subtype
+    have hsup : (⨆ ξ : U, ξ.1.1) < Ordinal.omega 1 :=
+      Ordinal.iSup_lt_omega_one fun ξ ↦ ξ.1.2
+    let σ : Ordinal := Order.succ (⨆ ξ : U, ξ.1.1)
+    have hσ : σ < Ordinal.omega 1 := (Cardinal.isSuccLimit_omega 1).succ_lt hsup
+    let ξ₀ : Ω := ⟨σ, hσ⟩
+    have hξ₀U : ξ₀ ∉ U := by
+      intro hmem
+      have hle : ξ₀.1 ≤ ⨆ ξ : U, ξ.1.1 :=
+        Ordinal.le_iSup (fun ξ : U ↦ ξ.1.1) ⟨ξ₀, hmem⟩
+      exact (lt_succ_of_not_isMax (not_isMax_of_lt hsup)).not_ge hle
+    have htail : Ioi ξ₀ ⊆ ⋃ n, A n ξ₀ := by
+      intro α hα
+      have hlt : ξ₀.1 < α.1 := hα
+      exact mem_iUnion.mpr ⟨f α ⟨ξ₀.1, hlt⟩, ⟨hlt, rfl⟩⟩
+    have hunion : IsStationary (⋃ n, A n ξ₀) :=
+      ((isClub_Ioi ξ₀).isStationary hcof).mono htail
+    rw [isStationary_iUnion_iff_of_countable hcof] at hunion
+    obtain ⟨n, hn⟩ := hunion
+    exact hξ₀U (mem_iUnion.mpr ⟨n, hn⟩)
+  obtain ⟨n, hn⟩ := hsome
+  let T : Set Ω := {ξ | IsStationary (A n ξ)}
+  have hTne : T.Nonempty := by
+    rw [nonempty_iff_ne_empty]
+    intro hempty
+    exact hn (by simp [T, hempty])
+  obtain ⟨ξ, hξ⟩ := hTne
+  have hrest : ¬ (T \ {ξ}).Countable := by
+    intro hc
+    apply hn
+    change T.Countable
+    have heq : T = insert ξ (T \ {ξ}) := by
+      ext η
+      simp only [mem_insert_iff, mem_sdiff, mem_singleton_iff, T]
+      constructor
+      · intro hη
+        exact (eq_or_ne η ξ).imp id (fun hne ↦ ⟨hη, hne⟩)
+      · intro hη
+        rcases hη with rfl | ⟨hη, _⟩
+        · exact hξ
+        · exact hη
+    rw [heq]
+    exact hc.insert ξ
+  have hrestne : (T \ {ξ}).Nonempty := by
+    rw [nonempty_iff_ne_empty]
+    intro hempty
+    exact hrest (by simp [hempty])
+  obtain ⟨η, hη⟩ := hrestne
+  rw [mem_sdiff] at hη
+  obtain ⟨hηT, hneq⟩ := hη
+  refine ⟨A n ξ, hξ, ?_⟩
+  exact hηT.mono (hdisj n hneq).symm.subset_compl_left
+
+end completedInductiveTensor_bornological_false_aux
 
 /-- Paper: Proposition C.2.3.13(3), p. 683. Let S be stationary in ω₁ with stationary
 complement and let X = S ∪ {ω₁} have the subspace topology from ω₁ + 1. Take E = C(X, ℂ)
