@@ -8,6 +8,7 @@ import all RiemannMasullo.Ch07_SchauderBasesZeta.Sec2
 public import RiemannMasullo.Ch07_SchauderBasesZeta.Sec3a
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
 import RiemannMasullo.ForMathlib.MeasureTheory.Integral.ProdPi
+import RiemannMasullo.ForMathlib.Analysis.SpecialFunctions.Complex.ExpPolynomial
 
 import all RiemannMasullo.Ch03_IdelicZeta.Sec3
 
@@ -1745,83 +1746,6 @@ theorem sLocalGammaFiltration_isClosed (ω : PontryaginDual J₁(S)) (N : depths
   exact isClosed_iInf_ker
     (fun j : ΓIndex(ω, sLocalGammaPoleCutoff (F := F) (S := S) ω N) ↦ ΓCoeff(ω, j))
 
--- TODO(paper-gap): The test list (7.3.4.9) does not separate the two coefficients
--- of a double real pole at cutoff (0,0). See ERRATA I169. Finite interpolation can
--- use translations of a test attaining the full pole order.
-
-/-- Paper: Theorem 7.3.4.1(2), pp. 364–365.
-The Laurent coefficients at the selected centers form a finite linearly independent family. -/
-theorem sLocalGammaFiltration_coeff_independent (ω : PontryaginDual J₁(S)) (N : depths) :
-    let U := sLocalGammaPoleCutoff (F := F) (S := S) ω N
-    Finite (ΓIndex(ω, U)) ∧ LinearIndependent ℂ (fun j : ΓIndex(ω, U) ↦ ΓCoeff(ω, j)) := by sorry
-
-private theorem dual_range_mkQL_eq_span_of_finite {E ι : Type*}
-    [AddCommGroup E] [Module ℂ E] [TopologicalSpace E] [IsTopologicalAddGroup E]
-    [ContinuousSMul ℂ E] [Finite ι] (φ : ι → StrongDual ℂ E) :
-    let stage : Submodule ℂ E := ⨅ j : ι, (φ j).ker
-    Set.range (fun ℓ : StrongDual ℂ (E ⧸ stage) ↦ ℓ.comp stage.mkQL) =
-      (Submodule.span ℂ (Set.range φ) : Set (StrongDual ℂ E)) := by
-  intro stage
-  classical
-  let : Fintype ι := Fintype.ofFinite ι
-  ext ψ
-  constructor
-  · rintro ⟨ℓ, rfl⟩
-    let T : E →ₗ[ℂ] (ι → ℂ) := LinearMap.pi (fun j ↦ (φ j).toLinearMap)
-    have hker : T.ker ≤ (ℓ.comp stage.mkQL).toLinearMap.ker := by
-      intro x hx
-      have hx' : x ∈ stage := by
-        rw [Submodule.mem_iInf]
-        intro j
-        exact congrFun hx j
-      change ℓ (stage.mkQ x) = 0
-      rw [stage.mkQ_apply, (Submodule.Quotient.mk_eq_zero stage).mpr hx', map_zero]
-    let f₀ : T.range →ₗ[ℂ] ℂ :=
-      (Submodule.liftQ T.ker (ℓ.comp stage.mkQL).toLinearMap hker).comp
-        T.quotKerEquivRange.symm.toLinearMap
-    obtain ⟨g, hg⟩ := LinearMap.exists_extend f₀
-    have hsum : ℓ.comp stage.mkQL = ∑ j : ι, g (Pi.single j 1) • φ j := by
-      ext x
-      have hTx : T x = ∑ j : ι, (φ j x) • Pi.single j (1 : ℂ) := by
-        ext k
-        simp [T, Finset.sum_apply, Pi.single_apply]
-      have h1 : (ℓ.comp stage.mkQL) x = g (T x) := by
-        have := congrArg (fun h : T.range →ₗ[ℂ] ℂ ↦ h ⟨T x, LinearMap.mem_range_self T x⟩) hg
-        simpa [f₀, LinearEquiv.symm_apply_apply] using this.symm
-      rw [h1, hTx, map_sum]
-      simp [smul_eq_mul, mul_comm]
-    change ℓ.comp stage.mkQL ∈ Submodule.span ℂ (Set.range φ)
-    rw [hsum]
-    exact Submodule.sum_mem _ fun j _ ↦
-      Submodule.smul_mem _ _ (Submodule.subset_span ⟨j, rfl⟩)
-  · intro hψ
-    have hker : stage ≤ ψ.toLinearMap.ker := by
-      refine Submodule.span_induction
-        (p := fun (ψ' : StrongDual ℂ E) _ ↦ stage ≤ ψ'.toLinearMap.ker)
-        ?_ ?_ ?_ ?_ hψ
-      · rintro _ ⟨j, rfl⟩ x hx
-        rw [Submodule.mem_iInf] at hx
-        exact hx j
-      · intro x _; simp
-      · intro a b _ _ ha hb x hx
-        have ha' : a x = 0 := ha hx
-        have hb' : b x = 0 := hb hx
-        change a x + b x = 0
-        rw [ha', hb', add_zero]
-      · intro c a _ ha x hx
-        have ha' : a x = 0 := ha hx
-        change c * a x = 0
-        rw [ha', mul_zero]
-    let ℓ_lin : (E ⧸ stage) →ₗ[ℂ] ℂ := stage.liftQ ψ.toLinearMap hker
-    have hcont : Continuous ℓ_lin := by
-      have hq : Topology.IsQuotientMap (stage.mkQ : E → E ⧸ stage) :=
-        QuotientAddGroup.isQuotientMap_mk _
-      rw [hq.continuous_iff]
-      exact ψ.continuous
-    refine ⟨⟨ℓ_lin, hcont⟩, ?_⟩
-    ext x
-    rfl
-
 private theorem meromorphicOrderAt_gamma_lt_zero_iff (u : ℂ) :
     meromorphicOrderAt (fun z : ℂ ↦ Complex.Gamma (z + u)) 0 < 0 ↔ ∃ m : ℕ, u = -(m : ℂ) := by
   have hg : ∀ y, AnalyticAt ℂ (fun x : ℂ ↦ (Complex.Gamma x)⁻¹) y := fun y ↦
@@ -1961,15 +1885,12 @@ private theorem meromorphicOrderAt_gammaC_div_two_lt_zero_iff (u : ℂ) :
   rw [heq, meromorphicOrderAt_mul he_an.meromorphicAt hG_mer, he_ord, zero_add,
     meromorphicOrderAt_gamma_lt_zero_iff]
 
-/-- Paper: Theorem 7.3.4.1(2), p. 365.
-The transposes of the linear functionals on the filtered quotient are precisely the
-span of the selected Laurent coefficients on the principal-value space.
-Deviation: The displayed positive order k in (7.3.4.4) selects Laurent exponent −k. -/
-theorem sLocalGammaFiltration_dual_span (ω : PontryaginDual J₁(S)) (N : depths) :
-    let stage := sLocalGammaFiltration (F := F) (S := S) ω N
-    Set.range (fun ℓ : StrongDual ℂ ((fullPV(ω)) ⧸ stage) ↦ ℓ.comp stage.mkQL) =
-      (Submodule.span ℂ (Set.range (fun j : ΓIndex(ω, sLocalGammaPoleCutoff (F := F) (S := S) ω N) ↦
-        ΓCoeff(ω, j))) : Set (StrongDual ℂ (fullPV(ω)))) := by
+/-- The selected centers and orders form a finite index set. Along the norm-twist line of a
+component each archimedean place has its poles in an arithmetic progression running to the
+left, and a cutoff keeps finitely many of them. -/
+private theorem sLocalGammaFiltration_coeff_independent_finite (ω : PontryaginDual J₁(S))
+    (N : depths) :
+    Finite (ΓIndex(ω, sLocalGammaPoleCutoff (F := F) (S := S) ω N)) := by
   let U := sLocalGammaPoleCutoff (F := F) (S := S) ω N
   have hU_fin : U.Finite := by
     by_cases hUne : U.Nonempty
@@ -2156,6 +2077,183 @@ theorem sLocalGammaFiltration_dual_span (ω : PontryaginDual J₁(S)) (N : depth
       have h2 : j₁.val.2 = j₂.val.2 := congrArg (fun p ↦ p.2.val) h
       exact Subtype.ext (Prod.ext h1 h2)
     exact Finite.of_injective f hf
+  exact hι_fin
+
+/-- Paper: Theorem 7.3.4.1(2), pp. 364–365.
+On each component some principal value attains the full archimedean pole order at every
+center: its Laurent coefficient of the top admissible order does not vanish there.
+This follows from `exists_sLocalIdelicZFunction_principalValue_attaining_poles` for one unitary
+character on the component. Every center of the component is a norm twist of it, the pole
+multiplicity at a twist is the number of archimedean pole places (the computation in
+`gammaFiltration_principalValue_bound`), and `mem_sLocalThetaPoleBound_iff_leading` gives the
+leading coefficient. -/
+private theorem sLocalGammaFiltration_coeff_independent_attaining (ω : PontryaginDual J₁(S)) :
+    ∃ g : B(S), ∀ c : Xₛ, onComponent(c, ω) → 0 < (arch(c)).card →
+      sLocalPrincipalPartCoeff c (arch(c)).card
+        (sAdelePrincipalValue F (Finset.Subset.refl S) g) ≠ 0 := by sorry
+
+/-- Paper: Theorem 7.3.4.1(2), pp. 364–365, and Theorem 7.2.1.1(2), p. 334.
+The Laurent coefficients of the principal value of a translated test are an upper triangular
+combination of those of the principal value of the test, with powers of the logarithm of the
+norm of the translating idele.
+This follows as `sLocalPrincipalPartCoeff_translate` does. By
+`sLocalIdelicZFunction_principalValue`, applied to the test and to its translate, and
+`sLocalPrincipalPartCoeff_translate_zeta`, the zeta function of the principal value of the
+translate is the character value times that of the principal value, off a discrete set of each
+norm-twist line. Residues only see such germs (`sLocalPrincipalPartCoeff_translate_congr`), and
+`sLocalPrincipalPartCoeff_translate_laurent` applies with the pole bound of
+`gammaFiltration_principalValue_bound`. -/
+private theorem sLocalGammaFiltration_coeff_independent_translate (g : B(S))
+    (u : (SAdeleRing F S)ˣ) (c : Xₛ) (k : ℕ) (hk : 0 < k) (hkc : k ≤ (arch(c)).card) :
+    sLocalPrincipalPartCoeff c k (sAdelePrincipalValue F (Finset.Subset.refl S)
+        (schwartzBruhatUnitTranslate u g)) =
+      c (QuotientGroup.mk u : J(S)) * ∑ i ∈ Finset.range ((arch(c)).card - k + 1),
+        sLocalPrincipalPartCoeff c (k + i) (sAdelePrincipalValue F (Finset.Subset.refl S) g) *
+          ((Real.log (((m(S) (QuotientGroup.mk u : J(S)) : ℝ≥0) : ℝ)) : ℝ) : ℂ) ^ i /
+            (i.factorial : ℂ) := by sorry
+
+/-- Paper: Theorem 7.3.4.1(2), pp. 364–365.
+There is a family of S-ideles indexed by the logarithm of their norm on which every
+quasi-character is an exponential, and the exponents separate the quasi-characters of one
+component.
+This follows from a continuous section of the norm (`sIdeleQuotientNorm_exists_section`),
+lifted to S-ideles at the points `exp t`: a quasi-character composed with the section is a
+complex power (`existsUnique_complexPower`), and two quasi-characters of one component which
+agree on the section agree everywhere, since every class is a norm-one class times a value of
+the section. -/
+private theorem sLocalGammaFiltration_coeff_independent_section :
+    ∃ (u : ℝ → (SAdeleRing F S)ˣ) (s : Xₛ → ℂ),
+      (∀ t : ℝ, Real.log (((m(S) (QuotientGroup.mk (u t) : J(S)) : ℝ≥0) : ℝ)) = t) ∧
+      (∀ (c : Xₛ) (t : ℝ), c (QuotientGroup.mk (u t) : J(S)) = Complex.exp (s c * t)) ∧
+      ∀ (ω : PontryaginDual J₁(S)) (c c' : Xₛ), onComponent(c, ω) → onComponent(c', ω) →
+        s c = s c' → c = c' := by sorry
+
+-- TODO(paper-gap): The test list (7.3.4.9) does not separate the two coefficients
+-- of a double real pole at cutoff (0,0). See ERRATA I169. Finite interpolation can
+-- use translations of a test attaining the full pole order.
+
+/-- Paper: Theorem 7.3.4.1(2), pp. 364–365.
+The Laurent coefficients at the selected centers form a finite linearly independent family. -/
+theorem sLocalGammaFiltration_coeff_independent (ω : PontryaginDual J₁(S)) (N : depths) :
+    let U := sLocalGammaPoleCutoff (F := F) (S := S) ω N
+    Finite (ΓIndex(ω, U)) ∧ LinearIndependent ℂ (fun j : ΓIndex(ω, U) ↦ ΓCoeff(ω, j)) := by
+  intro U
+  have hfin : Finite (ΓIndex(ω, U)) := sLocalGammaFiltration_coeff_independent_finite ω N
+  refine ⟨hfin, ?_⟩
+  classical
+  let := Fintype.ofFinite (ΓIndex(ω, U))
+  obtain ⟨g₀, hg₀⟩ := sLocalGammaFiltration_coeff_independent_attaining (F := F) (S := S) ω
+  obtain ⟨u, s, hnorm, hchar, hsinj⟩ :=
+    sLocalGammaFiltration_coeff_independent_section (F := F) (S := S)
+  rw [Fintype.linearIndependent_iff]
+  intro a ha j₀
+  let x (t : ℝ) : fullPV(ω) :=
+    ⟨PV((Finset.Subset.refl S), ω) (q(S, ω) (schwartzBruhatUnitTranslate (u t) g₀)),
+      LinearMap.mem_range_self _ _⟩
+  refine expPolynomial_translate_coeff_eq_zero (Finset.univ : Finset (ΓIndex(ω, U)))
+    (fun j ↦ j.val.1) (fun j ↦ j.val.2) s (fun c ↦ (arch(c)).card)
+    (fun c m ↦ sLocalPrincipalPartCoeff c m (sAdelePrincipalValue F (Finset.Subset.refl S) g₀))
+    a ?_ ?_ ?_ ?_ ?_ ?_ j₀ (Finset.mem_univ _)
+  · intro j _ j' _ h1 h2
+    exact Subtype.ext (Prod.ext h1 h2)
+  · intro j _ j' _ h
+    exact hsinj ω _ _ j.property.1 j'.property.1 h
+  · intro j _
+    exact j.property.2.2.2
+  · intro j _
+    exact hg₀ j.val.1 j.property.1 (lt_of_lt_of_le j.property.2.2.1 j.property.2.2.2)
+  · intro c m hm
+    by_contra hne
+    have hle := (sLocalPrincipalPartCoeff_ne_zero_imp_pole c m (Nat.zero_lt_of_lt hm) _ hne).2
+    exact absurd (hle.trans (gammaFiltration_principalValue_bound g₀ c)) (not_le.mpr hm)
+  · intro t
+    have hat := congrArg (fun φ : StrongDual ℂ (fullPV(ω)) ↦ φ (x t)) ha
+    simp only [ContinuousLinearMap.sum_apply, ContinuousLinearMap.smul_apply, smul_eq_mul,
+      ContinuousLinearMap.zero_apply] at hat
+    refine Eq.trans (Finset.sum_congr rfl fun j _ ↦ congrArg (a j * ·) ?_) hat
+    have h2 := sLocalGammaFiltration_coeff_independent_translate (F := F) (S := S) g₀ (u t)
+      j.val.1 j.val.2 j.property.2.2.1 j.property.2.2.2
+    rw [hchar, hnorm] at h2
+    exact h2.symm
+
+private theorem dual_range_mkQL_eq_span_of_finite {E ι : Type*}
+    [AddCommGroup E] [Module ℂ E] [TopologicalSpace E] [IsTopologicalAddGroup E]
+    [ContinuousSMul ℂ E] [Finite ι] (φ : ι → StrongDual ℂ E) :
+    let stage : Submodule ℂ E := ⨅ j : ι, (φ j).ker
+    Set.range (fun ℓ : StrongDual ℂ (E ⧸ stage) ↦ ℓ.comp stage.mkQL) =
+      (Submodule.span ℂ (Set.range φ) : Set (StrongDual ℂ E)) := by
+  intro stage
+  classical
+  let : Fintype ι := Fintype.ofFinite ι
+  ext ψ
+  constructor
+  · rintro ⟨ℓ, rfl⟩
+    let T : E →ₗ[ℂ] (ι → ℂ) := LinearMap.pi (fun j ↦ (φ j).toLinearMap)
+    have hker : T.ker ≤ (ℓ.comp stage.mkQL).toLinearMap.ker := by
+      intro x hx
+      have hx' : x ∈ stage := by
+        rw [Submodule.mem_iInf]
+        intro j
+        exact congrFun hx j
+      change ℓ (stage.mkQ x) = 0
+      rw [stage.mkQ_apply, (Submodule.Quotient.mk_eq_zero stage).mpr hx', map_zero]
+    let f₀ : T.range →ₗ[ℂ] ℂ :=
+      (Submodule.liftQ T.ker (ℓ.comp stage.mkQL).toLinearMap hker).comp
+        T.quotKerEquivRange.symm.toLinearMap
+    obtain ⟨g, hg⟩ := LinearMap.exists_extend f₀
+    have hsum : ℓ.comp stage.mkQL = ∑ j : ι, g (Pi.single j 1) • φ j := by
+      ext x
+      have hTx : T x = ∑ j : ι, (φ j x) • Pi.single j (1 : ℂ) := by
+        ext k
+        simp [T, Finset.sum_apply, Pi.single_apply]
+      have h1 : (ℓ.comp stage.mkQL) x = g (T x) := by
+        have := congrArg (fun h : T.range →ₗ[ℂ] ℂ ↦ h ⟨T x, LinearMap.mem_range_self T x⟩) hg
+        simpa [f₀, LinearEquiv.symm_apply_apply] using this.symm
+      rw [h1, hTx, map_sum]
+      simp [smul_eq_mul, mul_comm]
+    change ℓ.comp stage.mkQL ∈ Submodule.span ℂ (Set.range φ)
+    rw [hsum]
+    exact Submodule.sum_mem _ fun j _ ↦
+      Submodule.smul_mem _ _ (Submodule.subset_span ⟨j, rfl⟩)
+  · intro hψ
+    have hker : stage ≤ ψ.toLinearMap.ker := by
+      refine Submodule.span_induction
+        (p := fun (ψ' : StrongDual ℂ E) _ ↦ stage ≤ ψ'.toLinearMap.ker)
+        ?_ ?_ ?_ ?_ hψ
+      · rintro _ ⟨j, rfl⟩ x hx
+        rw [Submodule.mem_iInf] at hx
+        exact hx j
+      · intro x _; simp
+      · intro a b _ _ ha hb x hx
+        have ha' : a x = 0 := ha hx
+        have hb' : b x = 0 := hb hx
+        change a x + b x = 0
+        rw [ha', hb', add_zero]
+      · intro c a _ ha x hx
+        have ha' : a x = 0 := ha hx
+        change c * a x = 0
+        rw [ha', mul_zero]
+    let ℓ_lin : (E ⧸ stage) →ₗ[ℂ] ℂ := stage.liftQ ψ.toLinearMap hker
+    have hcont : Continuous ℓ_lin := by
+      have hq : Topology.IsQuotientMap (stage.mkQ : E → E ⧸ stage) :=
+        QuotientAddGroup.isQuotientMap_mk _
+      rw [hq.continuous_iff]
+      exact ψ.continuous
+    refine ⟨⟨ℓ_lin, hcont⟩, ?_⟩
+    ext x
+    rfl
+
+/-- Paper: Theorem 7.3.4.1(2), p. 365.
+The transposes of the linear functionals on the filtered quotient are precisely the
+span of the selected Laurent coefficients on the principal-value space.
+Deviation: The displayed positive order k in (7.3.4.4) selects Laurent exponent −k. -/
+theorem sLocalGammaFiltration_dual_span (ω : PontryaginDual J₁(S)) (N : depths) :
+    let stage := sLocalGammaFiltration (F := F) (S := S) ω N
+    Set.range (fun ℓ : StrongDual ℂ ((fullPV(ω)) ⧸ stage) ↦ ℓ.comp stage.mkQL) =
+      (Submodule.span ℂ (Set.range (fun j : ΓIndex(ω, sLocalGammaPoleCutoff (F := F) (S := S) ω N) ↦
+        ΓCoeff(ω, j))) : Set (StrongDual ℂ (fullPV(ω)))) := by
+  let U := sLocalGammaPoleCutoff (F := F) (S := S) ω N
+  have hι_fin : Finite (ΓIndex(ω, U)) := sLocalGammaFiltration_coeff_independent_finite ω N
   exact @dual_range_mkQL_eq_span_of_finite _ _ _ _ _ _ _ hι_fin
     (fun j : ΓIndex(ω, U) ↦ ΓCoeff(ω, j))
 
