@@ -2098,17 +2098,81 @@ private theorem sLocalTrace_infinite_weight_prod_integrable :
   rw [Finset.prod_ite_eq' Finset.univ u]
   simp [mul_comm]
 
+/-- Each coordinate of an infinite adele is bounded by the norm of its image in the
+mixed space. -/
+private theorem sLocalTrace_norm_le_mixed (a : InfiniteAdeleRing F) (w : InfinitePlace F) :
+    ‖a w‖ ≤ ‖InfiniteAdeleRing.ringEquiv_mixedSpace F a‖ := by
+  rw [InfiniteAdeleRing.ringEquiv_mixedSpace_apply]
+  by_cases hw : w.IsReal
+  · refine le_trans (le_of_eq ?_) ((norm_le_pi_norm _ ⟨w, hw⟩).trans (norm_fst_le _))
+    exact ((InfinitePlace.Completion.isometry_extensionEmbeddingOfIsReal hw).norm_map_of_map_zero
+      (map_zero _) (a w)).symm
+  · have hc : w.IsComplex := InfinitePlace.not_isReal_iff_isComplex.mp hw
+    refine le_trans (le_of_eq ?_) ((norm_le_pi_norm _ ⟨w, hc⟩).trans (norm_snd_le _))
+    exact ((InfinitePlace.Completion.isometry_extensionEmbedding w).norm_map_of_map_zero
+      (map_zero _) (a w)).symm
+
+/-- `(1 + t) ^ k ≤ 2 ^ k (1 + t ^ k)` for `t ≥ 0`. -/
+private theorem sLocalTrace_one_add_pow_le {t : ℝ} (ht : 0 ≤ t) (k : ℕ) :
+    (1 + t) ^ k ≤ 2 ^ k * (1 + t ^ k) := by
+  rcases le_total t 1 with h | h
+  · calc (1 + t) ^ k ≤ 2 ^ k := pow_le_pow_left₀ (by positivity) (by linarith) k
+      _ ≤ 2 ^ k * (1 + t ^ k) :=
+          le_mul_of_one_le_right (by positivity) (by linarith [pow_nonneg ht k])
+  · calc (1 + t) ^ k ≤ (2 * t) ^ k := pow_le_pow_left₀ (by positivity) (by linarith) k
+      _ = 2 ^ k * t ^ k := mul_pow _ _ _
+      _ ≤ 2 ^ k * (1 + t ^ k) := by gcongr; linarith
+
 /-- Paper: (12.4.1.20)–(12.4.1.21), p. 518. The Fourier transform of the translated test
 is bounded by a multiple of the product of the weights `(1 + ‖y_w‖)⁻⁴` at the infinite
 places times the indicator of a ball at every finite place of `S`.
-Deviation: The translated test is a finite sum of archimedean tests tensored with ball
-indicators, whose Fourier transforms are archimedean Schwartz functions and scaled ball
-indicators; this records the resulting bound. -/
+Deviation: The Fourier transform of the translated test is again an S-adelic
+Schwartz–Bruhat function (`sAdeleSchwartzFourier`), so the bound is its compact support
+in the finite coordinates and its rapid decay in the infinite ones. -/
 private theorem sLocalTrace_fourier_decay_bound (f : BruhatCompactSupport Iₛ) (ξ : Hₛ) :
     ∃ C R : ℝ, ∀ y : Aₛ, ‖fourierₛ (sLocalTraceEta f ξ) y‖ ≤
       C * (∏ w, ((1 + ‖y.1 w‖) ^ 4)⁻¹) *
         ∏ v : S, {b : v.val.adicCompletion F | ‖b‖ ≤ R}.indicator (fun _ ↦ (1 : ℝ)) (y.2 v) := by
-  sorry
+  obtain ⟨η, hη⟩ := SLocalTraceEta.eta_test f ξ
+  let g : testₛ := sAdeleSchwartzFourier η
+  have hg (y : Aₛ) : fourierₛ (sLocalTraceEta f ξ) y = g (Multiplicative.ofAdd y) := by
+    change _ = tamagawaFourier νₛ ψₛ (fun x ↦ η (Multiplicative.ofAdd x)) y
+    rw [show (fun x ↦ η (Multiplicative.ofAdd x)) = sLocalTraceEta f ξ from funext hη]
+  obtain ⟨K, hK, hKz, hdec⟩ := sAdeleSchwartz_exists_decay_bound F S g
+  let k := 4 * Fintype.card (InfinitePlace F)
+  obtain ⟨B0, hB0, h0⟩ := hdec 0
+  obtain ⟨B1, hB1, h1⟩ := hdec k
+  obtain ⟨R, hR⟩ := hK.isBounded.subset_closedBall 0
+  refine ⟨2 ^ k * (B0 + B1), R, fun y ↦ ?_⟩
+  rw [hg]
+  have hW0 : 0 ≤ ∏ w, ((1 + ‖y.1 w‖) ^ 4)⁻¹ := Finset.prod_nonneg fun w _ ↦ by positivity
+  by_cases hy : y.2 ∈ K
+  · have hP : ∏ v : S, {b : v.val.adicCompletion F | ‖b‖ ≤ R}.indicator
+        (fun _ ↦ (1 : ℝ)) (y.2 v) = 1 := by
+      refine Finset.prod_eq_one fun v _ ↦ indicator_of_mem ?_ _
+      exact (norm_le_pi_norm y.2 v).trans (mem_closedBall_zero_iff.mp (hR hy))
+    rw [hP, mul_one, Finset.prod_inv_distrib, ← div_eq_mul_inv,
+      le_div_iff₀ (Finset.prod_pos fun w _ ↦ by positivity)]
+    set t := ‖InfiniteAdeleRing.ringEquiv_mixedSpace F y.1‖
+    have ht : 0 ≤ t := norm_nonneg _
+    have hW : ∏ w, (1 + ‖y.1 w‖) ^ 4 ≤ (1 + t) ^ k := by
+      calc ∏ w, (1 + ‖y.1 w‖) ^ 4 ≤ ∏ _w : InfinitePlace F, (1 + t) ^ 4 := by
+            gcongr with w
+            exact sLocalTrace_norm_le_mixed y.1 w
+        _ = (1 + t) ^ k := by rw [Finset.prod_const, Finset.card_univ, ← pow_mul]
+    have hb0 := h0 y
+    have hb1 := h1 y
+    rw [pow_zero, mul_one] at hb0
+    have hn := norm_nonneg (g (Multiplicative.ofAdd y))
+    calc ‖g (Multiplicative.ofAdd y)‖ * ∏ w, (1 + ‖y.1 w‖) ^ 4
+        ≤ ‖g (Multiplicative.ofAdd y)‖ * (2 ^ k * (1 + t ^ k)) :=
+          mul_le_mul_of_nonneg_left (hW.trans (sLocalTrace_one_add_pow_le ht k)) hn
+      _ = 2 ^ k * (‖g (Multiplicative.ofAdd y)‖ + ‖g (Multiplicative.ofAdd y)‖ * t ^ k) := by
+          ring
+      _ ≤ 2 ^ k * (B0 + B1) := by gcongr
+  · rw [hKz y hy, norm_zero]
+    exact mul_nonneg (mul_nonneg (mul_nonneg (by positivity) (add_nonneg hB0 hB1)) hW0)
+      (Finset.prod_nonneg fun v _ ↦ indicator_nonneg (fun _ _ ↦ zero_le_one) _)
 
 /-- Paper: (12.4.1.20)–(12.4.1.21), p. 518. The Fourier transform of the translated test
 is dominated by a function of the infinite coordinates, integrable also against the
