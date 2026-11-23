@@ -2090,7 +2090,78 @@ leading coefficient. -/
 private theorem sLocalGammaFiltration_coeff_independent_attaining (ω : PontryaginDual J₁(S)) :
     ∃ g : B(S), ∀ c : Xₛ, onComponent(c, ω) → 0 < (arch(c)).card →
       sLocalPrincipalPartCoeff c (arch(c)).card
-        (sAdelePrincipalValue F (Finset.Subset.refl S) g) ≠ 0 := by sorry
+        (sAdelePrincipalValue F (Finset.Subset.refl S) g) ≠ 0 := by
+  classical
+  by_cases hne : ∃ c₀ : Xₛ, onComponent(c₀, ω)
+  swap
+  · exact ⟨0, fun c hc ↦ (hne ⟨c, hc⟩).elim⟩
+  obtain ⟨c₀, hc₀⟩ := hne
+  obtain ⟨χ, a, ha⟩ := exists_sLocalNormTwist (F := F) (S := S) c₀
+  let d : Xₛ := (⟨Circle.coeHom, continuous_subtype_val⟩ : Circle →ₜ* ℂ).comp χ
+  obtain ⟨f, hf⟩ := exists_sLocalIdelicZFunction_principalValue_attaining_poles (F := F) (S := S) χ
+  refine ⟨f, fun c hc hpos ↦ ?_⟩
+  have htw (b : Xₛ) (a z : ℂ) : shift(shift(b, a), z) = shift(b, z + a) := by
+    ext1 g
+    change b g * _ ^ a * _ ^ z = b g * _ ^ (z + a)
+    rw [add_comm, Complex.cpow_add _ _ (Complex.ofReal_ne_zero.mpr
+      (NNReal.coe_ne_zero.mpr (m(S) g).ne_zero)), mul_assoc]
+  -- Every quasi-character of the component is a norm twist of `c₀`.
+  obtain ⟨s, hs⟩ : ∃ s : ℂ, c = shift(c₀, s) := by
+    obtain ⟨σ, hσ⟩ := sIdeleQuotientNorm_exists_section (F := F) (S := S)
+    let c₀inv := c₀.comp (ContinuousMonoidHom.inv J(S))
+    let P : QuasiCharacter ℝ≥0ˣ := (c * c₀inv).comp σ
+    obtain ⟨s, hs⟩ := (existsUnique_complexPower P).exists
+    refine ⟨s, ?_⟩
+    ext1 g
+    let u : J(S) := g * (σ (m(S) g))⁻¹
+    have hu_mem : u ∈ J₁(S) := by
+      change m(S) (g * (σ (m(S) g))⁻¹) = 1
+      rw [map_mul, map_inv, hσ, mul_inv_cancel]
+    have hu_eq : c u = c₀ u := DFunLike.congr_fun (hc.trans hc₀.symm) ⟨u, hu_mem⟩
+    have hdecomp : g = u * σ (m(S) g) := by simp [u]
+    have hcg : c g = c u * c (σ (m(S) g)) := by
+      conv_lhs => rw [hdecomp]
+      exact map_mul c _ _
+    have hc₀g : c₀ g = c₀ u * c₀ (σ (m(S) g)) := by
+      conv_lhs => rw [hdecomp]
+      exact map_mul c₀ _ _
+    have hP : c (σ (m(S) g)) * (c₀ (σ (m(S) g)))⁻¹ = (((m(S) g : ℝ≥0) : ℝ) : ℂ) ^ s := by
+      have h1 := hs (m(S) g)
+      change c (σ (m(S) g)) * c₀ (σ (m(S) g))⁻¹ = _ at h1
+      rwa [map_inv] at h1
+    have hc₀σ_ne : c₀ (σ (m(S) g)) ≠ 0 := ((Group.isUnit _).map c₀).ne_zero
+    change c g = c₀ g * (((m(S) g : ℝ≥0) : ℝ) : ℂ) ^ s
+    rw [hcg, hc₀g, hu_eq, ← hP]
+    field_simp [hc₀σ_ne]
+  have hct : c = shift(d, s + a) := by rw [hs, ← ha, htw]
+  subst hct
+  have translate (H : Xₛ → ℂ) :
+      meromorphicOrderAt (fun z : ℂ ↦ H (shift(shift(d, s + a), z))) 0 =
+        meromorphicOrderAt (fun z : ℂ ↦ H (shift(d, z))) (s + a) := by
+    have e : (fun z : ℂ ↦ H (shift(shift(d, s + a), z))) =
+        (fun z : ℂ ↦ H (shift(d, z))) ∘ (· + (s + a)) := by
+      funext z
+      rw [htw]
+      rfl
+    rw [e, meromorphicOrderAt_comp_add_const_eq_meromorphicOrderAt, zero_add]
+  have places : (arch(shift(d, s + a))).card = sLocalArchimedeanPoleMultiplicity χ (s + a) := by
+    unfold sLocalArchPolePlaces sLocalArchimedeanPoleMultiplicity
+    apply congrArg Finset.card
+    apply Finset.filter_congr
+    intro w _
+    rw [translate (fun b ↦ infiniteLocalEulerFactor w (sLocalInfiniteRestriction w b))]
+  let p := sAdelePrincipalValue F (Finset.Subset.refl S) f
+  have hord : meromorphicOrderAt (fun z ↦ sLocalIdelicZFunction p (shift(shift(d, s + a), z))) 0 =
+      ((-((arch(shift(d, s + a))).card : ℤ) : ℤ) : WithTop ℤ) := by
+    rw [translate (sLocalIdelicZFunction p), places]
+    exact hf (s + a)
+  have hZ := sLocalZ_centered p (shift(d, s + a))
+  rw [sLocalPrincipalPartCoeff_apply]
+  refine mem_sLocalThetaPoleBound_iff_leading hZ.1 hpos ?_
+  change (-(meromorphicOrderAt (fun z ↦ sLocalIdelicZFunction p
+    (shift(shift(d, s + a), z))) 0).untop₀).toNat = _
+  rw [hord]
+  simp
 
 /-- Paper: Theorem 7.3.4.1(2), pp. 364–365, and Theorem 7.2.1.1(2), p. 334.
 The Laurent coefficients of the principal value of a translated test are an upper triangular
