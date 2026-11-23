@@ -37,7 +37,7 @@ local notation "C₁" => (ideleClassNorm F).ker
 local notation "μ𝔽" => ideleClassTamagawaMeasure F
 local notation "m𝔽" =>
   (⟨ideleClassNorm F, (isProperMap_ideleClassNorm F).continuous⟩ : C𝔽 →ₜ* ℝ≥0ˣ)
-local notation "logNorm" => (fun g : C𝔽 ↦ Real.log ((ideleClassNorm F g).val : ℝ))
+local notation "logNorm" => (logIdeleClassNorm F)
 local notation "W(" l ", " r ", " s ")" => CompactIntervalSobolev μ𝔽 logNorm l r s
 local notation "W'(" l ", " r ", " s ")" => CompactIntervalSobolev μ𝔽 logNorm l r s true
 local notation "Θ(" a ", " hI ", " hs ")" => globalThetaSobolev F a hI hs
@@ -440,7 +440,7 @@ theorem spectralSobolevPairing_isotype {l r s : ℝ} (hI : l ≤ r) (hs : 0 ≤ 
   have hwk : ∀ (k : C₁) g, w (k.val⁻¹ * g) = w g := by
     intro k g
     have hk : ideleClassNorm F k.val = 1 := k.2
-    simp only [w, map_mul, map_inv, hk, inv_one, one_mul]
+    simp only [w, logIdeleClassNorm, map_mul, map_inv, hk, inv_one, one_mul]
   have hbase : μ𝔽 ≪ (μ𝔽).withDensity (fun x ↦ ENNReal.ofReal (w x)) :=
     withDensity_absolutelyContinuous' hw.ennreal_ofReal.aemeasurable
       (ae_of_all _ fun x ↦ (ENNReal.ofReal_pos.mpr (hwpos x)).ne')
@@ -2372,7 +2372,7 @@ private theorem spectralAdelicJet_linearIndependent
       spectralZeroJet (χ j.1) j.2.1 j.2.2.1 j.2.2.2) := by
   let L (g : C𝔽) : ℂ := logNorm g
   have hadd (g y : C𝔽) : L (g * y) = L g + L y := by
-    dsimp only [L]
+    dsimp only [L, logIdeleClassNorm]
     rw [map_mul, Units.val_mul, NNReal.coe_mul, Real.log_mul
       (NNReal.coe_ne_zero.2 (ideleClassNorm F g).ne_zero)
       (NNReal.coe_ne_zero.2 (ideleClassNorm F y).ne_zero), Complex.ofReal_add]

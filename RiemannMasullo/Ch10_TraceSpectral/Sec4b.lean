@@ -41,7 +41,7 @@ local notation "C₁" => (ideleClassNorm F).ker
 local notation "μ𝔽" => ideleClassTamagawaMeasure F
 local notation "m𝔽" =>
   (⟨ideleClassNorm F, (isProperMap_ideleClassNorm F).continuous⟩ : C𝔽 →ₜ* ℝ≥0ˣ)
-local notation "logNorm" => (fun g : C𝔽 ↦ Real.log ((ideleClassNorm F g).val : ℝ))
+local notation "logNorm" => (logIdeleClassNorm F)
 local notation "hStrip(" hα ")" => (neg_nonpos.mpr hα |>.trans hα)
 local notation "hs₀(" hs ")" => (le_of_lt (zero_lt_one.trans hs))
 local notation "w(" α ", " s ")" => (fun g : C𝔽 ↦ intervalSobolevDensity (-α) α s (logNorm g))
@@ -1304,7 +1304,7 @@ private theorem integral_mul_translated_zeroJet_eq_zero
   let L (y : C𝔽) : ℂ := logNorm y
   let c (i : ℕ) := T g * L g ^ (m - i) * (m.choose i : ℂ)
   have hlog (y : C𝔽) : L (g * y) = L y + L g := by
-    dsimp only [L]
+    dsimp only [L, logIdeleClassNorm]
     rw [map_mul, Units.val_mul, NNReal.coe_mul, Real.log_mul
       (NNReal.coe_ne_zero.2 (ideleClassNorm F g).ne_zero)
       (NNReal.coe_ne_zero.2 (ideleClassNorm F y).ne_zero), Complex.ofReal_add, add_comm]

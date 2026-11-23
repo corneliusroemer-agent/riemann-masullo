@@ -27,7 +27,7 @@ local notation "C[" F "]" => IdeleClassGroup (𝓞 F) F
 local notation "m[" F "]" =>
   (⟨ideleClassNorm F, (isProperMap_ideleClassNorm F).continuous⟩ : C[F] →ₜ* ℝ≥0ˣ)
 local notation "μ[" F "]" => ideleClassTamagawaMeasure F
-local notation "logNorm[" F "]" => fun g : C[F] ↦ Real.log ((ideleClassNorm F g).val : ℝ)
+local notation "logNorm[" F "]" => (logIdeleClassNorm F)
 
 /-- Paper: §10.4, introduction, p. 455. As printed: on the symmetric
 interval Sobolev space, multiplication by a smooth cutoff has closed range.

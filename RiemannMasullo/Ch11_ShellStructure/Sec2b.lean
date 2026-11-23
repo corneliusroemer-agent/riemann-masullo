@@ -47,7 +47,7 @@ local notation "mₛ(" S ")" =>
     SIdeleQuotient F S →ₜ* ℝ≥0ˣ)
 local notation "logNorm(" m ")" => (fun g ↦ Real.log (((m) g).val : ℝ))
 local notation "h₀" => (le_rfl (a := (0 : ℝ)))
-local notation "W(" s ")" => CompactIntervalSobolev μ𝔽 (logNorm(m𝔽)) 0 0 s
+local notation "W(" s ")" => CompactIntervalSobolev μ𝔽 (logIdeleClassNorm F) 0 0 s
 local notation "Wω(" hs ", " ω ")" =>
   actionIsotype ((hardySobolevTranslation μ𝔽 m𝔽 0 0 _ h₀ hs).comp
     (ideleClassNorm F).ker.subtype) ω
