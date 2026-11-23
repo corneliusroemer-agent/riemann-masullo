@@ -441,7 +441,7 @@ theorem sLocalAdelicTheta_factorsThrough (f : ℬₛ) :
     FactorsThrough (sLocalAdelicTheta F S f) classOf := by
   intro a b hab
   have h := QuotientGroup.eq.mp hab
-  rw [MonoidHom.map_range, MonoidHom.mem_range] at h
+  rw [sProjectedDiagonal, MonoidHom.map_range, MonoidHom.mem_range] at h
   obtain ⟨u, hu⟩ := h
   refine Eq.trans ?_ (congrArg (sLocalAdelicTheta F S f) (inv_mul_eq_iff_eq_mul.mp hu.symm)).symm
   change ∑' ξ : Uₛ, thetaTerm f ξ a = ∑' ξ : Uₛ, thetaTerm f ξ (a * unitAtS u)
