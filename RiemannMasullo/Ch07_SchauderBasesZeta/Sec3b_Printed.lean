@@ -265,12 +265,166 @@ def Printed.sLocalAbsolutePW_seqDense : Prop :=
             (∀ n, ∃ X > 0, u n ∈ unitLevel(F, S, T, hST, sLocalPWBox S X, D, χ)) ∧
             Tendsto u atTop (𝓝 x)
 
+open MeasureTheory in
+/-- A test in the kernel of global homogeneous theta for the trivial character vanishes at
+zero: after the polar term the homogeneous theta function is small at small norm. -/
+private theorem sec3bP_globalHom_zero {F : Type*} [Field F] [NumberField F]
+    (f : SchwartzBruhat (Multiplicative (AdeleRing (𝓞 F) F)))
+    (hf : homogeneousAdelicTheta (1 : PontryaginDual (ideleClassNorm F).ker) f = 0) :
+    f (Multiplicative.ofAdd 0) = 0 := by
+  let : MeasurableSpace (IdeleClassGroup (𝓞 F) F) := borel _
+  let : BorelSpace (IdeleClassGroup (𝓞 F) F) := ⟨rfl⟩
+  let : CompactSpace (ideleClassNorm F).ker := (ideleClassGroup_finiteness F).2.1
+  let : (normOneIdeleClassTamagawaMeasure F).IsHaarMeasure :=
+    (multiplicativeTamagawaMeasures_existsUnique F).exists.choose_spec.2.2.2.1
+  obtain ⟨C, T, hC, hT, hsmall⟩ :=
+    homogeneousAdelicTheta_decay_small (1 : PontryaginDual (ideleClassNorm F).ker) f 1
+  set V := (normOneIdeleClassTamagawaMeasure F univ).toReal
+  have hV : 0 < V := ENNReal.toReal_pos (isOpen_univ.measure_ne_zero _ univ_nonempty)
+    isCompact_univ.measure_lt_top.ne
+  set a := adeleSchwartzFourier f (Multiplicative.ofAdd 0)
+  set b := f (Multiplicative.ofAdd 0)
+  -- Every positive real below `T` is the norm of an idele class.
+  have key (t : ℝ) (ht : 0 < t) (htT : t < T) : ‖V • (t⁻¹ • a - b)‖ ≤ C * t := by
+    let u : ℝ≥0ˣ := Units.mk0 ⟨t, ht.le⟩ fun h0 ↦ ht.ne' (congrArg Subtype.val h0)
+    let g : IdeleClassGroup (𝓞 F) F := QuotientGroup.mk (canonicalIdeleNormSection F u)
+    have hg : ((ideleClassNorm F g : ℝ≥0) : ℝ) = t := by
+      change ((ideleNorm F (canonicalIdeleNormSection F u) : ℝ≥0) : ℝ) = t
+      rw [canonicalIdeleNormSection_rightInverse F u]
+      rfl
+    have h := hsmall g (by beta_reduce; rw [hg]; exact htT)
+    beta_reduce at h
+    simp only [homogeneousAdelicTheta_polarTerm, ite_true] at h
+    rw [hf, hg, pow_one] at h
+    rw [norm_smul, Real.norm_of_nonneg hV.le]
+    simpa [V, a, b] using h
+  have hlim0 : Tendsto (fun t : ℝ ↦ t) (𝓝[>] 0) (𝓝 0) :=
+    (continuous_id.tendsto 0).mono_left nhdsWithin_le_nhds
+  -- Multiplying by `t` shows that the Fourier value vanishes.
+  have ha : a = 0 := by
+    have hb : ∀ᶠ t in 𝓝[>] (0 : ℝ), ‖a‖ ≤ t * ‖b‖ + C * t ^ 2 / V := by
+      filter_upwards [Ioo_mem_nhdsGT hT] with t ht
+      have h := key t ht.1 ht.2
+      have he : a = (t / V) • (V • (t⁻¹ • a - b)) + t • b := by
+        rw [smul_smul, div_mul_cancel₀ _ hV.ne', smul_sub, smul_smul,
+          mul_inv_cancel₀ ht.1.ne', one_smul, sub_add_cancel]
+      rw [he]
+      refine (norm_add_le _ _).trans ?_
+      rw [norm_smul (t / V), norm_smul t, Real.norm_of_nonneg (div_nonneg ht.1.le hV.le),
+        Real.norm_of_nonneg ht.1.le]
+      have h2 : t / V * ‖V • (t⁻¹ • a - b)‖ ≤ t / V * (C * t) :=
+        mul_le_mul_of_nonneg_left h (div_nonneg ht.1.le hV.le)
+      have h3 : t / V * (C * t) = C * t ^ 2 / V := by ring
+      linarith
+    have hl : Tendsto (fun t : ℝ ↦ t * ‖b‖ + C * t ^ 2 / V) (𝓝[>] 0) (𝓝 0) := by
+      have := ((hlim0.mul_const ‖b‖).add ((hlim0.pow 2).const_mul C |>.div_const V))
+      simpa using this
+    exact norm_le_zero_iff.mp (ge_of_tendsto hl hb)
+  have hb : ∀ᶠ t in 𝓝[>] (0 : ℝ), ‖b‖ ≤ C * t / V := by
+    filter_upwards [Ioo_mem_nhdsGT hT] with t ht
+    have h := key t ht.1 ht.2
+    rw [ha, smul_zero, zero_sub, smul_neg, norm_neg, norm_smul, Real.norm_of_nonneg hV.le] at h
+    rw [le_div_iff₀ hV]
+    linarith
+  have hl : Tendsto (fun t : ℝ ↦ C * t / V) (𝓝[>] 0) (𝓝 0) := by
+    simpa using (hlim0.const_mul C).div_const V
+  exact norm_le_zero_iff.mp (ge_of_tendsto hl hb)
+
+/-- Evaluation at zero descends to the homogeneous theta space at a stage `T` for an
+unramified norm-one character, through the insertion into the global homogeneous space. -/
+private theorem sec3bP_evalZero_ker {F : Type*} [Field F] [NumberField F]
+    {T : Finset (V(F))} (hω : NormOneCharacterUnramifiedOutside
+      (1 : PontryaginDual (ideleClassNorm F).ker) T)
+    (f : B(F, T))
+    (hf : f ∈ LinearMap.ker (sLocalHomogeneousAdelicThetaLinearMap F T
+      (sLocalNormOneCharacter T 1 hω))) :
+    f (Multiplicative.ofAdd 0) = 0 := by
+  have hg := sLocalHomogeneousThetaToGlobal_preserves_kernel (F := F) (S := T) hω hf
+  rw [Submodule.mem_comap, LinearMap.mem_ker] at hg
+  have h0 := sec3bP_globalHom_zero _ hg
+  rw [sAdeleSchwartzToGlobal_apply, if_pos (fun w _ ↦ (w.adicCompletionIntegers F).zero_mem),
+    map_zero] at h0
+  exact h0
+
+/-- Over the rationals with S = ∅ and one added prime, the unit levels for every family of
+cutoff regions miss a class: evaluation at zero is continuous on the theta space, vanishes on
+every inserted unit test, and is nonzero on some class. -/
+private theorem sec3bP_seqDense_false (p : Vℚ) (hsub : (∅ : Finset Vℚ) ⊆ {p})
+    (hu : NormOneCharacterUnramifiedOutside (1 : PontryaginDual (ideleClassNorm ℚ).ker) ∅)
+    (K : ℝ → Set (SAdeleRing ℚ ∅)) :
+    ¬ ∀ x : Θ(ℚ, {p}, sLocalNormOneCharacter {p} 1 (hu.mono hsub)),
+      x ∈ (⊤ : Submodule ℂ (B(ℚ, {p}))).map (q(ℚ, {p}, sLocalNormOneCharacter {p} 1 (hu.mono hsub))) →
+        ∃ u : ℕ → Θ(ℚ, {p}, sLocalNormOneCharacter {p} 1 (hu.mono hsub)),
+          (∀ n, ∃ X > 0, u n ∈ unitLevel(ℚ, (∅ : Finset Vℚ), {p}, hsub, K X, ⊤,
+            sLocalNormOneCharacter {p} 1 (hu.mono hsub))) ∧
+          Tendsto u atTop (𝓝 x) := by
+  intro h
+  set χ := sLocalNormOneCharacter {p} 1 (hu.mono hsub) with hχ
+  set Kθ := LinearMap.ker (sLocalHomogeneousAdelicThetaLinearMap ℚ ({p} : Finset Vℚ) χ) with hKθ
+  have hpT : p ∈ ({p} : Finset Vℚ) \ (∅ : Finset Vℚ) := by simp
+  -- Evaluation at zero as a continuous functional on tests and on the theta space.
+  let ℓ : B(ℚ, ({p} : Finset Vℚ)) →L[ℂ] ℂ :=
+    ⟨(LinearMap.fst ℂ ℂ ℂ).comp ((adelePolarValues (F := ℚ)).comp (sAdeleSchwartzToGlobal ℚ ({p} : Finset Vℚ))),
+      continuous_fst.comp ((adelePolarValues_continuous (F := ℚ)).comp
+        (sAdeleSchwartzToGlobal_isEmbedding ℚ ({p} : Finset Vℚ)).continuous)⟩
+  have hℓ (f : B(ℚ, ({p} : Finset Vℚ))) : ℓ f = f (Multiplicative.ofAdd 0) := by
+    change sAdeleSchwartzToGlobal ℚ ({p} : Finset Vℚ) f (Multiplicative.ofAdd 0) = _
+    rw [sAdeleSchwartzToGlobal_apply, if_pos (fun w _ ↦ (w.adicCompletionIntegers ℚ).zero_mem),
+      map_zero]
+  have hker : Kθ ≤ LinearMap.ker (ℓ : B(ℚ, ({p} : Finset Vℚ)) →ₗ[ℂ] ℂ) := fun f hf ↦ by
+    rw [LinearMap.mem_ker, ContinuousLinearMap.coe_coe, hℓ]
+    exact sec3bP_evalZero_ker (hu.mono hsub) f hf
+  let L : Θ(ℚ, ({p} : Finset Vℚ), χ) →L[ℂ] ℂ := Kθ.liftQL ℓ hker
+  have hL (f : B(ℚ, ({p} : Finset Vℚ))) : L (Kθ.mkQ f) = f (Multiplicative.ofAdd 0) := hℓ f
+  -- The insertion of a test that is one near zero.
+  let G := Multiplicative (SAdeleRing ℚ ∅)
+  let : T2Space G := inferInstanceAs (T2Space
+    (((w : InfinitePlace ℚ) → w.Completion) × ((v : (∅ : Finset Vℚ)) → v.val.adicCompletion ℚ)))
+  let : LocallyCompactSpace G := inferInstanceAs (LocallyCompactSpace
+    (((w : InfinitePlace ℚ) → w.Completion) × ((v : (∅ : Finset Vℚ)) → v.val.adicCompletion ℚ)))
+  obtain ⟨g, -, -, hg⟩ := schwartzBruhat_exists_local_unit (G := G) isOpen_univ (mem_univ 1)
+  let f₀ := sAdeleSchwartzTransition ℚ hsub g
+  have hf₀0 : f₀ (Multiplicative.ofAdd 0) = 1 := by
+    rw [sAdeleSchwartzTransition_apply,
+      if_pos (fun w _ ↦ (w.val.adicCompletionIntegers ℚ).zero_mem)]
+    have h0 : ((0 : SAdeleRing ℚ ({p} : Finset Vℚ)).1, fun w : (∅ : Finset Vℚ) ↦
+        (0 : SAdeleRing ℚ ({p} : Finset Vℚ)).2 ⟨w.val, hsub w.property⟩) = (0 : SAdeleRing ℚ ∅) :=
+      Prod.ext rfl (funext fun w ↦ absurd w.property (Finset.notMem_empty w.val))
+    rw [h0]
+    exact hg.eq_of_nhds
+  obtain ⟨u, hun, hlim⟩ := h _ (Submodule.mem_map_of_mem (p := ⊤) (Submodule.mem_top (x := f₀)))
+  have hE (t : B(ℚ, ({p} : Finset Vℚ))) :
+      L (Kθ.mkQ (sAdelePrincipalValue ℚ (Finset.sdiff_subset : ({p} : Finset Vℚ) \ (∅ : Finset Vℚ) ⊆ ({p} : Finset Vℚ)) t)) = 0 :=
+    (hL _).trans (sec3bP_sPV_zero Finset.sdiff_subset hpT 0 rfl t)
+  have hzero (n : ℕ) : L (u n) = 0 := by
+    obtain ⟨X, -, hX⟩ := hun n
+    have hX' := (Submodule.topologicalClosure_coe _).subst (motive := fun A ↦ u n ∈ A) hX
+    refine closure_minimal (t := {x | L x = 0}) ?_ (isClosed_eq L.continuous continuous_const) hX'
+    intro y hy
+    obtain ⟨e, he, rfl⟩ := Submodule.mem_map.mp hy
+    obtain ⟨t, -, rfl⟩ := Submodule.mem_map.mp he.1
+    exact hE t
+  have hx : L (Kθ.mkQ f₀) = 0 :=
+    tendsto_nhds_unique ((L.continuous.tendsto _).comp hlim)
+      (by rw [show (⇑L ∘ u) = fun _ ↦ 0 from funext hzero]; exact tendsto_const_nhds)
+  rw [hL, hf₀0] at hx
+  exact one_ne_zero hx
+
 /-- Paper: Proposition 7.3.2.2(1), p. 352, with Definition 7.3.2.1, p. 351.
 Take F = ℚ, S = {∞}, S₀ = {p}, and the trivial character. All inserted tests
 vanish near 0 at p, so their Mellin transforms have no pole at 2πi/log p.
 The residue there is continuous and is nonzero on the Gaussian tensored with
 the integer-ring indicator, whose Mellin transform contains (1 − p^(-s))⁻¹. -/
-theorem Printed.sLocalAbsolutePW_seqDense_false : ¬ Printed.sLocalAbsolutePW_seqDense := by sorry
+theorem Printed.sLocalAbsolutePW_seqDense_false : ¬ Printed.sLocalAbsolutePW_seqDense := by
+  intro h
+  obtain ⟨m, hm⟩ := Ideal.exists_maximal (𝓞 ℚ)
+  let p : Vℚ := ⟨m, hm.isPrime, NeZero.ne m⟩
+  have hsub : (∅ : Finset Vℚ) ⊆ {p} := Finset.empty_subset _
+  have hu : NormOneCharacterUnramifiedOutside (1 : PontryaginDual (ideleClassNorm ℚ).ker) ∅ :=
+    ⟨⟨1, (mem_unramifiedOutside_iff ℚ ∅ 1).mpr (fun _ _ _ ↦ rfl)⟩, fun _ ↦ rfl⟩
+  exact sec3bP_seqDense_false p hsub hu (sLocalPWBox ∅)
+    (h ℚ ∅ {p} {p} (by simp) (Finset.disjoint_empty_left _) (sec3bP_saturated p) sec3bP_pic
+      1 hu hsub _ rfl ⊤ (Or.inl rfl))
 
 /-- Paper: Proposition 7.3.2.4(1), pp. 355–356, with Definition 7.3.2.3, p. 355.
 The invariant levels formed with the printed unit factors exhaust the homogeneous
@@ -297,7 +451,16 @@ Take F = ℚ, S = {∞}, S₀ = {p}, and the trivial character. All inserted tes
 vanish near 0 at p, so their Mellin transforms have no pole at 2πi/log p.
 The residue there is continuous and is nonzero on the Gaussian tensored with
 the integer-ring indicator, whose Mellin transform contains (1 − p^(-s))⁻¹. -/
-theorem Printed.sLocalInvariantPW_seqDense_false : ¬ Printed.sLocalInvariantPW_seqDense := by sorry
+theorem Printed.sLocalInvariantPW_seqDense_false : ¬ Printed.sLocalInvariantPW_seqDense := by
+  intro h
+  obtain ⟨m, hm⟩ := Ideal.exists_maximal (𝓞 ℚ)
+  let p : Vℚ := ⟨m, hm.isPrime, NeZero.ne m⟩
+  have hsub : (∅ : Finset Vℚ) ⊆ {p} := Finset.empty_subset _
+  have hu : NormOneCharacterUnramifiedOutside (1 : PontryaginDual (ideleClassNorm ℚ).ker) ∅ :=
+    ⟨⟨1, (mem_unramifiedOutside_iff ℚ ∅ 1).mpr (fun _ _ _ ↦ rfl)⟩, fun _ ↦ rfl⟩
+  exact sec3bP_seqDense_false p hsub hu (sLocalPWProductRegion ∅)
+    (h ℚ ∅ {p} {p} (by simp) (Finset.disjoint_empty_left _) (sec3bP_saturated p) sec3bP_pic
+      1 hu hsub _ rfl ⊤ (Or.inl rfl))
 
 /-- Paper: Discussion after Proposition 7.3.2.2(4), p. 354.
 The closed zero-moment absolute level is said to have codimension two in the full level. -/
