@@ -205,7 +205,45 @@ def Printed.sLocalPWTests_twoMoments : Prop :=
 /-- Paper: Definitions 7.3.2.1(1) and 7.3.2.3(1), pp. 351, 355.
 For one added rational prime every inserted test vanishes at zero, so at most
 one independent moment remains on the test space. -/
-theorem Printed.sLocalPWTests_twoMoments_false : ¬ Printed.sLocalPWTests_twoMoments := by sorry
+theorem Printed.sLocalPWTests_twoMoments_false : ¬ Printed.sLocalPWTests_twoMoments := by
+  intro h
+  obtain ⟨m, hm⟩ := Ideal.exists_maximal (𝓞 ℚ)
+  let p : Vℚ := ⟨m, hm.isPrime, NeZero.ne m⟩
+  let S : Finset Vℚ := ∅
+  let T : Finset Vℚ := {p}
+  have hsub : S ⊆ T := Finset.empty_subset _
+  have hpT : p ∈ T \ S := by simp [S, T]
+  let E := unitTests(ℚ, S, T, hsub, sLocalPWBox S 1)
+  let Q := (zeroMoments(ℚ, T)).comap E.subtype
+  have h2 : Module.finrank ℂ (E ⧸ Q) = 2 :=
+    h ℚ S T T (by simp [S, T]) (Finset.disjoint_empty_left _) (sec3bP_saturated p)
+      sec3bP_pic hsub 1 one_pos (sLocalPWBox S 1) (by simp)
+  -- The Fourier transform at zero, restricted to the inserted tests.
+  let M := (sAdelePolarValues_isLinear (F := ℚ) (S := T)).mk' _
+  let L : E →ₗ[ℂ] ℂ := (LinearMap.snd ℂ ℂ ℂ).comp (M.comp E.subtype)
+  -- Every inserted test is a unit principal value, so it vanishes at zero, and the
+  -- zero-moment condition reduces to the kernel of the Fourier moment.
+  have hker : LinearMap.ker L ≤ Q := by
+    intro e he
+    rw [Submodule.mem_comap, mem_sAdelePolarSubspace]
+    refine ⟨?_, LinearMap.mem_ker.mp he⟩
+    obtain ⟨t, -, hte⟩ := Submodule.mem_map.mp e.property
+    rw [Submodule.subtype_apply, ← hte]
+    exact sec3bP_sPV_zero Finset.sdiff_subset hpT 0 rfl t
+  have hle : Module.finrank ℂ (E ⧸ LinearMap.ker L) ≤ 1 := by
+    rw [L.quotKerEquivRange.finrank_eq]
+    exact (Submodule.finrank_le _).trans (by simp)
+  have : FiniteDimensional ℂ (E ⧸ LinearMap.ker L) :=
+    L.quotKerEquivRange.symm.finiteDimensional
+  let φ := Submodule.mapQ (LinearMap.ker L) Q LinearMap.id hker
+  have hφ : Function.Surjective φ := by
+    intro q
+    obtain ⟨e, rfl⟩ := Submodule.mkQ_surjective Q q
+    exact ⟨Submodule.mkQ _ e, rfl⟩
+  have hrange : Module.finrank ℂ (E ⧸ Q) ≤ Module.finrank ℂ (E ⧸ LinearMap.ker L) := by
+    rw [← finrank_top ℂ (E ⧸ Q), ← LinearMap.range_eq_top.mpr hφ]
+    exact LinearMap.finrank_range_le φ
+  omega
 
 /-- Paper: Proposition 7.3.2.2(1), p. 352, with Definition 7.3.2.1, p. 351.
 The absolute levels formed with the printed unit factors exhaust the homogeneous
