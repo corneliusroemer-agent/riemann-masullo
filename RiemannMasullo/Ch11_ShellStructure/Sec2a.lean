@@ -881,9 +881,27 @@ private theorem globalThetaPrincipalValue_extension (S : Finset V) (a : ℝ) {s 
         j(a, hs) (theta(pvTest(S, f)))) :
     ∃! P : H(a, hs) →L[ℂ] H(a, hs), ∀ f : ℬ₀,
       P (j(a, hs) (theta(f))) = j(a, hs) (theta(pvTest(S, f))) := by
-  -- Extend `g` along the dense inclusion of its span, which is isometric, and use that two
-  -- continuous maps agreeing on a dense set of a Hausdorff space agree everywhere.
-  sorry
+  let T := globalThetaSobolevTestClass (F := F) a hs
+  let R := LinearMap.range T
+  have htc (f : ℬ₀) : T f = j(a, hs) (theta(f)) := by
+    change globalThetaSobolevTestClass (F := F) a hs f = _
+    rw [globalThetaSobolevTestClass, LinearMap.comp_apply, Submodule.mkQ_apply]
+    rfl
+  have hT : DenseRange T :=
+    (globalThetaSobolev_dense (F := F) a hI hs).comp (Submodule.mkQ_surjective _).denseRange
+      (globalThetaSobolevInclusion F a hI hs).continuous
+  have hR : DenseRange R.subtypeL :=
+    hT.mono fun y hy ↦ by
+      obtain ⟨f, hf⟩ := hy
+      exact ⟨⟨y, f, hf⟩, rfl⟩
+  have hu : IsUniformInducing R.subtypeL := isUniformEmbedding_subtype_val.isUniformInducing
+  have h₀ (f : ℬ₀) : g.extend R.subtypeL (T f) = j(a, hs) (theta(pvTest(S, f))) :=
+    (g.extend_eq hR hu ⟨T f, LinearMap.mem_range_self _ f⟩).trans (hg f)
+  refine ⟨g.extend R.subtypeL, fun f ↦ ?_, fun P hP ↦ ?_⟩
+  · exact (congrArg (g.extend R.subtypeL) (htc f)).symm.trans (h₀ f)
+  refine ContinuousLinearMap.coeFn_injective
+    (hT.equalizer P.continuous (g.extend R.subtypeL).continuous (funext fun f ↦ ?_))
+  exact (congrArg P (htc f)).trans ((hP f).trans (h₀ f).symm)
 
 /-- Paper: Proposition 11.2.0.1(2) and (11.2.0.4), pp. 484–485.
 The principal value has a unique bounded extension to the global theta completion.
