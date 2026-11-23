@@ -2488,7 +2488,11 @@ values Lean assigns to `logDeriv` at the pole of `finiteL 1` at one and to
 than as `AnalyticOnNhd` of the raw expression itself. The character is trivial
 on the norm section, as in the chart: a norm twist of the trivial character
 moves the pole of its finite L-function off the real axis, where the
-correction term does not cancel it. -/
+correction term does not cancel it.
+
+Gap: The paper asserts this continuation on p. 30 without proof. For every a > 0 it says that
+the finite Hecke L-function of a character trivial on the norm section has no zero with
+Re s > 1/2 + a. -/
 private theorem introTrace_combined_limit_extension_analytic (τ : ℝ≥0ˣ →ₜ* C𝔽)
     (_hτ : RightInverse τ (ideleClassNorm F)) (χ : U𝔽) (_hχ : ∀ t, χ (τ t) = 1)
     {a : ℝ} (_ha : 0 < a) :
