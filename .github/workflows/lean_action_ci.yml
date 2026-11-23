@@ -1,20 +1,37 @@
 name: Lean Action CI
 
-# For pull requests that touch anything besides the library's Lean files (scripts, workflows,
-# the lakefile, vendored code). `PR check` builds every pull request that changes only library
-# files, with the statement check on top, and `Main state` builds main, so running this as well
-# for those would only use up runners: the queue then delays everything, claims included.
+# For pull requests that touch build configuration, root Lean targets, vendored Lean code,
+# Lean scripts, or the checks this workflow runs. `PR check` builds library-only pull requests,
+# `CI self-test` checks workflow and Python/shell CI changes, and `Main state` builds main;
+# running a cold full build on docs, claims, or other workflow/script edits only burns runners.
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
-      - '**'
-      - '!RiemannMasullo/**/*.lean'
-      - 'RiemannMasullo/External/**'
+      - 'lakefile.toml'
+      - 'lakefile.lean'
+      - 'lean-toolchain'
+      - 'lake-manifest.json'
+      - '*.lean'
+      - 'RiemannMasullo/External/**/*.lean'
+      - 'scripts/**/*.lean'
+      - 'scripts/lint.sh'
+      - 'scripts/signatures.sh'
+      - '.github/workflows/lean_action_ci.yml'
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lean-action-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
       - name: Lint
