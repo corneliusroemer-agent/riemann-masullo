@@ -1985,13 +1985,139 @@ private theorem sLocalTrace_integral_inv_Ici (a L : ℝ) (ha : 0 < a) :
       integral_inv_of_pos ha (ha.trans_le h), Real.log_div (ha.trans_le h).ne' ha.ne']
   · rw [Icc_eq_empty h, Measure.restrict_empty, integral_zero_measure]
 
+section FourierLogSection
+
+local instance instInfiniteCompletionMeasurableSpaceSec4 (w : InfinitePlace F) :
+    MeasurableSpace w.Completion := borel _
+
+/-- Paper: (12.4.1.20)–(12.4.1.21), p. 518. The Fourier transform of the translated test
+is dominated by a function of the infinite coordinates, integrable also against the
+logarithm of each infinite absolute value, times the indicator of a ball at every finite
+place of `S`.
+Deviation: The translated test is a finite sum of archimedean tests tensored with ball
+indicators, whose Fourier transforms are archimedean Schwartz functions and scaled ball
+indicators; this records the resulting bound. -/
+private theorem sLocalTrace_fourier_product_bound (f : BruhatCompactSupport Iₛ) (ξ : Hₛ) :
+    ∃ (Φ : ((w : InfinitePlace F) → w.Completion) → ℝ) (R : ℝ), (∀ a, 0 ≤ Φ a) ∧
+      Integrable Φ (Measure.pi (infiniteLocalAdditiveTamagawaMeasure F)) ∧
+      (∀ w : InfinitePlace F, Integrable (fun a ↦ Φ a * |Real.log ‖a w‖|)
+        (Measure.pi (infiniteLocalAdditiveTamagawaMeasure F))) ∧
+      ∀ y : Aₛ, ‖fourierₛ (sLocalTraceEta f ξ) y‖ ≤
+        Φ y.1 * ∏ v : S, {b : v.val.adicCompletion F | ‖b‖ ≤ R}.indicator (fun _ ↦ (1 : ℝ)) (y.2 v) := by
+  sorry
+
+/-- Paper: (12.4.1.24), p. 518. The logarithm of the absolute value is integrable on a
+ball of a finite completion. -/
+private theorem sLocalTrace_finite_log_ball_integrable (v : V) (R : ℝ) :
+    IntegrableOn (fun b : v.adicCompletion F ↦ |Real.log ‖b‖|) {b | ‖b‖ ≤ R}
+      (finiteLocalAdditiveTamagawaMeasure F v) := by
+  sorry
+
 /-- Paper: (12.4.1.24), p. 518. The Fourier transform of the translated test, weighted
 by the logarithm of the product norm, is integrable for additive Tamagawa measure.
 Deviation: The logarithm of zero is zero on the null locus with a zero coordinate. -/
 private theorem sLocalTrace_fourier_log_integrable (f : BruhatCompactSupport Iₛ) (ξ : Hₛ) :
     Integrable (fun w ↦ fourierₛ (sLocalTraceEta f ξ) w * ((Real.log (modS(w)) : ℝ) : ℂ))
       νₛ := by
-  sorry
+  classical
+  let (v : S) : ProperSpace (v.val.adicCompletion F) := properSpace_adicCompletion v.val
+  let (w : InfinitePlace F) : SecondCountableTopology w.Completion :=
+    (InfinitePlace.Completion.isometry_extensionEmbedding w).isEmbedding.secondCountableTopology
+  let (v : S) : MeasurableSpace (v.val.adicCompletion F) := borel _
+  let (w : InfinitePlace F) : BorelSpace w.Completion := ⟨rfl⟩
+  let (v : S) : BorelSpace (v.val.adicCompletion F) := ⟨rfl⟩
+  let (w : InfinitePlace F) : (infiniteLocalAdditiveTamagawaMeasure F w).IsAddHaarMeasure :=
+    infiniteLocalAdditiveTamagawaMeasure_haar F w
+  let (v : S) : (finiteLocalAdditiveTamagawaMeasure F v.val).IsAddHaarMeasure :=
+    finiteLocalAdditiveTamagawaMeasure_isAddHaar F v.val
+  let : BorelSpace Aₛ := sAdeleRing_borelSpace
+  obtain ⟨Φ, R, hΦ0, hΦi, hΦl, hbd⟩ := sLocalTrace_fourier_product_bound f ξ
+  let g := fourierₛ (sLocalTraceEta f ξ)
+  obtain ⟨η, hη⟩ := SLocalTraceEta.eta_test f ξ
+  have hgc : Continuous g := by
+    change Continuous (fourierₛ (sLocalTraceEta f ξ))
+    rw [← funext hη]
+    exact (schwartzBruhat_continuous (sAdeleSchwartzFourier η)).comp continuous_ofAdd
+  have hm : Continuous fun t : Aₛ ↦ modS(t) :=
+    (continuous_finsetProd _ fun w _ ↦
+      (((continuous_apply w).comp continuous_fst).norm.pow _)).mul
+      (continuous_finsetProd _ fun v _ ↦ ((continuous_apply v).comp continuous_snd).norm)
+  let ind (v : S) : v.val.adicCompletion F → ℝ :=
+    {b : v.val.adicCompletion F | ‖b‖ ≤ R}.indicator (fun _ ↦ (1 : ℝ))
+  have hballm (v : S) : MeasurableSet {b : v.val.adicCompletion F | ‖b‖ ≤ R} :=
+    measurableSet_le continuous_norm.measurable measurable_const
+  have hball (v : S) : finiteLocalAdditiveTamagawaMeasure F v.val
+      {b : v.val.adicCompletion F | ‖b‖ ≤ R} < ⊤ := by
+    have : {b : v.val.adicCompletion F | ‖b‖ ≤ R} = Metric.closedBall 0 R := by
+      ext b; simp
+    rw [this]
+    exact (isCompact_closedBall 0 R).measure_lt_top
+  have hind (v : S) : Integrable (ind v) (finiteLocalAdditiveTamagawaMeasure F v.val) :=
+    (integrable_indicator_iff (hballm v)).mpr (integrableOn_const (hball v).ne)
+  -- The weights at the finite places.
+  let fin (u : S) (v : S) : v.val.adicCompletion F → ℝ :=
+    fun b ↦ ind v b * (if v = u then |Real.log ‖b‖| else 1)
+  have hfin (u v : S) : Integrable (fin u v) (finiteLocalAdditiveTamagawaMeasure F v.val) := by
+    by_cases h : v = u
+    · simp only [fin, h, ↓reduceIte]
+      subst h
+      have := (sLocalTrace_finite_log_ball_integrable v.val R).integrable_indicator (hballm v)
+      refine this.congr (ae_of_all _ fun b ↦ ?_)
+      by_cases hb : b ∈ {b : v.val.adicCompletion F | ‖b‖ ≤ R}
+      · simp [ind, indicator_of_mem hb]
+      · simp [ind, indicator_of_notMem hb]
+    · simp only [fin, h, ↓reduceIte, mul_one]
+      exact hind v
+  let P : ((v : S) → v.val.adicCompletion F) → ℝ := fun b ↦ ∏ v, ind v (b v)
+  have hP : Integrable P (Measure.pi fun v : S ↦ finiteLocalAdditiveTamagawaMeasure F v.val) :=
+    Integrable.fintype_prod_dep hind
+  have hQ (u : S) : Integrable (fun b : (v : S) → v.val.adicCompletion F ↦ ∏ v, fin u v (b v))
+      (Measure.pi fun v : S ↦ finiteLocalAdditiveTamagawaMeasure F v.val) :=
+    Integrable.fintype_prod_dep (hfin u)
+  have hQeq (u : S) (b : (v : S) → v.val.adicCompletion F) :
+      ∏ v, fin u v (b v) = P b * |Real.log ‖b u‖| := by
+    simp only [fin, Finset.prod_mul_distrib, P]
+    congr 1
+    rw [Finset.prod_ite_eq' Finset.univ u]
+    simp
+  -- The dominating function.
+  let D : Aₛ → ℝ := fun y ↦
+    (∑ w : InfinitePlace F, (w.mult : ℝ) * (Φ y.1 * |Real.log ‖y.1 w‖| * P y.2)) +
+      ∑ u : S, Φ y.1 * ∏ v, fin u v (y.2 v)
+  have hD : Integrable D νₛ := by
+    change Integrable D ((Measure.pi (infiniteLocalAdditiveTamagawaMeasure F)).prod
+      (Measure.pi fun v : S ↦ finiteLocalAdditiveTamagawaMeasure F v.val))
+    refine Integrable.add (integrable_finsetSum _ fun w _ ↦ ((hΦl w).mul_prod hP).const_mul _)
+      (integrable_finsetSum _ fun u _ ↦ hΦi.mul_prod (hQ u))
+  -- The logarithm of the product norm is bounded by the sum of the local logarithms.
+  have hlog (y : Aₛ) : |Real.log (modS(y))| ≤
+      (∑ w : InfinitePlace F, (w.mult : ℝ) * |Real.log ‖y.1 w‖|) +
+        ∑ v : S, |Real.log ‖y.2 v‖| := by
+    by_cases h0 : modS(y) = 0
+    · rw [h0, Real.log_zero, abs_zero]
+      exact add_nonneg (Finset.sum_nonneg fun w _ ↦ mul_nonneg (Nat.cast_nonneg _) (abs_nonneg _))
+        (Finset.sum_nonneg fun v _ ↦ abs_nonneg _)
+    have hA : (∏ w : InfinitePlace F, ‖y.1 w‖ ^ w.mult) ≠ 0 := left_ne_zero_of_mul h0
+    have hB : (∏ v : S, ‖y.2 v‖) ≠ 0 := right_ne_zero_of_mul h0
+    rw [Real.log_mul hA hB, Real.log_prod (fun w _ ↦ Finset.prod_ne_zero_iff.mp hA w
+      (Finset.mem_univ w)), Real.log_prod (fun v _ ↦ Finset.prod_ne_zero_iff.mp hB v
+      (Finset.mem_univ v))]
+    refine (abs_add_le _ _).trans (add_le_add ((Finset.abs_sum_le_sum_abs _ _).trans
+      (Finset.sum_le_sum fun w _ ↦ ?_)) (Finset.abs_sum_le_sum_abs _ _))
+    rw [Real.log_pow, abs_mul, Nat.abs_cast]
+  refine hD.mono' (hgc.measurable.mul (Complex.measurable_ofReal.comp
+    (Real.measurable_log.comp hm.measurable))).aestronglyMeasurable (ae_of_all _ fun y ↦ ?_)
+  have hP0 : 0 ≤ P y.2 := Finset.prod_nonneg fun v _ ↦ indicator_nonneg (fun _ _ ↦ zero_le_one) _
+  have hDy : D y = Φ y.1 * P y.2 * ((∑ w : InfinitePlace F, (w.mult : ℝ) * |Real.log ‖y.1 w‖|) +
+      ∑ v : S, |Real.log ‖y.2 v‖|) := by
+    simp only [D, hQeq, mul_add, Finset.mul_sum]
+    congr 1
+    · exact Finset.sum_congr rfl fun w _ ↦ by ring
+    · exact Finset.sum_congr rfl fun v _ ↦ by ring
+  rw [hDy, norm_mul, Complex.norm_real, Real.norm_eq_abs]
+  exact mul_le_mul (hbd y) (hlog y) (abs_nonneg _) (mul_nonneg (hΦ0 _) hP0)
+
+end FourierLogSection
 
 /-- Paper: (12.4.1.23)–(12.4.1.24), p. 518. Integrating the band integrals of the
 Fourier transform against dt/t on (0, L] gives the logarithmic width of the spatial
