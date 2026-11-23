@@ -813,6 +813,72 @@ private theorem completedInductiveTensor_bornological_false_split :
   refine ⟨A n ξ, hξ, ?_⟩
   exact hηT.mono (hdisj n hneq).symm.subset_compl_left
 
+/-- `Iio ω₁` has the order type of a regular uncountable cardinal, so Fodor applies. -/
+private theorem completedInductiveTensor_bornological_false_regular :
+    IsRegularCardinalOrder (Iio (Ordinal.omega (1 : Ordinal.{0}))) := by
+  refine ⟨le_of_eq ?_⟩
+  have hcof : Order.cof (Iio (Ordinal.omega (1 : Ordinal.{0}))) =
+      Cardinal.lift.{1} (ℵ₁ : Cardinal.{0}) := by
+    rw [Ordinal.cof_Iio, ← Ordinal.lift_cof, Cardinal.cof_omega_one]
+  rw [Ordinal.type_lt_Iio, hcof, ← Cardinal.lift_ord, Cardinal.ord_aleph]
+
+/-- Limit points of a stationary subset of `Iio ω₁` form a club. -/
+private theorem completedInductiveTensor_bornological_false_limitClub
+    (S : Set (Iio (Ordinal.omega (1 : Ordinal.{0})))) (hS : IsStationary S) :
+    IsClub {α | (∃ β, β < α) ∧ ∀ β < α, ∃ γ ∈ S, β < γ ∧ γ < α} := by
+  let Ω := Iio (Ordinal.omega (1 : Ordinal.{0}))
+  let C : Set Ω := {α | (∃ β, β < α) ∧ ∀ β < α, ∃ γ ∈ S, β < γ ∧ γ < α}
+  have hcof : Order.cof Ω ≠ ℵ₀ := by
+    rw [Ordinal.cof_Iio, ← Ordinal.lift_cof, Cardinal.cof_omega_one]
+    exact (Cardinal.aleph0_lt_lift.mpr Cardinal.aleph0_lt_aleph_one).ne.symm
+  change IsClub C
+  have habove (β : Ω) : ∃ γ : Ω, β < γ ∧ γ ∈ S := by
+    have hsucc : β.1 + 1 < Ordinal.omega (1 : Ordinal) :=
+      (Cardinal.isSuccLimit_omega 1).succ_lt β.2
+    obtain ⟨γ, hγS, hle⟩ := hS.isCofinal ⟨β.1 + 1, hsucc⟩
+    have hβ : β.1 < β.1 + 1 :=
+      lt_succ_of_not_isMax (not_isMax_of_lt (β.2 : β.1 < Ordinal.omega 1))
+    refine ⟨γ, lt_of_lt_of_le hβ (Subtype.coe_le_coe.mp hle), hγS⟩
+  refine ⟨?_, ?_⟩
+  · intro d hd hne _ a ha
+    refine ⟨?_, ?_⟩
+    · obtain ⟨δ, hδ⟩ := hne
+      obtain ⟨β, hβ⟩ := (hd hδ).1
+      exact ⟨β, lt_of_lt_of_le hβ (ha.1 hδ)⟩
+    · intro β hβ
+      have : ∃ δ ∈ d, β < δ := by
+        by_contra h
+        push Not at h
+        exact not_le_of_gt hβ (ha.2 (fun δ hδ => h δ hδ))
+      obtain ⟨δ, hδd, hβδ⟩ := this
+      obtain ⟨γ, hγS, hβγ, hγδ⟩ := (hd hδd).2 β hβδ
+      exact ⟨γ, hγS, hβγ, lt_of_lt_of_le hγδ (ha.1 hδd)⟩
+  · intro α
+    let seq : ℕ → Ω := Nat.rec (Classical.choose (habove α))
+      (fun _ prev => Classical.choose (habove prev))
+    have hseq (n : ℕ) : seq n < seq (n + 1) ∧ seq (n + 1) ∈ S := by
+      simpa [seq] using Classical.choose_spec (habove (seq n))
+    have hseed : α < seq 0 ∧ seq 0 ∈ S := by
+      simpa [seq] using Classical.choose_spec (habove α)
+    have hbdd : BddAbove (range fun n => (seq n).1) :=
+      ⟨Ordinal.omega 1, by rintro _ ⟨n, rfl⟩; exact le_of_lt (seq n).2⟩
+    have hsup : (⨆ n, (seq n).1) < Ordinal.omega 1 :=
+      Ordinal.iSup_lt_omega_one fun n => (seq n).2
+    refine ⟨⟨⨆ n, (seq n).1, hsup⟩, ?_, ?_⟩
+    · have h01 : (seq 0).1 < (seq 1).1 := by rw [Subtype.coe_lt_coe]; exact (hseq 0).1
+      refine ⟨⟨seq 0, lt_of_lt_of_le h01 (le_ciSup hbdd 1)⟩, ?_⟩
+      intro β hβ
+      obtain ⟨n, hn⟩ := exists_lt_of_lt_ciSup (f := fun n => (seq n).1) hβ
+      have hstep : (seq n).1 < (seq (n + 1)).1 := by
+        rw [Subtype.coe_lt_coe]; exact (hseq n).1
+      have hstep' : (seq (n + 1)).1 < (seq (n + 2)).1 := by
+        rw [Subtype.coe_lt_coe]; exact (hseq (n + 1)).1
+      refine ⟨seq (n + 1), (hseq n).2, hn.trans hstep,
+        lt_of_lt_of_le hstep' (le_ciSup hbdd (n + 2))⟩
+    · have hα : α.1 ≤ (seq 0).1 := by
+        rw [Subtype.coe_le_coe]; exact le_of_lt hseed.1
+      exact le_trans hα (le_ciSup hbdd 0)
+
 end completedInductiveTensor_bornological_false_aux
 
 /-- Paper: Proposition C.2.3.13(3), p. 683. Let S be stationary in ω₁ with stationary
