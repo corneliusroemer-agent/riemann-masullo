@@ -713,11 +713,64 @@ theorem globalThetaEigendistribution_holomorphic (χ : PontryaginDual C𝔽) :
     VectorHolomorphicOn (fun s ↦ globalThetaEigendistribution (ideleClassNormTwist χ s))
       univ := by sorry
 
+/-- In a Hausdorff polynormable Montel space, a family of continuous functionals whose common
+kernel is zero spans a dense subspace of the strong dual. A functional on the strong dual that
+vanishes on the closed span is evaluation at a vector, and that vector lies in the common
+kernel. -/
+private theorem sLocalThetaEigendistributions_dense_span_of_separate {E I : Type*}
+    [AddCommGroup E] [Module ℂ E] [UniformSpace E] [IsUniformAddGroup E] [ContinuousSMul ℂ E]
+    [PolynormableSpace ℂ E] [T2Space E] [MontelSpace ℂ E] [PolynormableSpace ℂ (StrongDual ℂ E)]
+    (U : I → StrongDual ℂ E) (hU : ∀ x : E, (∀ i, U i x = 0) → x = 0) :
+    Dense (Submodule.span ℂ (Set.range U) : Set (StrongDual ℂ E)) := by
+  let W : Submodule ℂ (StrongDual ℂ E) := Submodule.span ℂ (Set.range U)
+  let : Module ℝ (StrongDual ℂ E) := Module.restrictScalars ℝ ℂ (StrongDual ℂ E)
+  let : IsScalarTower ℝ ℂ (StrongDual ℂ E) := IsScalarTower.restrictScalars ℝ ℂ (StrongDual ℂ E)
+  let : LocallyConvexSpace ℝ (StrongDual ℂ E) :=
+    (PolynormableSpace.withSeminorms ℂ (StrongDual ℂ E)).toLocallyConvexSpace
+  intro T
+  by_contra hT
+  obtain ⟨l, hl, hl0⟩ := exists_dual_eq_zero_on_submodule_of_notMem (𝕜 := ℂ)
+    W.topologicalClosure W.isClosed_topologicalClosure (x := T) hT
+  obtain ⟨x, rfl⟩ := surjective_strongBidual_eval (E := E) l
+  have hx : x = 0 := hU x fun i ↦
+    hl0 (U i) (W.le_topologicalClosure (Submodule.subset_span ⟨i, rfl⟩))
+  exact hl (by rw [hx]; exact map_zero T)
+
+/-- Paper: Remark 5.5.1.4, p. 280, and Remark 5.5.3.3, p. 285.
+Mellin uniqueness for the S-local theta map: a Schwartz–Bruhat function whose normalized
+S-local zeta function vanishes at every quasi-character has zero theta function.
+This is the analytic content of the density of the eigendistributions. The zeta integral of
+`f` against `c` unfolds to the Mellin transform of the theta function of `f` over the quotient
+by the S-units wherever it converges, and the local Euler product that normalizes it has no
+zeros there, so the hypothesis makes that Mellin transform vanish on a right half-plane of
+every norm chart. -/
+theorem sLocalAdelicTheta_eq_zero_of_normalizedZFunction_eq_zero (f : ℬ(Aₛ))
+    (hf : ∀ c : QuasiCharacter Jₛ, sLocalNormalizedZFunction f c = 0) : f ∈ Kₛ := by sorry
+
 /-- Paper: Remark 5.5.1.4, p. 280.
 The descended S-local eigendistributions span a strongly dense subspace of the theta dual. -/
 theorem sLocalThetaEigendistributions_dense_span :
     Dense (Submodule.span ℂ (Set.range (sLocalThetaEigendistribution (F := F) (S := S))) :
-      Set D(SLocalAdelicThetaSpace F S)) := by sorry
+      Set D(SLocalAdelicThetaSpace F S)) := by
+  let : UniformSpace (SLocalAdelicThetaSpace F S) := IsTopologicalAddGroup.rightUniformSpace _
+  let : IsUniformAddGroup (SLocalAdelicThetaSpace F S) := isUniformAddGroup_of_addCommGroup
+  let : T2Space (SLocalAdelicThetaSpace F S) :=
+    (sLocalAdelicThetaSpace_nuclear.{_, 0} (F := F) (S := S)).1
+  let : PolynormableSpace ℂ (SLocalAdelicThetaSpace F S) :=
+    (sLocalAdelicThetaSpace_nuclear.{_, 0} (F := F) (S := S)).2.1
+  let : MontelSpace ℂ (SLocalAdelicThetaSpace F S) := sLocalAdelicThetaSpace_montel
+  let : PolynormableSpace ℂ D(SLocalAdelicThetaSpace F S) :=
+    (sLocalAdelicThetaSpace_strongDual_nuclear.{_, 0} (F := F) (S := S)).2.1
+  refine sLocalThetaEigendistributions_dense_span_of_separate
+    (sLocalThetaEigendistribution (F := F) (S := S)) fun x hx ↦ ?_
+  obtain ⟨f, rfl⟩ := (Kₛ).mkQ_surjective x
+  refine (Submodule.Quotient.mk_eq_zero _).mpr
+    (sLocalAdelicTheta_eq_zero_of_normalizedZFunction_eq_zero f fun c ↦ ?_)
+  have h := (existsUnique_sLocalNormalizedEigendistribution (F := F) (S := S) c).exists.choose_spec f
+  have h0 : sLocalNormalizedEigendistribution c f = 0 := hx c
+  rw [← h]
+  change _ * sLocalNormalizedEigendistribution c f = 0
+  rw [h0, mul_zero]
 
 end Global
 
