@@ -40,14 +40,11 @@ command #import_bumps
 command #import_diff
 command #import_path
 command #info_trees
-command #instances
 command #kerodon_tags
 command #leansearch
 command #lint
 command #list_linters
 command #lmfdb_tags
-command #long_instances
-command #long_names
 command #loogle
 command #min_imports
 command #norm_imports
@@ -69,7 +66,6 @@ command #search
 command #show_deprecated_modules
 command #show_imports
 command #show_kind
-command #show_unused
 command #simp
 command #stacks_tags
 command #string_diagram
@@ -95,7 +91,6 @@ command abbrev
 command add_aesop_rules
 command alias
 command allow_unused_tactic
-command assert_no_sorry
 command assert_not_exists
 command assert_not_imported
 command attribute
@@ -257,8 +252,6 @@ command variables
 command whatsnew
 command with_weak_namespace
 tail 0
-tail CO
-tail Co
 tail L
 tail MOD
 tail PMOD
@@ -271,7 +264,6 @@ tail adaptation_note
 tail aesop_rules
 tail aesop_stats
 tail allow_unused_tactic
-tail c
 tail check
 tail check_assertions
 tail check_failure
@@ -294,7 +286,6 @@ tail explode
 tail find
 tail find_home
 tail find_syntax
-tail g
 tail grind_lint
 tail guard
 tail guard_expr
@@ -307,16 +298,12 @@ tail import_bumps
 tail import_diff
 tail import_path
 tail info_trees
-tail instances
 tail kerodon_tags
 tail leansearch
 tail lint
 tail list_linters
 tail lmfdb_tags
-tail long_instances
-tail long_names
 tail loogle
-tail m
 tail min_imports
 tail norm_imports
 tail norm_num
@@ -334,14 +321,11 @@ tail r
 tail reduce
 tail redundant_imports
 tail reset_min_imports
-tail rq
-tail s
 tail sample
 tail search
 tail show_deprecated_modules
 tail show_imports
 tail show_kind
-tail show_unused
 tail simp
 tail stacks_tags
 tail statesearch
