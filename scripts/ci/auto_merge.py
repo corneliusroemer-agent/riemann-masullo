@@ -79,6 +79,7 @@ NON_BUILD_FILES = (
     "RiemannMasullo/External/ATTRIBUTION.md",
     ".github/workflows/claims.yml",
     ".github/workflows/pr_schedule.yml",
+    ".github/workflows/stop_pr_check.yml",
     "scripts/ci/pr_schedule.py",
     "scripts/ci/test_pr_schedule.py",
     "scripts/ci/stale_claims.py",

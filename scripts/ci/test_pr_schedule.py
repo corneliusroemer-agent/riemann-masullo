@@ -250,6 +250,8 @@ class WorkflowWiring(unittest.TestCase):
             "group: pr-check-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}",
             self.stop_pr_check,
         )
+        self.assertIn("converted_to_draft", self.stop_pr_check)
+        self.assertNotIn("if: github.event.pull_request.merged", self.stop_pr_check)
         self.assertIn("run-name: PR check #${{ inputs.pr }} ${{ inputs.head_sha }}", self.pr_check)
 
     def test_scheduler_is_least_privilege_and_runs_main_code(self):
