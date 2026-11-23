@@ -897,15 +897,10 @@ theorem sLocalAbsolutePW_localFourierSupport {S₀ : Finset (HeightOneSpectrum (
       have ha_theta : sLocalAdelicThetaOnClasses F T φ (QuotientGroup.mk a) = 0 := by
         rw [sLocalAdelicThetaOnClasses_mk, sLocalAdelicTheta_apply]
         have hzero : ∀ ξ : (Set.integer (T : Set V) F)ˣ,
-            φ (Multiplicative.ofAdd (Units.val (MonoidHom.comp
-              (Units.map (RingHom.toMonoidHom (RingHom.comp (adeleProjection F T)
-                (Subring.subtype (integralAdelesOutside F T)))))
-              (Units.map (RingHom.toMonoidHom (integralAdeleDiagonal F T))) ξ * a))) = 0 := by
+            φ (Multiplicative.ofAdd (Units.val (sUnitEmbedding F T ξ * a))) = 0 := by
           intro ξ
           let unitAtT : (Set.integer (T : Set V) F)ˣ →* (SAdeleRing F T)ˣ :=
-            MonoidHom.comp (Units.map (RingHom.toMonoidHom (RingHom.comp (adeleProjection F T)
-              (Subring.subtype (integralAdelesOutside F T)))))
-              (Units.map (RingHom.toMonoidHom (integralAdeleDiagonal F T)))
+            sUnitEmbedding F T
           by_contra hnz
           have hle := hbound_adele (unitAtT ξ * a).val hnz
           have hnorm_unit : sIdeleNorm F T (unitAtT ξ) = 1 :=

@@ -2424,10 +2424,7 @@ theorem globalThetaKernel_eq_induced_closure :
       (globalThetaKernel_eq_induced_closure_translate p.1 p.2 c).symm).trans
         (adelicThetaLinearMap_apply (F := F) _).symm))
 
-local notation "unitAtₛ(" S ")" =>
-  MonoidHom.comp (Units.map (RingHom.toMonoidHom (RingHom.comp (adeleProjection F S)
-    (Subring.subtype (integralAdelesOutside F S)))))
-    (Units.map (RingHom.toMonoidHom (integralAdeleDiagonal F S)))
+local notation "unitAtₛ(" S ")" => sUnitEmbedding F S
 
 /-- A quotient by a smaller submodule maps onto the quotient by a larger one, compatibly
 with the quotient maps. -/

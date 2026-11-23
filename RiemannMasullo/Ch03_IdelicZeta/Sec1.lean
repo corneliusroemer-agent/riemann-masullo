@@ -931,6 +931,14 @@ abbrev sProjectedDiagonal : Subgroup (SAdeleRing F S)ˣ :=
     (Subring.subtype (integralAdelesOutside F S)))))
     (MonoidHom.range (Units.map (RingHom.toMonoidHom (integralAdeleDiagonal F S))))
 
+/-- The diagonal embedding of the S-units into the S-ideles, whose range is
+`sProjectedDiagonal`. Named for the same reason: Chapters 2, 5 and 7 wrote it out through
+`unitAtS` notations, so every instance argument over it carried a copy. -/
+abbrev sUnitEmbedding : ((S : Set (Primes(F))).integer F)ˣ →* (SAdeleRing F S)ˣ :=
+  MonoidHom.comp (Units.map (RingHom.toMonoidHom (RingHom.comp (adeleProjection F S)
+    (Subring.subtype (integralAdelesOutside F S)))))
+    (Units.map (RingHom.toMonoidHom (integralAdeleDiagonal F S)))
+
 local notation "projectedDiagonal" => sProjectedDiagonal F S
 
 /-- Paper: Equation (3.1.2.1), p. 120. The group J_{F,S} is the quotient of the S-ideles
