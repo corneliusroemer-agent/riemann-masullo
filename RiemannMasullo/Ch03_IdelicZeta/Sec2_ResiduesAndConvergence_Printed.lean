@@ -9,6 +9,7 @@ public import Mathlib.Topology.Algebra.RestrictedProduct.TopologicalSpace
 public import Mathlib.Topology.Algebra.Valued.NormedValued
 public import Mathlib.Topology.Algebra.Constructions
 public import Mathlib.Analysis.SpecificLimits.Basic
+public import Mathlib.NumberTheory.NumberField.Cyclotomic.Basic
 
 /-! # Chapter 3.2: printed residues and absolute convergence -/
 
@@ -50,12 +51,101 @@ def Printed.completedHeckeL_residues : Prop :=
           Tendsto (fun s : ℂ ↦ (s - (1 + z)) * L s) (𝓝[≠] (1 + z))
             (𝓝 ((d ^ (-(1 / 2) : ℝ) * m : ℝ) : ℂ))
 
-/-- Paper: Proposition 3.2.1.3(2), p. 123. Take F = ℚ(√5), χ = 1, t = 0 and
-φ = (1 + √5)/2. The norm-one class volume is 2 log φ/√5. For the product
-π^(-s) Γ(s/2)² ζ_F(s), the class number formulas give residues −2 log φ at 0
-and 2 log φ/√5 at 1. The printed values are −2 log φ/√5 and 2 log φ/5. -/
+/-- Proposition 3.2.1.3(2), p. 123. For F = ℚ(i), χ = 1 and t = 0, the residue
+at 1 of the completed L-function is m / (2π). The printed value is m / 2, with
+m the norm-one class volume and ‖N(𝔡)‖ = 4. See ERRATA F209. -/
 theorem Printed.completedHeckeL_residues_false :
-    ¬ Printed.completedHeckeL_residues := by sorry
+    ¬ Printed.completedHeckeL_residues := by
+  intro h
+  let F := CyclotomicField 4 ℚ
+  have : NeZero (4 : ℕ) := ⟨by decide⟩
+  have : IsCyclotomicExtension {4} ℚ F := by
+    convert CyclotomicField.isCyclotomicExtension 4 ℚ
+    exact Subsingleton.elim _ _
+  have : NumberField F := IsCyclotomicExtension.numberField {4} ℚ F
+  have hR : InfinitePlace.nrRealPlaces F = 0 :=
+    IsCyclotomicExtension.Rat.nrRealPlaces_eq_zero (n := 4) F (by norm_num)
+  have hC : InfinitePlace.nrComplexPlaces F = 1 := by
+    rw [IsCyclotomicExtension.Rat.nrComplexPlaces_eq_totient_div_two (n := 4) F]
+    decide
+  have hdisc : (NumberField.discr F).natAbs = 4 := by
+    rw [IsCyclotomicExtension.Rat.natAbs_discr (n := 4) (K := F)]
+    have hfac : Nat.primeFactors 4 = {2} := by
+      rw [show (4 : ℕ) = 2 ^ 2 by decide]
+      exact Nat.primeFactors_prime_pow (by decide) Nat.prime_two
+    rw [hfac, Finset.prod_singleton]
+    have ht : Nat.totient 4 = 2 := by decide
+    rw [ht]
+    norm_num
+  have hdnorm : ((differentIdeal ℤ (𝓞 F)).absNorm : ℝ) = 4 := by
+    rw [NumberField.absNorm_differentIdeal (K := F), hdisc]
+    norm_num
+  have hpow : ((differentIdeal ℤ (𝓞 F)).absNorm : ℝ) ^ (-(1 / 2 : ℝ)) = 1 / 2 := by
+    rw [hdnorm, Real.rpow_neg (by norm_num : (0 : ℝ) ≤ 4), ← Real.sqrt_eq_rpow]
+    rw [show Real.sqrt (4 : ℝ) = 2 by
+      rw [Real.sqrt_eq_iff_mul_self_eq (by norm_num) (by norm_num)]; norm_num]
+    norm_num
+  have hγ : heckeGammaFactor (1 : PontryaginDual C[F]) 1 = (1 / (2 * Real.pi) : ℂ) := by
+    rw [heckeGammaFactor_one, hR, hC, pow_zero, one_mul, pow_one, Complex.Gammaℂ_one]
+    ring
+  have hmass : (normOneIdeleClassTamagawaMeasure F univ).toReal = dedekindZeta_residue F := by
+    rw [normOneIdeleClassTamagawaMeasure_volume]
+    suffices hform :
+        (2 : ℝ) ^ InfinitePlace.nrRealPlaces F *
+          (2 * Real.pi) ^ InfinitePlace.nrComplexPlaces F *
+          (NumberField.classNumber F : ℝ) * Units.regulator F /
+          (Real.sqrt ((NumberField.discr F).natAbs : ℝ) *
+            (Units.torsionOrder F : ℝ)) =
+          dedekindZeta_residue F by
+      rw [hform, ENNReal.toReal_ofReal (dedekindZeta_residue_pos F).le]
+    rw [dedekindZeta_residue_def, Nat.cast_natAbs, Int.cast_abs]
+    ring
+  obtain ⟨L, hL, hEq⟩ := completedHeckeL_exists_continuation (1 : PontryaginDual C[F])
+  have hker : (1 : PontryaginDual C[F]).toMonoidHom.comp (ideleClassNorm F).ker.subtype = 1 :=
+    rfl
+  have ht : ideleClassNormTwist (1 : PontryaginDual C[F]) 0 =
+      ideleClassNormTwist (1 : PontryaginDual C[F]) (-Complex.I * ((0 : ℝ) : ℂ)) := by
+    simp
+  obtain ⟨-, hres⟩ := by
+    simpa [Complex.ofReal_zero, mul_zero, add_zero] using
+      h F (1 : PontryaginDual C[F]) hker L hL hEq 0 ht
+  have hpow' : ((differentIdeal ℤ (𝓞 F)).absNorm : ℝ) ^ (-(2 : ℝ)⁻¹) = 1 / 2 := by
+    rw [show (-(2 : ℝ)⁻¹) = -(1 / 2 : ℝ) by ring]
+    exact hpow
+  have hreal : Tendsto (fun r : ℝ ↦ (r : ℂ)) (𝓝[>] (1 : ℝ)) (𝓝[≠] (1 : ℂ)) := by
+    apply tendsto_nhdsWithin_iff.mpr
+    refine ⟨?_, ?_⟩
+    · simpa using (Complex.continuous_ofReal.continuousAt (x := (1 : ℝ))).tendsto.mono_left
+        nhdsWithin_le_nhds
+    · filter_upwards [self_mem_nhdsWithin] with r hr
+      simpa using (show 1 < r from hr).ne'
+  have hlim : Tendsto (fun r : ℝ ↦ ((r : ℂ) - 1) * L (r : ℂ)) (𝓝[>] (1 : ℝ))
+      (𝓝 (heckeGammaFactor (1 : PontryaginDual C[F]) 1 * (dedekindZeta_residue F : ℂ))) := by
+    let γ := heckeGammaFactor (1 : PontryaginDual C[F])
+    have hγdiff : DifferentiableAt ℂ γ 1 :=
+      differentiableAt_heckeGammaFactor_of_re_pos _ (by norm_num)
+    apply ((hγdiff.continuousAt.tendsto.comp (hreal.mono_right nhdsWithin_le_nhds)).mul
+      (tendsto_sub_one_mul_dedekindZeta_nhdsGT F)).congr'
+    filter_upwards [self_mem_nhdsWithin] with r hr
+    have hr' : (r : ℂ) ∈ Complex.re ⁻¹' Ioi (1 : ℝ) := by simpa using hr
+    have he := hEq ⟨(r : ℂ), hr'⟩
+    rw [completedHeckeL_one_eq_dedekindZeta, ← heckeGammaFactor_one] at he
+    dsimp [γ]
+    rw [show L (r : ℂ) =
+        heckeGammaFactor (1 : PontryaginDual C[F]) (r : ℂ) * dedekindZeta F (r : ℂ) from he]
+    ring
+  have heq := tendsto_nhds_unique hlim (hres.comp hreal)
+  rw [hγ, hmass, hpow'] at heq
+  have hm : (dedekindZeta_residue F : ℂ) ≠ 0 :=
+    Complex.ofReal_ne_zero.mpr (dedekindZeta_residue_ne_zero F)
+  have hcoeff : (1 / (2 * Real.pi) : ℂ) = ↑((1 : ℝ) / 2) :=
+    mul_right_cancel₀ hm heq
+  have hrealπ : (1 : ℝ) / (2 * Real.pi) = 1 / 2 := by
+    apply Complex.ofReal_injective
+    rw [Complex.ofReal_div, Complex.ofReal_one, Complex.ofReal_mul, Complex.ofReal_ofNat]
+    exact hcoeff
+  rw [div_eq_div_iff (mul_ne_zero two_ne_zero Real.pi_ne_zero) two_ne_zero] at hrealπ
+  linarith only [hrealπ, Real.pi_gt_three]
 
 /-- Paper: Theorem 3.2.2.1(2)(b), p. 125. As printed: for every number field
 and every adelic Schwartz–Bruhat function, the theta Mellin integral (3.2.2.3)
