@@ -1,6 +1,6 @@
 # Build-time profiling for riemann-masullo
 
-Scripts and scratch-only Lean probes for finding out where the library's compile time goes. They were used for [mccorvie/riemann-masullo#6948](https://github.com/mccorvie/riemann-masullo/pull/6948), which names the subgroup behind `SIdeleQuotient` and cuts the compile time of the modules above `Ch03_IdelicZeta/Sec1` by 6.5%. Background: [#5398](https://github.com/mccorvie/riemann-masullo/issues/5398).
+Scripts and scratch-only Lean probes for finding out where the library's compile time goes. They found the terms named in [mccorvie/riemann-masullo#6995](https://github.com/mccorvie/riemann-masullo/pull/6995), which cut the compile time of the 119 modules above `Ch03_IdelicZeta/Sec1` by 18% (wall clock 23%). The statement measurement went into the PR check as [#6996](https://github.com/mccorvie/riemann-masullo/pull/6996). Background: [#5398](https://github.com/mccorvie/riemann-masullo/issues/5398).
 
 Copy `scripts/` and `lean/` into a checkout of the library (they are not part of it), and run everything from the repository root.
 
@@ -39,16 +39,19 @@ Workarounds within a proof, when the definition cannot change: write `have h := 
 
 `scripts/scan_statements.sh lean/StatementSizes.lean` measures every public statement of a built library (about 35 s). It prints the statements of 10⁶ tree nodes or more, and the subterm heads that recur most among them. Then:
 - `lean/StatementBlowup.lean` lists, for chosen statements, the subterms with the largest multiplicity × tree size.
-- `lean/ShowSubterm.lean` pretty-prints the top one.
+- `lean/ShowDominant.lean` pretty-prints the top one, whatever its head.
 
-The largest hits on `main` at 42d9a99 fall into two families:
+The largest hits on `main` at 2ffae66 fell into three families, all named in #6995:
 
-| family | example statement | distinct | as a tree | fixed by |
+| family | example statement | distinct | as a tree | named |
 |---|---|---|---|---|
-| the projected-diagonal subgroup of `SIdeleQuotient`, up to 2·10⁸ copies | `sLocalThetaSobolev_isotypeDecomposition` (Ch10 Sec1) | 20,263 | 3.2·10¹³ | [#6948](https://github.com/mccorvie/riemann-masullo/pull/6948) (−6.5% above Ch03 Sec1) |
-| the weighted measure of `CompactIntervalSobolev` with the `logNorm` lambda, 4.2·10⁶ copies | `primeOrbitalSobolevConvolution_traceNorm_continuous` (Ch11 Sec2b) | 7,430 | 2·10¹¹ | [#6986](https://github.com/mccorvie/riemann-masullo/pull/6986) (−22.7% above Ch09 Sec2) |
+| the projected-diagonal subgroup of `SIdeleQuotient`, up to 2·10⁸ copies | `sLocalThetaSobolev_isotypeDecomposition` (Ch10 Sec1) | 20,263 | 3.2·10¹³ | `sProjectedDiagonal` |
+| the weighted measure of `CompactIntervalSobolev` with the `logNorm` lambda, 4.2·10⁶ copies | `primeOrbitalSobolevConvolution_traceNorm_continuous` (Ch11 Sec2b) | 7,430 | 2·10¹¹ | `intervalSobolevMeasure`, `logIdeleClassNorm` |
+| the diagonal embedding of the S-units, written out through `unitAtS`-style notations in Chapters 2, 3, 5, 7 and 12 | `sLocalGammaOrbitalQuotient_coeff_equiv` (Ch07 Sec3b) | | | `sUnitEmbedding` |
 
-The fix is the same in both: name the repeated term with an `abbrev` (`sProjectedDiagonal`, `intervalSobolevMeasure`, `logIdeleClassNorm`), and point the notations at the name. Instance arguments then mention one constant. Proofs that unfolded the term with `simp`, `dsimp` or `rw` need the name added to their simp set (4 proofs for #6948, 15 for #6986).
+The fix is the same for all three: name the repeated term with an `abbrev`, and point the notations at the name. Instance arguments then mention one constant. Proofs that unfolded the term with `simp`, `dsimp` or `rw` need the name added to their simp set (21 proofs in #6995).
+
+Naming pays when it removes copies of a large term from statements whose copies are counted in the millions. It pays little when the count stays and only each copy shrinks. Naming the continuous idele norm `⟨ideleClassNorm F, (isProperMap_ideleClassNorm F).continuous⟩` (11 `m𝔽` notations, 69 spellings in 30 files) made the largest statements on top of #6995 three times smaller, but saved only 1.9% of build time, nearly all of it in `Ch11_ShellStructure/Sec2b`. Measure before opening such a change: the copy counts come from instances nested over `abbrev` quotient types, and only turning those into `def`s (#5398) reduces them.
 
 ## Files
 
