@@ -1034,7 +1034,7 @@ theorem infiniteLocalMultiplicativeTamagawaMeasure_isHaarMeasure (w : InfinitePl
 
 /-- A meromorphic identity on the open critical strip holds off a discrete
 set in the whole complex plane. -/
-private theorem sLocal_meromorphic_identity {a b : ℂ → ℂ} (ha : Meromorphic a) (hb : Meromorphic b)
+theorem sLocal_meromorphic_identity {a b : ℂ → ℂ} (ha : Meromorphic a) (hb : Meromorphic b)
     (h : EqOn a b criticalStrip) : a =ᶠ[codiscrete ℂ] b := by
   let Δ := a - b
   have hΔ : MeromorphicOn Δ univ := fun x _ ↦ (ha x).sub (hb x)
@@ -2042,7 +2042,7 @@ theorem sMultiplicativeTamagawaMeasure_isHaarMeasure : (μₛ).IsHaarMeasure := 
   exact E.isHaarMeasure_map _
 
 /-- Dualizing a norm twist inverts its unitary part and reflects its exponent. -/
-private theorem sLocal_dual_normTwist (χ : PontryaginDual Jₛ) (s : ℂ) :
+theorem sLocal_dual_normTwist (χ : PontryaginDual Jₛ) (s : ℂ) :
     dualQuasiCharacter mₛ hmₛ (chartₛ(χ) s) = chartₛ(χ⁻¹) (1 - s) :=
   dualQuasiCharacter_normTwist mₛ hmₛ χ s
 
@@ -3538,7 +3538,7 @@ theorem sLocalRhoFactor_conj (χ : PontryaginDual Jₛ) :
   exact (star_star _).symm.trans (congrArg star hz)
 
 /-- Holomorphy of the local Tate factors passes to their finite product. -/
-private theorem sLocalRhoFactor_analyticOn (χ : PontryaginDual Jₛ) :
+theorem sLocalRhoFactor_analyticOn (χ : PontryaginDual Jₛ) :
     AnalyticOnNhd ℂ (fun z ↦ sLocalRhoFactor (chartₛ(χ) z)) rightHalf := by
   unfold sLocalRhoFactor
   apply AnalyticOnNhd.mul
