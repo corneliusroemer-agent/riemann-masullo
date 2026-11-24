@@ -15462,6 +15462,251 @@ theorem idelicExplicitFormula_infiniteMatching_realLocal (w : InfinitePlace F) (
   rw [hT, hI, hPV]
   linear_combination ha + c * hh'
 
+section ExplicitFormulaComplexPlace
+
+/-- At a complex place, the class of a complex unit has class norm the square of its absolute
+value. -/
+private theorem explicitFormula_complex_classNorm (w : InfinitePlace F) (hw : w.IsComplex)
+    (u : ℂˣ) :
+    ((ideleClassNorm F (infiniteClassMap(w)
+      (Units.map (InfinitePlace.Completion.ringEquivComplexOfIsComplex hw).symm.toMonoidHom u)) :
+        ℝ≥0) : ℝ) = ‖(u : ℂ)‖ ^ 2 := by
+  rw [ideleClassNorm_ofCompletion, hw.mult_eq_two, Units.val_pow_eq_pow_val, NNReal.coe_pow]
+  let e := (InfinitePlace.Completion.ringEquivComplexOfIsComplex hw).symm
+  change ‖e (u : ℂ)‖ ^ 2 = _
+  exact congrArg (· ^ 2) ((InfinitePlace.Completion.isometryEquivComplexOfIsComplex hw).symm.isometry.norm_map_of_map_zero
+    (map_zero e) (u : ℂ))
+
+/-- At a complex place, a character on the class of a complex unit is given by its radial
+exponent and angular weight. -/
+private theorem explicitFormula_complex_character (w : InfinitePlace F) (hw : w.IsComplex)
+    (χ : U[F]) (u : ℂˣ) :
+    ((χ (infiniteClassMap(w)
+      (Units.map (InfinitePlace.Completion.ringEquivComplexOfIsComplex hw).symm.toMonoidHom u)) :
+        Circle) : ℂ) =
+      ((‖(u : ℂ)‖ ^ 2 : ℝ) : ℂ) ^ (complexHeckeCharacter_parameters χ w hw).exists.choose.1 *
+        ((u : ℂ) / (‖(u : ℂ)‖ : ℂ)) ^ (complexHeckeCharacter_parameters χ w hw).exists.choose.2 := by
+  rw [← ((complexHeckeCharacter_parameters χ w hw).exists.choose_spec.2 u)]
+  change _ = (χ _ : ℂ) * (_ : ℂ) ^ (0 : ℂ)
+  rw [Complex.cpow_zero, mul_one]
+
+/-- The character value at `e^{s + iφ}` is `e^{2 s a} e^{i n φ}`. -/
+private theorem explicitFormula_complex_character_exp (w : InfinitePlace F) (hw : w.IsComplex)
+    (χ : U[F]) (s φ : ℝ) :
+    ((χ (infiniteClassMap(w)
+      (Units.map (InfinitePlace.Completion.ringEquivComplexOfIsComplex hw).symm.toMonoidHom
+        (Units.mk0 (Complex.exp (s + φ * Complex.I)) (Complex.exp_ne_zero _)))) : Circle) : ℂ) =
+      Complex.exp ((complexHeckeCharacter_parameters χ w hw).exists.choose.1 * ((2 * s : ℝ) : ℂ)) *
+        Complex.exp (((complexHeckeCharacter_parameters χ w hw).exists.choose.2 : ℂ) *
+          (φ * Complex.I)) := by
+  rw [explicitFormula_complex_character w hw, Units.val_mk0]
+  have hn : ‖Complex.exp (s + φ * Complex.I)‖ = Real.exp s := by
+    rw [Complex.norm_exp]; simp
+  rw [hn, ← Real.exp_nat_mul, show ((2 : ℕ) : ℝ) * s = 2 * s by push_cast; ring,
+    explicitFormula_exp_cpow]
+  congr 1
+  have hq : Complex.exp (s + φ * Complex.I) / ((Real.exp s : ℝ) : ℂ) = Complex.exp (φ * Complex.I) := by
+    rw [Complex.ofReal_exp, ← Complex.exp_sub]; congr 1; ring
+  rw [hq, ← Complex.exp_int_mul]
+
+/-- Fourier inversion on the norm shell through `e^{s + iφ}` at a complex place. -/
+private theorem explicitFormula_complex_shell (τ : ℝ≥0ˣ →ₜ* C[F])
+    (hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F])) (w : InfinitePlace F)
+    (hw : w.IsComplex) (Φ : chartChars(τ) → 𝓢(ℝ, ℂ))
+    (hM : ∀ χ s, (∫ g, classMellinIntegrand(f, ideleClassNormTwist χ.val s, -1 / 2) g
+      ∂classMeasure) / (classVolume : ℂ) = logMellin (Φ χ) (s - 1 / 2)) (s φ : ℝ) :
+    let e : ℂˣ →* w.Completionˣ :=
+      Units.map (InfinitePlace.Completion.ringEquivComplexOfIsComplex hw).symm.toMonoidHom
+    HasSum (fun χ : chartChars(τ) ↦ Φ χ (2 * s) *
+        (Complex.exp ((complexHeckeCharacter_parameters χ.val w hw).exists.choose.1 *
+          ((2 * s : ℝ) : ℂ)))⁻¹ *
+        Complex.exp (-(((complexHeckeCharacter_parameters χ.val w hw).exists.choose.2 : ℂ) *
+          (φ * Complex.I))))
+      (f.val (infiniteClassMap(w) (e (Units.mk0 (Complex.exp (s + φ * Complex.I))
+        (Complex.exp_ne_zero _))))) := by
+  intro e
+  have h := explicitFormula_shell_inversion τ hτ f Φ hM
+    (infiniteClassMap(w) (e (Units.mk0 (Complex.exp (s + φ * Complex.I)) (Complex.exp_ne_zero _))))
+  have hn : ‖Complex.exp (s + φ * Complex.I)‖ = Real.exp s := by
+    rw [Complex.norm_exp]; simp
+  rw [explicitFormula_complex_classNorm w hw, Units.val_mk0, hn, ← Real.exp_nat_mul,
+    Real.log_exp, Nat.cast_ofNat] at h
+  convert h using 2 with χ
+  rw [Circle.coe_inv, explicitFormula_complex_character_exp w hw, mul_inv, Complex.exp_neg,
+      mul_assoc]
+
+end ExplicitFormulaComplexPlace
+
+section ExplicitFormulaPoissonCoefficients
+
+/-- The nonnegative Fourier coefficients of the Poisson kernel: for `0 ≤ r < 1` and `m ∈ ℕ`,
+`∫_0^{2π} e^{imφ} / |1 - r e^{iφ}|² dφ = 2π r^m / (1 - r²)` (Cauchy's formula for
+`z ↦ z^m (1 - r z)⁻¹`; the case `m = 0` is `explicitFormula_poisson_integral`). -/
+private theorem explicitFormula_poisson_coeff_nat {r : ℝ} (hr0 : 0 ≤ r) (hr1 : r < 1) (m : ℕ) :
+    ∫ φ in (0 : ℝ)..2 * Real.pi, Complex.exp (φ * Complex.I) ^ m *
+        (((‖1 - (r : ℂ) * Complex.exp (φ * Complex.I)‖ ^ 2 : ℝ) : ℂ))⁻¹ =
+      2 * Real.pi * (r : ℂ) ^ m / (1 - (r : ℂ) ^ 2) := by
+  have hne (z : ℂ) (hz : ‖z‖ ≤ 1) : 1 - (r : ℂ) * z ≠ 0 := by
+    intro h
+    have h1 : ‖(r : ℂ) * z‖ = 1 := by rw [← (sub_eq_zero.mp h)]; exact norm_one
+    rw [norm_mul, Complex.norm_real, Real.norm_of_nonneg hr0] at h1
+    nlinarith [norm_nonneg z]
+  have hd : DiffContOnCl ℂ (fun z : ℂ ↦ z ^ m * (1 - (r : ℂ) * z)⁻¹) (Metric.ball 0 1) := by
+    refine DifferentiableOn.diffContOnCl ?_
+    intro z hz
+    rw [closure_ball 0 one_ne_zero, Metric.mem_closedBall, dist_zero_right] at hz
+    exact ((differentiableAt_id.pow m).mul (((differentiableAt_const (1 : ℂ)).sub
+      ((differentiableAt_const (r : ℂ)).mul differentiableAt_id)).inv
+      (hne z hz))).differentiableWithinAt
+  have hw : (r : ℂ) ∈ Metric.ball (0 : ℂ) 1 := by
+    rw [Metric.mem_ball, dist_zero_right, Complex.norm_real, Real.norm_of_nonneg hr0]; exact hr1
+  have hC := hd.circleIntegral_sub_inv_smul hw
+  rw [circleIntegral] at hC
+  have hpt (θ : ℝ) : deriv (circleMap 0 1) θ •
+      ((circleMap 0 1 θ - r)⁻¹ • (circleMap 0 1 θ ^ m * (1 - (r : ℂ) * circleMap 0 1 θ)⁻¹)) =
+      Complex.I * (Complex.exp (θ * Complex.I) ^ m *
+        (((‖1 - (r : ℂ) * Complex.exp (θ * Complex.I)‖ ^ 2 : ℝ) : ℂ))⁻¹) := by
+    rw [deriv_circleMap, circleMap_zero, smul_eq_mul, smul_eq_mul,
+      Complex.ofReal_one, one_mul]
+    set u := Complex.exp (θ * Complex.I) with hu
+    have hconj : (starRingEnd ℂ) u = Complex.exp (-(θ * Complex.I)) := by
+      rw [hu, ← Complex.exp_conj]; congr 1; simp [Complex.conj_ofReal]
+    have huu : u * Complex.exp (-(θ * Complex.I)) = 1 := by
+      rw [hu, ← Complex.exp_add, add_neg_cancel, Complex.exp_zero]
+    have hn : (((‖1 - (r : ℂ) * u‖ ^ 2 : ℝ) : ℂ)) =
+        (1 - (r : ℂ) * u) * (1 - (r : ℂ) * Complex.exp (-(θ * Complex.I))) := by
+      rw [Complex.sq_norm, ← Complex.mul_conj, map_sub, map_one, map_mul, Complex.conj_ofReal,
+        hconj]
+    have h1 : 1 - (r : ℂ) * u ≠ 0 := hne u (by rw [hu, Complex.norm_exp_ofReal_mul_I])
+    have h2 : u - r ≠ 0 := by
+      intro h
+      have : (r : ℂ) = u := (sub_eq_zero.mp h).symm
+      have hn1 : ‖u‖ = 1 := by rw [hu, Complex.norm_exp_ofReal_mul_I]
+      rw [← this, Complex.norm_real, Real.norm_of_nonneg hr0] at hn1
+      linarith
+    have hu0 : u ≠ 0 := Complex.exp_ne_zero _
+    have h3 : u - r = u * (1 - (r : ℂ) * Complex.exp (-(θ * Complex.I))) := by
+      linear_combination (r : ℂ) * huu
+    rw [hn, h3]
+    have h4 : 1 - (r : ℂ) * Complex.exp (-(θ * Complex.I)) ≠ 0 := by
+      intro h; apply h2; rw [h3, h, mul_zero]
+    field_simp
+  simp_rw [hpt] at hC
+  rw [intervalIntegral.integral_const_mul] at hC
+  have hI : Complex.I ≠ 0 := Complex.I_ne_zero
+  have hr2 : 1 - (r : ℂ) ^ 2 ≠ 0 := by
+    rw [← Complex.ofReal_pow, ← Complex.ofReal_one, ← Complex.ofReal_sub, Complex.ofReal_ne_zero]
+    nlinarith
+  have hrr : 1 - (r : ℂ) * r ≠ 0 := by rw [← sq]; exact hr2
+  rw [smul_eq_mul] at hC
+  field_simp at hC ⊢
+  linear_combination hC
+
+/-- The Fourier coefficients of the Poisson kernel: for `0 ≤ r < 1` and `n ∈ ℤ`,
+`∫_0^{2π} e^{-inφ} / |1 - r e^{iφ}|² dφ = 2π r^{|n|} / (1 - r²)`. -/
+private theorem explicitFormula_poisson_coeff {r : ℝ} (hr0 : 0 ≤ r) (hr1 : r < 1) (n : ℤ) :
+    ∫ φ in (0 : ℝ)..2 * Real.pi, Complex.exp (-((n : ℂ) * (φ * Complex.I))) *
+        (((‖1 - (r : ℂ) * Complex.exp (φ * Complex.I)‖ ^ 2 : ℝ) : ℂ))⁻¹ =
+      2 * Real.pi * (r : ℂ) ^ n.natAbs / (1 - (r : ℂ) ^ 2) := by
+  rcases Int.natAbs_eq n with hn | hn
+  · -- `n = |n| ≥ 0`: conjugate the coefficient of `e^{i|n|φ}`.
+    have hc := congrArg (starRingEnd ℂ) (explicitFormula_poisson_coeff_nat hr0 hr1 n.natAbs)
+    rw [← intervalIntegral.intervalIntegral_conj] at hc
+    have hrhs : (starRingEnd ℂ) (2 * Real.pi * (r : ℂ) ^ n.natAbs / (1 - (r : ℂ) ^ 2)) =
+        2 * Real.pi * (r : ℂ) ^ n.natAbs / (1 - (r : ℂ) ^ 2) := by
+      simp [Complex.conj_ofReal, map_div₀, map_sub, map_pow, map_ofNat]
+    rw [hrhs] at hc
+    rw [← hc]
+    refine intervalIntegral.integral_congr fun φ _ ↦ ?_
+    simp only [map_mul, map_inv₀, Complex.conj_ofReal, map_pow]
+    congr 1
+    rw [← Complex.exp_conj, ← Complex.exp_nat_mul]
+    congr 1
+    conv_lhs => rw [hn]
+    simp [Complex.conj_ofReal]
+  · have h := explicitFormula_poisson_coeff_nat hr0 hr1 n.natAbs
+    rw [← h]
+    refine intervalIntegral.integral_congr fun φ _ ↦ ?_
+    show _ = _
+    congr 1
+    rw [← Complex.exp_nat_mul]
+    congr 1
+    conv_lhs => rw [hn]
+    simp only [Int.cast_neg, Int.cast_natCast]
+    ring
+
+end ExplicitFormulaPoissonCoefficients
+
+section ExplicitFormulaComplexKernelSum
+
+/-- Termwise interval integration of a series dominated by a summable family of constants
+(no countability of the index type is needed: the terms vanish off the countable support of
+the bounds). -/
+private theorem explicitFormula_hasSum_intervalIntegral {ι : Type*} (u : ι → ℝ → ℂ)
+    (S : ℝ → ℂ) (b : ι → ℝ) (x₀ x₁ : ℝ) (hb : Summable b)
+    (hm : ∀ i, AEStronglyMeasurable (u i) (volume.restrict (uIoc x₀ x₁)))
+    (hle : ∀ i φ, ‖u i φ‖ ≤ b i) (hs : ∀ φ, HasSum (fun i ↦ u i φ) (S φ)) :
+    HasSum (fun i ↦ ∫ φ in x₀..x₁, u i φ) (∫ φ in x₀..x₁, S φ) := by
+  let T : Set ι := Function.support b
+  have hT : T.Countable := hb.countable_support
+  have : Countable T := hT.to_subtype
+  have hoff (i : ι) (hi : i ∉ T) (φ : ℝ) : u i φ = 0 := by
+    have : b i = 0 := by simpa [T] using hi
+    exact norm_le_zero_iff.mp (this ▸ hle i φ)
+  have h := intervalIntegral.hasSum_integral_of_dominated_convergence (μ := volume)
+    (F := fun i : T ↦ u i.val) (f := S) (fun i _ ↦ b i.val) (fun i ↦ hm i.val)
+    (fun i ↦ .of_forall fun φ _ ↦ hle i.val φ)
+    (.of_forall fun _ _ ↦ hb.comp_injective Subtype.val_injective)
+    intervalIntegrable_const
+    (.of_forall fun φ _ ↦ (hasSum_subtype_iff_of_support_subset (s := T) (f := fun i ↦ u i φ)
+      (fun i hi ↦ by
+        by_contra h
+        exact hi (hoff i h φ))).mpr (hs φ))
+  refine (hasSum_subtype_iff_of_support_subset (s := T) ?_).mp h
+  intro i hi
+  by_contra h
+  apply hi
+  simp only [hoff i h, intervalIntegral.integral_zero]
+
+end ExplicitFormulaComplexKernelSum
+
+section ExplicitFormulaComplexKernelAlg
+
+/-- The angular average of one character's terms in the shell inversion is its complex digamma
+term: with `r = e^{-t/2}`, `(2π)⁻¹ r (Φ₊ e^{-at} + Φ₋ e^{at}) 2π r^k / (1 - r²)` is
+`(Φ₊ e^{-(1/2 + a + k/2) t} + Φ₋ e^{-(1/2 - a + k/2) t}) / (1 - e^{-t})`. -/
+private theorem explicitFormula_complex_kernel_alg (Φp Φm a : ℂ) (k : ℕ) (t : ℝ) (ht : 0 < t) :
+    (2 * Real.pi : ℂ)⁻¹ * ((Real.exp (-(t / 2)) : ℂ) *
+        (Φp * (Complex.exp (a * (t : ℂ)))⁻¹ + Φm * (Complex.exp (a * ((-t : ℝ) : ℂ)))⁻¹) *
+        (2 * Real.pi * ((Real.exp (-(t / 2)) : ℝ) : ℂ) ^ k /
+          (1 - ((Real.exp (-(t / 2)) : ℝ) : ℂ) ^ 2))) =
+      (Φp * Complex.exp (-(1 / 2 + a + (k : ℂ) / 2) * (t : ℂ)) +
+        Φm * Complex.exp (-(1 / 2 - a + (k : ℂ) / 2) * (t : ℂ))) /
+        (1 - (Real.exp (-t) : ℂ)) := by
+  have hR : ((Real.exp (-(t / 2)) : ℝ) : ℂ) = Complex.exp (-(t / 2 : ℂ)) := by push_cast; rfl
+  have hR1 : ((Real.exp (-t) : ℝ) : ℂ) = Complex.exp (-(t : ℂ)) := by push_cast; rfl
+  have hk : Complex.exp (-(t / 2 : ℂ)) ^ k = Complex.exp (-(k * t / 2 : ℂ)) := by
+    rw [← Complex.exp_nat_mul]; congr 1; ring
+  have h2 : Complex.exp (-(t / 2 : ℂ)) ^ 2 = Complex.exp (-(t : ℂ)) := by
+    rw [← Complex.exp_nat_mul]; congr 1; push_cast; ring
+  have hp : Complex.exp (-(1 / 2 + a + (k : ℂ) / 2) * (t : ℂ)) =
+      (Complex.exp (a * (t : ℂ)))⁻¹ * Complex.exp (-(t / 2 : ℂ)) *
+        Complex.exp (-(k * t / 2 : ℂ)) := by
+    rw [← Complex.exp_neg, ← Complex.exp_add, ← Complex.exp_add]; congr 1; ring
+  have hm : Complex.exp (-(1 / 2 - a + (k : ℂ) / 2) * (t : ℂ)) =
+      (Complex.exp (a * ((-t : ℝ) : ℂ)))⁻¹ * Complex.exp (-(t / 2 : ℂ)) *
+        Complex.exp (-(k * t / 2 : ℂ)) := by
+    rw [← Complex.exp_neg, ← Complex.exp_add, ← Complex.exp_add]; congr 1; push_cast; ring
+  have hd : 1 - Complex.exp (-(t : ℂ)) ≠ 0 := by
+    rw [← hR1, ← Complex.ofReal_one, ← Complex.ofReal_sub, Complex.ofReal_ne_zero, sub_ne_zero]
+    exact (Real.exp_lt_one_iff.mpr (by linarith)).ne'
+  have hpi : (2 * Real.pi : ℂ) ≠ 0 := by
+    exact mul_ne_zero two_ne_zero (Complex.ofReal_ne_zero.mpr Real.pi_ne_zero)
+  rw [hR, hR1, hk, h2, hp, hm]
+  field_simp
+
+end ExplicitFormulaComplexKernelAlg
+
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (domination at a complex place `w`). For
 the radial profiles `Φ_χ` of a test `f` (as in `idelicExplicitFormula_finiteMatching`), each
 complex digamma kernel `t ↦ K_χ(t)` at `w` (with the radial exponent `a_χ` and angular weight
@@ -15518,7 +15763,83 @@ theorem idelicExplicitFormula_infiniteMatching_complexKernelSum (τ : ℝ≥0ˣ 
       heckeArchimedeanDigammaKernel 1 (1 / 2 + p.1 + (p.2.natAbs : ℂ) / 2)
         (1 / 2 - p.1 + (p.2.natAbs : ℂ) / 2) (Φ χ) t
     ∀ t : ℝ, 0 < t → HasSum (fun χ ↦ K χ t) (2 * (Real.exp (-t) : ℂ) * f.val 1 / (t : ℂ) - A t) := by
-  sorry
+  intro e g A K t ht
+  set r : ℝ := Real.exp (-(t / 2)) with hr
+  have hr0 : 0 ≤ r := (Real.exp_pos _).le
+  have hr1 : r < 1 := Real.exp_lt_one_iff.mpr (by linarith)
+  let a : chartChars(τ) → ℂ := fun χ ↦ (complexHeckeCharacter_parameters χ.val w hw).exists.choose.1
+  let n : chartChars(τ) → ℤ := fun χ ↦ (complexHeckeCharacter_parameters χ.val w hw).exists.choose.2
+  have ha (χ : chartChars(τ)) : (a χ).re = 0 :=
+    (complexHeckeCharacter_parameters χ.val w hw).exists.choose_spec.1
+  let D : ℝ → ℂ := fun φ ↦ (((‖1 - (r : ℂ) * Complex.exp (φ * Complex.I)‖ ^ 2 : ℝ) : ℂ))⁻¹
+  -- the coefficient of `e^{-inφ} / |1 - r e^{iφ}|²` in the shell expansion
+  let c : chartChars(τ) → ℂ := fun χ ↦ (r : ℂ) *
+    (Φ χ t * (Complex.exp (a χ * (t : ℂ)))⁻¹ + Φ χ (-t) * (Complex.exp (a χ * ((-t : ℝ) : ℂ)))⁻¹)
+  let u : chartChars(τ) → ℝ → ℂ := fun χ φ ↦
+    c χ * (Complex.exp (-((n χ : ℂ) * (φ * Complex.I))) * D φ)
+  -- pointwise in `φ`, the shell inversion at `e^{±t/2 + iφ}`
+  have hexp (φ : ℝ) : Complex.exp (-(t / 2 : ℂ) + φ * Complex.I) = (r : ℂ) * Complex.exp (φ * Complex.I) := by
+    rw [hr, Complex.ofReal_exp, ← Complex.exp_add]; push_cast; ring_nf
+  have hpt (φ : ℝ) : HasSum (fun χ ↦ u χ φ)
+      ((Real.exp (-(t / 2)) : ℂ) * (g (t / 2 + φ * Complex.I) + g (-(t / 2) + φ * Complex.I)) /
+        ((‖1 - Complex.exp (-(t / 2) + φ * Complex.I)‖ ^ 2 : ℝ) : ℂ)) := by
+    have h1 := explicitFormula_complex_shell τ _hτ f w hw Φ _hM (t / 2) φ
+    have h2 := explicitFormula_complex_shell τ _hτ f w hw Φ _hM (-(t / 2)) φ
+    simp only [show 2 * (t / 2) = t by ring, show 2 * -(t / 2) = -t by ring] at h1 h2
+    have h := ((h1.add h2).mul_left (r : ℂ)).mul_right (D φ)
+    rw [hexp, div_eq_mul_inv]
+    convert h using 1
+    · funext χ
+      simp only [u, c, a, n]
+      ring
+    · simp only [g, D, hr]
+      push_cast
+      ring
+  -- the bounds
+  have hD (φ : ℝ) : ‖D φ‖ ≤ ((1 - r) ^ 2)⁻¹ := by
+    have h1 : 1 - r ≤ ‖1 - (r : ℂ) * Complex.exp (φ * Complex.I)‖ := by
+      have := norm_sub_norm_le (1 : ℂ) ((r : ℂ) * Complex.exp (φ * Complex.I))
+      rw [norm_one, norm_mul, Complex.norm_exp_ofReal_mul_I, mul_one, Complex.norm_real,
+        Real.norm_of_nonneg hr0] at this
+      exact this
+    have h0 : 0 < 1 - r := by linarith
+    simp only [D, norm_inv, Complex.norm_real, Real.norm_of_nonneg (sq_nonneg _)]
+    exact inv_anti₀ (pow_pos h0 2) (pow_le_pow_left₀ h0.le h1 2)
+  have hX (χ : chartChars(τ)) (x : ℝ) : ‖(Complex.exp (a χ * (x : ℂ)))⁻¹‖ = 1 := by
+    rw [norm_inv, Complex.norm_exp, Complex.mul_re, ha χ, Complex.ofReal_re, Complex.ofReal_im]
+    simp
+  have hE (χ : chartChars(τ)) (φ : ℝ) : ‖Complex.exp (-((n χ : ℂ) * (φ * Complex.I)))‖ = 1 := by
+    rw [Complex.norm_exp]; simp
+  let b : chartChars(τ) → ℝ := fun χ ↦ (r * (‖Φ χ t‖ + ‖Φ χ (-t)‖)) * ((1 - r) ^ 2)⁻¹
+  have hb : Summable b :=
+    (((explicitFormula_profile_summable τ _hτ f Φ _hM t).add
+      (explicitFormula_profile_summable τ _hτ f Φ _hM (-t))).mul_left r).mul_right _
+  have hle (χ : chartChars(τ)) (φ : ℝ) : ‖u χ φ‖ ≤ b χ := by
+    simp only [u, norm_mul, hE, one_mul]
+    refine mul_le_mul ?_ (hD φ) (norm_nonneg _) (by positivity)
+    simp only [c, norm_mul, Complex.norm_real, Real.norm_of_nonneg hr0]
+    refine mul_le_mul_of_nonneg_left ((norm_add_le _ _).trans ?_) hr0
+    rw [norm_mul, norm_mul, hX, hX, mul_one, mul_one]
+  have hm (χ : chartChars(τ)) : AEStronglyMeasurable (u χ) (volume.restrict (uIoc 0 (2 * Real.pi))) :=
+    (by fun_prop : Measurable (u χ)).aestronglyMeasurable
+  have hI := explicitFormula_hasSum_intervalIntegral u _ b 0 (2 * Real.pi) hb hm hle hpt
+  -- each angular integral is a Poisson coefficient
+  have hIc (χ : chartChars(τ)) : ∫ φ in (0 : ℝ)..2 * Real.pi, u χ φ =
+      c χ * (2 * Real.pi * (r : ℂ) ^ (n χ).natAbs / (1 - (r : ℂ) ^ 2)) := by
+    simp only [u, D]
+    rw [intervalIntegral.integral_const_mul, explicitFormula_poisson_coeff hr0 hr1]
+  have hA : HasSum (fun χ ↦ (Φ χ t * Complex.exp (-(1 / 2 + a χ + ((n χ).natAbs : ℂ) / 2) * (t : ℂ)) +
+        Φ χ (-t) * Complex.exp (-(1 / 2 - a χ + ((n χ).natAbs : ℂ) / 2) * (t : ℂ))) /
+        (1 - (Real.exp (-t) : ℂ))) (A t) := by
+    have h := hI.mul_left (2 * Real.pi : ℂ)⁻¹
+    convert h using 1
+    funext χ
+    rw [hIc, explicitFormula_complex_kernel_alg _ _ _ _ t ht]
+  have h0 := ((idelicExplicitFormula_finiteMatching_inversion τ _hτ f Φ _hΦ _hM).mul_left
+    (2 * (Real.exp (-t) : ℂ))).div_const (t : ℂ)
+  convert h0.sub hA using 1
+  funext χ
+  simp only [K, heckeArchimedeanDigammaKernel, Complex.ofReal_one, one_mul, a, n]
 
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (character sum at a complex place `w`).
 Let `Φ_χ` be the radial profiles of a test `f`, as in `idelicExplicitFormula_finiteMatching`,
