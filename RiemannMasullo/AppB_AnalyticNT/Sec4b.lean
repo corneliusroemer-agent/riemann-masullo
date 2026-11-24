@@ -13184,6 +13184,382 @@ private theorem explicitFormula_real_shell (τ : ℝ≥0ˣ →ₜ* C[F])
 
 end ExplicitFormulaRealPlace
 
+section ExplicitFormulaRealDominationCoeff
+
+/-- Integration by parts on `C¹` for a translate: the coefficient of the translate by `r` of
+the flow derivative of a test is `-κ` times that of the translate of the test. -/
+private theorem explicitFormula_translate_coeff_flowDeriv (b : Multiplicative ℝ →ₜ* C[F])
+    (hb : ∀ t, b t ∈ (ideleClassNorm F).ker) (χ : U[F]) (f : 𝒟(C[F])) (r : C[F]) :
+    ∫ u, bruhatDirectionalDeriv b f.val (r * (u : C[F])) * (χ (u : C[F]) : ℂ)
+        ∂normOneIdeleClassTamagawaMeasure F =
+      -(bruhatDirectionalDeriv b (fun x : C[F] ↦ (χ x : ℂ)) 1 *
+        ∫ u, f.val (r * (u : C[F])) * (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F) := by
+  obtain ⟨f', hf'⟩ := explicitFormula_test_translate f r
+  have hD (x : C[F]) : bruhatDirectionalDeriv b f'.val x = bruhatDirectionalDeriv b f.val (r * x) := by
+    change deriv _ 0 = deriv _ 0
+    congr 1
+    funext t
+    rw [hf', mul_assoc]
+  have h := explicitFormula_normOne_coeff_flowDeriv b hb χ f'
+  simp only [hD, hf'] at h
+  exact h
+
+/-- Iterated integration by parts for all translates at once. -/
+private theorem explicitFormula_translate_coeff_flowDeriv_pow (b : Multiplicative ℝ →ₜ* C[F])
+    (hb : ∀ t, b t ∈ (ideleClassNorm F).ker) (N : ℕ) (f : 𝒟(C[F])) :
+    ∃ g : 𝒟(C[F]), ∀ (χ : U[F]) (r : C[F]),
+      ∫ u, g.val (r * (u : C[F])) * (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F =
+        (-bruhatDirectionalDeriv b (fun x : C[F] ↦ (χ x : ℂ)) 1) ^ N *
+          ∫ u, f.val (r * (u : C[F])) * (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F := by
+  induction N with
+  | zero => exact ⟨f, fun χ r ↦ by rw [pow_zero, one_mul]⟩
+  | succ N ih =>
+    obtain ⟨g, hg⟩ := ih
+    refine ⟨⟨bruhatDirectionalDeriv b g.val, explicitFormula_flowDeriv_mem b g⟩, fun χ r ↦ ?_⟩
+    change ∫ u, bruhatDirectionalDeriv b g.val (r * (u : C[F])) * (χ (u : C[F]) : ℂ)
+      ∂normOneIdeleClassTamagawaMeasure F = _
+    rw [explicitFormula_translate_coeff_flowDeriv b hb χ g, hg, pow_succ]
+    ring
+
+/-- The coefficients on `C¹` of all translates of a test are bounded uniformly. -/
+private theorem explicitFormula_translate_coeff_bound (f : 𝒟(C[F])) :
+    ∃ B : ℝ, 0 ≤ B ∧ ∀ (χ : U[F]) (r : C[F]), ‖∫ u, f.val (r * (u : C[F])) * (χ (u : C[F]) : ℂ)
+      ∂normOneIdeleClassTamagawaMeasure F‖ ≤ B := by
+  have : IsFiniteMeasure (normOneIdeleClassTamagawaMeasure F) :=
+    ⟨by rw [normOneIdeleClassTamagawaMeasure_volume]; exact ENNReal.ofReal_lt_top⟩
+  obtain ⟨C, hC⟩ := (explicitTest_continuous f).bounded_above_of_compact_support f.property.2
+  have hC0 : 0 ≤ C := (norm_nonneg _).trans (hC 1)
+  refine ⟨C * (normOneIdeleClassTamagawaMeasure F).real univ, by positivity, fun χ r ↦
+    norm_integral_le_of_norm_le_const (.of_forall fun u ↦ ?_)⟩
+  rw [norm_mul, Circle.norm_coe, mul_one]
+  exact hC _
+
+/-- Rapid decay of the coefficients of all translates of a test in the frequencies along
+finitely many one-parameter subgroups of `C¹`, uniformly in the translate. -/
+private theorem explicitFormula_translate_coeff_decay {ι : Type*} [Fintype ι]
+    (b : ι → Multiplicative ℝ →ₜ* C[F]) (hb : ∀ j t, b j t ∈ (ideleClassNorm F).ker) (N : ℕ)
+    (f : 𝒟(C[F])) :
+    ∃ B : ℝ, ∀ (χ : U[F]) (r : C[F]),
+      (1 + ∑ j, ‖bruhatDirectionalDeriv (b j) (fun x : C[F] ↦ (χ x : ℂ)) 1‖) ^ (N + 1) *
+        ‖∫ u, f.val (r * (u : C[F])) * (χ (u : C[F]) : ℂ)
+          ∂normOneIdeleClassTamagawaMeasure F‖ ≤ B := by
+  classical
+  obtain ⟨B0, hB0, hB0'⟩ := explicitFormula_translate_coeff_bound f
+  choose g hg using fun j ↦ explicitFormula_translate_coeff_flowDeriv_pow (b j) (hb j) (N + 1) f
+  choose B hB0j hB using fun j ↦ explicitFormula_translate_coeff_bound (g j)
+  refine ⟨((Fintype.card ι : ℝ) + 1) ^ N * (B0 + ∑ j, B j), fun χ r ↦ ?_⟩
+  set c := ‖∫ u, f.val (r * (u : C[F])) * (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F‖
+  have hc0 : 0 ≤ c := norm_nonneg _
+  let κ : ι → ℝ := fun j ↦ ‖bruhatDirectionalDeriv (b j) (fun x : C[F] ↦ (χ x : ℂ)) 1‖
+  let h : Option ι → ℝ := fun o ↦ o.elim 1 κ
+  have hh : ∀ o ∈ (Finset.univ : Finset (Option ι)), 0 ≤ h o := by
+    rintro (_ | j) _
+    · exact zero_le_one
+    · exact norm_nonneg _
+  have hJ := pow_sum_le_card_mul_sum_pow hh N
+  simp only [Finset.card_univ, Fintype.card_option, Fintype.sum_option, Option.elim, h,
+    one_pow] at hJ
+  push_cast at hJ
+  have hsum : ∑ j, κ j ^ (N + 1) * c ≤ ∑ j, B j := by
+    refine Finset.sum_le_sum fun j _ ↦ ?_
+    have := hB j χ r
+    rw [hg j χ r, norm_mul, norm_pow, norm_neg] at this
+    exact this
+  calc (1 + ∑ j, κ j) ^ (N + 1) * c
+      ≤ (((Fintype.card ι : ℝ) + 1) ^ N * (1 + ∑ j, κ j ^ (N + 1))) * c :=
+        mul_le_mul_of_nonneg_right hJ hc0
+    _ = ((Fintype.card ι : ℝ) + 1) ^ N * (c + ∑ j, κ j ^ (N + 1) * c) := by
+        rw [← Finset.sum_mul]
+        ring
+    _ ≤ ((Fintype.card ι : ℝ) + 1) ^ N * (B0 + ∑ j, B j) := by
+        gcongr
+        exact hB0' χ r
+
+end ExplicitFormulaRealDominationCoeff
+
+section ExplicitFormulaRealFlow
+
+/-- The positive real unit `eᵗ` as the inverse of the logarithm equivalence. -/
+private theorem explicitFormula_positiveRealLog_symm_val (t : ℝ) :
+    (((positiveRealLogEquiv.symm (Multiplicative.ofAdd t)).val : ℝ≥0) : ℝ) = Real.exp t := by
+  have h := positiveRealLogEquiv_apply (positiveRealLogEquiv.symm (Multiplicative.ofAdd t))
+  rw [ContinuousMulEquiv.apply_symm_apply, toAdd_ofAdd] at h
+  conv_rhs => rw [h]
+  rw [Real.exp_log (NNReal.coe_pos.mpr (Units.zero_lt _))]
+
+/-- The norm-one flow at a real place `w`: the class of `eᵗ ∈ F_w^×` divided by the norm
+section at `eᵗ`. -/
+private def explicitFormula_realFlow (τ : ℝ≥0ˣ →ₜ* C[F]) (w : InfinitePlace F) (hw : w.IsReal) :
+    Multiplicative ℝ →ₜ* C[F] :=
+  let P : Multiplicative ℝ →* ℝ≥0ˣ := positiveRealLogEquiv.symm.toMulEquiv.toMonoidHom
+  let U : ℝ≥0ˣ →* ℝˣ := Units.map NNReal.toRealHom.toMonoidHom
+  let E : ℝˣ →* w.Completionˣ :=
+    Units.map (InfinitePlace.Completion.ringEquivRealOfIsReal hw).symm.toMonoidHom
+  let I : w.Completionˣ →* C[F] := IdeleClassGroup.ofCompletion (𝓞 F) F w
+  have hP : Continuous P := positiveRealLogEquiv.symm.continuous
+  have hU : Continuous U := Units.continuous_map NNReal.continuous_coe
+  have hE : Continuous E :=
+    Units.continuous_map (InfinitePlace.Completion.isometryEquivRealOfIsReal hw).symm.continuous
+  have hI : Continuous I := continuous_ideleClass_ofCompletion F w
+  ⟨(I.comp (E.comp (U.comp P))) * (τ.toMonoidHom.comp P)⁻¹,
+    (hI.comp (hE.comp (hU.comp hP))).mul (τ.continuous.comp hP).inv⟩
+
+private theorem explicitFormula_realFlow_apply (τ : ℝ≥0ˣ →ₜ* C[F]) (w : InfinitePlace F)
+    (hw : w.IsReal) (t : ℝ) :
+    explicitFormula_realFlow τ w hw (Multiplicative.ofAdd t) =
+      infiniteClassMap(w) (Units.map (InfinitePlace.Completion.ringEquivRealOfIsReal hw).symm.toMonoidHom
+        (Units.mk0 (Real.exp t) (Real.exp_pos t).ne')) * (radialFlow(τ, t))⁻¹ := by
+  have hU : Units.map NNReal.toRealHom.toMonoidHom (positiveRealLogEquiv.symm (Multiplicative.ofAdd t)) =
+      Units.mk0 (Real.exp t) (Real.exp_pos t).ne' := by
+    ext
+    exact explicitFormula_positiveRealLog_symm_val t
+  change infiniteClassMap(w) (Units.map _ (Units.map NNReal.toRealHom.toMonoidHom
+    (positiveRealLogEquiv.symm (Multiplicative.ofAdd t)))) * _ = _
+  rw [hU]
+  rfl
+
+private theorem explicitFormula_realFlow_mem_ker (τ : ℝ≥0ˣ →ₜ* C[F])
+    (hτ : RightInverse τ (ideleClassNorm F)) (w : InfinitePlace F) (hw : w.IsReal)
+    (t : Multiplicative ℝ) : explicitFormula_realFlow τ w hw t ∈ (ideleClassNorm F).ker := by
+  rw [← ofAdd_toAdd t, explicitFormula_realFlow_apply, MonoidHom.mem_ker, map_mul, map_inv, hτ,
+    mul_inv_eq_one]
+  ext
+  rw [explicitFormula_real_classNorm w hw, explicitFormula_positiveRealLog_symm_val, Units.val_mk0,
+    abs_of_pos (Real.exp_pos _)]
+
+private theorem explicitFormula_realFlow_char (τ : ℝ≥0ˣ →ₜ* C[F]) (w : InfinitePlace F)
+    (hw : w.IsReal) (χ : chartChars(τ)) (t : ℝ) :
+    ((χ.val (explicitFormula_realFlow τ w hw (Multiplicative.ofAdd t)) : Circle) : ℂ) =
+      Complex.exp ((realHeckeCharacter_parameters χ.val w hw).exists.choose.1 * t) := by
+  rw [explicitFormula_realFlow_apply, map_mul, map_inv, χ.property, inv_one, mul_one,
+    explicitFormula_real_character w hw, Units.val_mk0, ite_eq_left (Real.exp_pos t), one_pow,
+    mul_one, Real.norm_of_nonneg (Real.exp_pos t).le, explicitFormula_exp_cpow]
+
+/-- The frequency of a character along the real norm-one flow is its radial exponent. -/
+private theorem explicitFormula_realFlow_deriv (τ : ℝ≥0ˣ →ₜ* C[F]) (w : InfinitePlace F)
+    (hw : w.IsReal) (χ : chartChars(τ)) :
+    bruhatDirectionalDeriv (explicitFormula_realFlow τ w hw) (fun x : C[F] ↦ (χ.val x : ℂ)) 1 =
+      (realHeckeCharacter_parameters χ.val w hw).exists.choose.1 := by
+  set a := (realHeckeCharacter_parameters χ.val w hw).exists.choose.1
+  change deriv (fun t : ℝ ↦ ((χ.val (1 * explicitFormula_realFlow τ w hw
+    (Multiplicative.ofAdd t)) : Circle) : ℂ)) 0 = a
+  simp only [one_mul, explicitFormula_realFlow_char]
+  have h := ((hasDerivAt_id (0 : ℂ)).const_mul a).cexp.comp_ofReal
+  simp only [mul_zero, Complex.exp_zero, one_mul, mul_one, id] at h
+  exact h.deriv
+
+/-- A unitary character has purely imaginary radial exponent. -/
+private theorem explicitFormula_realFlow_re (τ : ℝ≥0ˣ →ₜ* C[F]) (w : InfinitePlace F)
+    (hw : w.IsReal) (χ : chartChars(τ)) :
+    ((realHeckeCharacter_parameters χ.val w hw).exists.choose.1).re = 0 := by
+  have h := explicitFormula_realFlow_char τ w hw χ 1
+  have hn := congrArg norm h
+  rw [Circle.norm_coe, Complex.norm_exp, Complex.ofReal_one, mul_one] at hn
+  have := congrArg Real.log hn
+  rwa [Real.log_one, Real.log_exp, eq_comm] at this
+
+end ExplicitFormulaRealFlow
+
+section ExplicitFormulaRealKernelBound
+
+/-- `|e^{-z s}| ≤ e^{-s/4}` for `Re z ≥ 1/4` and `s ≥ 0`. -/
+private theorem explicitFormula_norm_cexp_le {z : ℂ} (hz : 1 / 4 ≤ z.re) {s : ℝ} (hs : 0 ≤ s) :
+    ‖Complex.exp (-z * (s : ℂ))‖ ≤ Real.exp (-(s / 4)) := by
+  rw [Complex.norm_exp]
+  refine Real.exp_le_exp.mpr ?_
+  simp only [Complex.mul_re, Complex.neg_re, Complex.ofReal_re, Complex.neg_im,
+    Complex.ofReal_im, mul_zero, sub_zero]
+  nlinarith
+
+/-- One half of the real digamma kernel and its derivative. -/
+private theorem explicitFormula_kernelHalf_hasDerivAt (Φ Φ' : ℝ → ℂ)
+    (hΦ : ∀ x, HasDerivAt Φ (Φ' x) x) (c : ℝ) (z : ℂ) (s : ℝ) :
+    HasDerivAt (fun s : ℝ ↦ Φ (c * s) * Complex.exp (-z * (s : ℂ)))
+      (c • Φ' (c * s) * Complex.exp (-z * (s : ℂ)) +
+        Φ (c * s) * (Complex.exp (-z * (s : ℂ)) * (-z))) s := by
+  have h1 : HasDerivAt (fun s : ℝ ↦ Φ (c * s)) (c • Φ' (c * s)) s := by
+    have := (hΦ (c * s)).scomp s ((hasDerivAt_id s).const_mul c)
+    rw [mul_one] at this
+    exact this
+  have h2 : HasDerivAt (fun s : ℝ ↦ Complex.exp (-z * (s : ℂ)))
+      (Complex.exp (-z * (s : ℂ)) * (-z)) s := by
+    have := ((hasDerivAt_id (s : ℂ)).const_mul (-z)).cexp.comp_ofReal
+    simpa only [mul_one, id] using this
+  exact h1.mul h2
+
+/-- Bound on the real digamma kernel: for a `C¹` profile `Φ` with `|Φ|, |Φ'| ≤ P` and
+exponents with real part at least `1/4` and size at most `1 + A`, the kernel is at most
+`8 P (1 + A) e^{-t/4}` on `(0, ∞)`. -/
+private theorem explicitFormula_realKernel_bound (Φ Φ' : ℝ → ℂ)
+    (hΦ : ∀ x, HasDerivAt Φ (Φ' x) x) (P A : ℝ) (hP : ∀ x, ‖Φ x‖ ≤ P) (hP' : ∀ x, ‖Φ' x‖ ≤ P)
+    (hA : 0 ≤ A) (zp zm : ℂ) (hzp : 1 / 4 ≤ zp.re) (hzm : 1 / 4 ≤ zm.re)
+    (hzp' : ‖zp‖ ≤ 1 + A) (hzm' : ‖zm‖ ≤ 1 + A) {t : ℝ} (ht : 0 < t) :
+    ‖heckeArchimedeanDigammaKernel (1 / 2) zp zm Φ t‖ ≤ 8 * P * (1 + A) * Real.exp (-(t / 4)) := by
+  have hP0 : 0 ≤ P := (norm_nonneg _).trans (hP 0)
+  let G : ℝ → ℂ := fun s ↦ Φ ((1 / 2 : ℝ) * s) * Complex.exp (-zp * (s : ℂ)) +
+    Φ ((-(1 / 2) : ℝ) * s) * Complex.exp (-zm * (s : ℂ))
+  have hGb (s : ℝ) (hs : 0 ≤ s) : ‖G s‖ ≤ 2 * P * Real.exp (-(s / 4)) := by
+    refine (norm_add_le _ _).trans ?_
+    rw [norm_mul, norm_mul]
+    have := explicitFormula_norm_cexp_le hzp hs
+    have := explicitFormula_norm_cexp_le hzm hs
+    have := hP ((1 / 2 : ℝ) * s)
+    have := hP ((-(1 / 2) : ℝ) * s)
+    nlinarith [norm_nonneg (Φ ((1 / 2 : ℝ) * s)), norm_nonneg (Φ ((-(1 / 2) : ℝ) * s)),
+      norm_nonneg (Complex.exp (-zp * (s : ℂ))), norm_nonneg (Complex.exp (-zm * (s : ℂ)))]
+  have hK : heckeArchimedeanDigammaKernel (1 / 2) zp zm Φ t =
+      ((1 / 2 : ℝ) : ℂ) * (2 * (Real.exp (-t) : ℂ) * Φ 0 / (t : ℂ) -
+        G t / (1 - (Real.exp (-t) : ℂ))) := by
+    simp only [heckeArchimedeanDigammaKernel, G]
+    congr 4
+    rw [neg_mul (1 / 2 : ℝ)]
+  have he1 : Real.exp (-t) < 1 := Real.exp_lt_one_iff.mpr (by linarith)
+  have hd : 0 < 1 - Real.exp (-t) := by linarith
+  have hdn : ‖(1 : ℂ) - (Real.exp (-t) : ℂ)‖ = 1 - Real.exp (-t) := by
+    rw [← Complex.ofReal_one, ← Complex.ofReal_sub, Complex.norm_real, Real.norm_of_nonneg hd.le]
+  have het : Real.exp (-t) ≤ Real.exp (-(t / 4)) := Real.exp_le_exp.mpr (by linarith)
+  have hE0 : 0 < Real.exp (-(t / 4)) := Real.exp_pos _
+  have hΦ0 : ‖Φ 0‖ ≤ P := hP 0
+  rw [hK]
+  rcases le_or_gt 1 t with h1 | h1
+  · -- Large `t`: both terms are bounded by `e^{-t/4}`.
+    have hd2 : 1 / 2 ≤ 1 - Real.exp (-t) := by
+      have : Real.exp (-t) ≤ Real.exp (-1) := Real.exp_le_exp.mpr (by linarith)
+      have : Real.exp (-1) ≤ 1 / 2 := by
+        rw [Real.exp_neg, inv_le_comm₀ (Real.exp_pos 1) (by norm_num)]
+        linarith [Real.add_one_le_exp (1 : ℝ), Real.exp_one_gt_d9]
+      linarith
+    have hA1 : ‖2 * (Real.exp (-t) : ℂ) * Φ 0 / (t : ℂ)‖ ≤ 2 * P * Real.exp (-(t / 4)) := by
+      rw [norm_div, norm_mul, norm_mul, Complex.norm_real, Complex.norm_real,
+        Real.norm_of_nonneg (Real.exp_pos _).le, Real.norm_of_nonneg ht.le, Complex.norm_ofNat,
+        div_le_iff₀ ht]
+      have h2 := mul_le_mul het hΦ0 (norm_nonneg _) hE0.le
+      have h3 := mul_le_mul_of_nonneg_left h1 (mul_nonneg hP0 hE0.le)
+      nlinarith
+    have hA2 : ‖G t / (1 - (Real.exp (-t) : ℂ))‖ ≤ 4 * P * Real.exp (-(t / 4)) := by
+      rw [norm_div, hdn, div_le_iff₀ hd]
+      have := hGb t ht.le
+      have h3 := mul_le_mul_of_nonneg_left hd2 (mul_nonneg hP0 hE0.le)
+      nlinarith
+    rw [norm_mul, Complex.norm_real, Real.norm_of_nonneg (by norm_num)]
+    have := norm_sub_le (2 * (Real.exp (-t) : ℂ) * Φ 0 / (t : ℂ)) (G t / (1 - (Real.exp (-t) : ℂ)))
+    nlinarith [mul_nonneg (mul_nonneg hP0 hA) hE0.le, mul_nonneg hP0 hE0.le]
+  · -- Small `t`: the singular parts cancel, by the mean value inequality for `G`.
+    have hmv : ‖G t - G 0‖ ≤ (3 + 2 * A) * P * (t - 0) := by
+      refine norm_image_sub_le_of_norm_deriv_le_segment' (f := G)
+        (f' := fun s ↦ ((1 / 2 : ℝ) • Φ' ((1 / 2 : ℝ) * s) * Complex.exp (-zp * (s : ℂ)) +
+          Φ ((1 / 2 : ℝ) * s) * (Complex.exp (-zp * (s : ℂ)) * (-zp))) +
+          ((-(1 / 2) : ℝ) • Φ' ((-(1 / 2) : ℝ) * s) * Complex.exp (-zm * (s : ℂ)) +
+          Φ ((-(1 / 2) : ℝ) * s) * (Complex.exp (-zm * (s : ℂ)) * (-zm))))
+        (fun s _ ↦ ((explicitFormula_kernelHalf_hasDerivAt Φ Φ' hΦ (1 / 2) zp s).add
+          (explicitFormula_kernelHalf_hasDerivAt Φ Φ' hΦ (-(1 / 2)) zm s)).hasDerivWithinAt)
+        (fun s hs ↦ ?_) t ⟨ht.le, le_rfl⟩
+      have hs0 : 0 ≤ s := hs.1
+      have e1 := explicitFormula_norm_cexp_le hzp hs0
+      have e2 := explicitFormula_norm_cexp_le hzm hs0
+      have e3 : Real.exp (-(s / 4)) ≤ 1 := Real.exp_le_one_iff.mpr (by linarith)
+      have q1 := hP' ((1 / 2 : ℝ) * s)
+      have q2 := hP' ((-(1 / 2) : ℝ) * s)
+      have p1 := hP ((1 / 2 : ℝ) * s)
+      have p2 := hP ((-(1 / 2) : ℝ) * s)
+      refine (norm_add_le _ _).trans ?_
+      refine (add_le_add (norm_add_le _ _) (norm_add_le _ _)).trans ?_
+      simp only [norm_mul, norm_smul, norm_neg, Real.norm_eq_abs]
+      have n1 := norm_nonneg (Complex.exp (-zp * (s : ℂ)))
+      have n2 := norm_nonneg (Complex.exp (-zm * (s : ℂ)))
+      have m1 := norm_nonneg (Φ' ((1 / 2 : ℝ) * s))
+      have m2 := norm_nonneg (Φ' ((-(1 / 2) : ℝ) * s))
+      have m3 := norm_nonneg (Φ ((1 / 2 : ℝ) * s))
+      have m4 := norm_nonneg (Φ ((-(1 / 2) : ℝ) * s))
+      have k1 : ‖Complex.exp (-zp * (s : ℂ))‖ ≤ 1 := e1.trans e3
+      have k2 : ‖Complex.exp (-zm * (s : ℂ))‖ ≤ 1 := e2.trans e3
+      have r1 : 1 / 2 * ‖Φ' ((1 / 2 : ℝ) * s)‖ * ‖Complex.exp (-zp * (s : ℂ))‖ ≤ 1 / 2 * P := by
+        nlinarith [mul_le_mul q1 k1 n1 hP0]
+      have r2 : 1 / 2 * ‖Φ' ((-(1 / 2) : ℝ) * s)‖ * ‖Complex.exp (-zm * (s : ℂ))‖ ≤ 1 / 2 * P := by
+        nlinarith [mul_le_mul q2 k2 n2 hP0]
+      have r3 : ‖Φ ((1 / 2 : ℝ) * s)‖ * (‖Complex.exp (-zp * (s : ℂ))‖ * ‖zp‖) ≤ P * (1 + A) := by
+        exact mul_le_mul p1 (by nlinarith [norm_nonneg zp]) (by positivity) hP0
+      have r4 : ‖Φ ((-(1 / 2) : ℝ) * s)‖ * (‖Complex.exp (-zm * (s : ℂ))‖ * ‖zm‖) ≤ P * (1 + A) := by
+        exact mul_le_mul p2 (by nlinarith [norm_nonneg zm]) (by positivity) hP0
+      nlinarith
+    have hG0 : G 0 = 2 * Φ 0 := by
+      simp only [G, mul_zero, Complex.ofReal_zero, Complex.exp_zero, mul_one]
+      ring
+    rw [hG0, sub_zero] at hmv
+    have hlin : 1 - Real.exp (-t) ≤ t := by linarith [Real.add_one_le_exp (-t)]
+    obtain ⟨hr1, hr2⟩ := digamma_remainder_bounds ht
+    have htc : (t : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr ht.ne'
+    have hdc : (1 : ℂ) - (Real.exp (-t) : ℂ) ≠ 0 := by
+      rw [← norm_ne_zero_iff, hdn]; exact hd.ne'
+    have hsplit : 2 * (Real.exp (-t) : ℂ) * Φ 0 / (t : ℂ) - G t / (1 - (Real.exp (-t) : ℂ)) =
+        -(2 * Φ 0 * (((1 - Real.exp (-t)) / t : ℝ) : ℂ)) + (2 * Φ 0 - G t) / (t : ℂ) +
+          G t * (((1 / t - 1 / (1 - Real.exp (-t))) : ℝ) : ℂ) := by
+      push_cast
+      field_simp
+      ring
+    rw [hsplit, norm_mul, Complex.norm_real, Real.norm_of_nonneg (by norm_num)]
+    have b1 : ‖-(2 * Φ 0 * (((1 - Real.exp (-t)) / t : ℝ) : ℂ))‖ ≤ 2 * P := by
+      rw [norm_neg, norm_mul, norm_mul, Complex.norm_real, Complex.norm_ofNat,
+        Real.norm_of_nonneg (div_nonneg hd.le ht.le)]
+      have : (1 - Real.exp (-t)) / t ≤ 1 := (div_le_one ht).mpr hlin
+      nlinarith [norm_nonneg (Φ 0), div_nonneg hd.le ht.le]
+    have b2 : ‖(2 * Φ 0 - G t) / (t : ℂ)‖ ≤ (3 + 2 * A) * P := by
+      rw [norm_div, Complex.norm_real, Real.norm_of_nonneg ht.le, div_le_iff₀ ht, norm_sub_rev]
+      linarith
+    have b3 : ‖G t * (((1 / t - 1 / (1 - Real.exp (-t))) : ℝ) : ℂ)‖ ≤ 2 * P := by
+      rw [norm_mul, Complex.norm_real]
+      have habs : ‖(1 / t - 1 / (1 - Real.exp (-t)))‖ ≤ 1 := by
+        rw [Real.norm_eq_abs, abs_le]; constructor <;> linarith
+      have hg := hGb t ht.le
+      have e3 : Real.exp (-(t / 4)) ≤ 1 := Real.exp_le_one_iff.mpr (by linarith)
+      calc ‖G t‖ * ‖(1 / t - 1 / (1 - Real.exp (-t)))‖ ≤ ‖G t‖ * 1 :=
+            mul_le_mul_of_nonneg_left habs (norm_nonneg _)
+        _ ≤ 2 * P := by nlinarith
+    have hsum : ‖-(2 * Φ 0 * (((1 - Real.exp (-t)) / t : ℝ) : ℂ)) + (2 * Φ 0 - G t) / (t : ℂ) +
+        G t * (((1 / t - 1 / (1 - Real.exp (-t))) : ℝ) : ℂ)‖ ≤
+        ‖-(2 * Φ 0 * (((1 - Real.exp (-t)) / t : ℝ) : ℂ))‖ + ‖(2 * Φ 0 - G t) / (t : ℂ)‖ +
+          ‖G t * (((1 / t - 1 / (1 - Real.exp (-t))) : ℝ) : ℂ)‖ :=
+      (norm_add_le _ _).trans (add_le_add_left (norm_add_le _ _) _)
+    have hE : 3 / 4 ≤ Real.exp (-(t / 4)) := by linarith [Real.add_one_le_exp (-(t / 4))]
+    have hPA : 0 ≤ P * (1 + A) := by positivity
+    nlinarith [mul_le_mul_of_nonneg_left hE hPA]
+
+end ExplicitFormulaRealKernelBound
+
+section ExplicitFormulaRealKernelIntegrable
+
+/-- A real digamma kernel of a continuous profile, bounded by `M e^{-t/4}` on `(0, ∞)`, is
+integrable there with `∫ |K| ≤ M ∫ e^{-t/4}`. -/
+private theorem explicitFormula_realKernel_integrable (Φ : ℝ → ℂ) (hΦ : Continuous Φ)
+    (zp zm : ℂ) (M : ℝ)
+    (hb : ∀ t, 0 < t → ‖heckeArchimedeanDigammaKernel (1 / 2) zp zm Φ t‖ ≤
+      M * Real.exp (-(t / 4))) :
+    IntegrableOn (heckeArchimedeanDigammaKernel (1 / 2) zp zm Φ) (Ioi 0) ∧
+      ∫ t in Ioi (0 : ℝ), ‖heckeArchimedeanDigammaKernel (1 / 2) zp zm Φ t‖ ≤
+        M * ∫ t in Ioi (0 : ℝ), Real.exp (-(t / 4)) := by
+  have hexp : IntegrableOn (fun t : ℝ ↦ Real.exp (-(t / 4))) (Ioi 0) := by
+    have h := exp_neg_integrableOn_Ioi 0 (by norm_num : (0 : ℝ) < 1 / 4)
+    refine h.congr_fun (fun t _ ↦ ?_) measurableSet_Ioi
+    ring_nf
+  have hc : ContinuousOn (heckeArchimedeanDigammaKernel (1 / 2) zp zm Φ) (Ioi 0) := by
+    intro t ht
+    have ht0 : (t : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr (ne_of_gt ht)
+    have hd : (1 : ℂ) - (Real.exp (-t) : ℂ) ≠ 0 := by
+      rw [← Complex.ofReal_one, ← Complex.ofReal_sub, Complex.ofReal_ne_zero, sub_ne_zero]
+      exact (Real.exp_lt_one_iff.mpr (by simpa using ht)).ne'
+    refine ContinuousAt.continuousWithinAt ?_
+    unfold heckeArchimedeanDigammaKernel
+    fun_prop (disch := assumption)
+  have hmeas := hc.aestronglyMeasurable (μ := volume) measurableSet_Ioi
+  have hint : IntegrableOn (heckeArchimedeanDigammaKernel (1 / 2) zp zm Φ) (Ioi 0) :=
+    Integrable.mono' (hexp.const_mul M) hmeas
+      ((ae_restrict_iff' measurableSet_Ioi).mpr (.of_forall fun t ht ↦ hb t ht))
+  refine ⟨hint, ?_⟩
+  rw [← integral_const_mul]
+  exact setIntegral_mono_on hint.norm (hexp.const_mul M) measurableSet_Ioi hb
+
+end ExplicitFormulaRealKernelIntegrable
+
 
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (domination at a real place `w`). For
 the radial profiles `Φ_χ` of a test `f` (as in `idelicExplicitFormula_finiteMatching`), each
@@ -13191,13 +13567,15 @@ real digamma kernel `t ↦ K_χ(t)` at `w` (with the radial exponent and sign pa
 `w`) is integrable on `(0, ∞)`, and `∑_χ ∫_0^∞ |K_χ(t)| dt < ∞`.
 
 Why it holds. `Φ_χ(x)` is the Fourier coefficient on `C¹` of the translate of `f` by the norm
-section at `eˣ`, supported in a fixed interval `|x| ≤ log M` (`f` has compact support). Near
-`t = 0` the kernel is bounded by `C (1 + |a_χ|)² (sup |Φ_χ| + sup |Φ_χ'| + sup |Φ_χ''|)`
-(`a_χ` the radial exponent at `w`, `Φ_χ'` the profile of the flow derivative of `f`), and for
-`t ≥ 1` by `C e^{-t/4} sup |Φ_χ|`. These suprema times any power of `1 + |a_χ|` are summable
-over `χ`: the coefficients of the smooth function `f` on `C¹` decay faster than any power of
-the archimedean frequency, uniformly on the compact set of translates
-(`idelicExplicitFormula_normOneFourier_summable`). -/
+section at `eˣ`, and `Φ_χ'(x)` that of the translate of the derivative of `f` along the norm
+section. On `(0, ∞)` the kernel is bounded by `8 P_χ (1 + |a_χ|) e^{-t/4}` whenever
+`|Φ_χ|, |Φ_χ'| ≤ P_χ` (`a_χ` the radial exponent at `w`, purely imaginary since `χ` is
+unitary; near `t = 0` the singular parts cancel by the mean value inequality). The radial
+exponent is the frequency of `χ` along the norm-one flow `t ↦ (eᵗ at w) · τ(eᵗ)⁻¹`, so
+integration by parts along that flow and along the flows of
+`idelicExplicitFormula_normOneFourier_count` bounds `P_χ (1 + |a_χ|)` by a constant times
+`(1 + m_χ)^{-(d+2)}`, uniformly in the translate (`m_χ` the frequency size, `d` the degree
+of the count), and the count makes this summable. -/
 theorem idelicExplicitFormula_infiniteMatching_realDomination (τ : ℝ≥0ˣ →ₜ* C[F])
     (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F])) (w : InfinitePlace F)
     (hw : w.IsReal) (Φ : chartChars(τ) → 𝓢(ℝ, ℂ)) (_hΦ : ∀ χ, ExponentialDecay (Φ χ))
@@ -13209,7 +13587,168 @@ theorem idelicExplicitFormula_infiniteMatching_realDomination (τ : ℝ≥0ˣ �
         ((1 / 2 - p.1 + p.2.val) / 2) (Φ χ) t
     (∀ χ, IntegrableOn (K χ) (Ioi 0)) ∧
       Summable (fun χ ↦ ∫ t in Ioi (0 : ℝ), ‖K χ t‖) := by
-  sorry
+  intro K
+  classical
+  -- The invariance subgroup of `f` and the polynomial count of characters.
+  obtain ⟨k, hk, hinv, -⟩ := (mem_bruhatSmoothSubmodule_iff _).mp f.property.1 0
+  obtain ⟨r, b, hb, C, d, hcount⟩ := idelicExplicitFormula_normOneFourier_count τ _hτ k hk
+  -- The flows: the real norm-one flow at `w`, then the counting flows.
+  let b' : Option (Fin r) → Multiplicative ℝ →ₜ* C[F] := fun o ↦
+    o.elim (explicitFormula_realFlow τ w hw) b
+  have hb' : ∀ o t, b' o t ∈ (ideleClassNorm F).ker := by
+    rintro (_ | j) t
+    · exact explicitFormula_realFlow_mem_ker τ _hτ w hw t
+    · exact hb j t
+  -- The radial flow and the derivative of `f` along it.
+  let brad : Multiplicative ℝ →ₜ* C[F] :=
+    ⟨τ.toMonoidHom.comp positiveRealLogEquiv.symm.toMulEquiv.toMonoidHom,
+      τ.continuous.comp positiveRealLogEquiv.symm.continuous⟩
+  let Df : 𝒟(C[F]) := ⟨bruhatDirectionalDeriv brad f.val, explicitFormula_flowDeriv_mem brad f⟩
+  obtain ⟨B1, hB1⟩ := explicitFormula_translate_coeff_decay b' hb' (d + 2) f
+  obtain ⟨B2, hB2⟩ := explicitFormula_translate_coeff_decay b' hb' (d + 2) Df
+  have hB1nn : 0 ≤ B1 := (mul_nonneg (by positivity) (norm_nonneg _)).trans (hB1 1 1)
+  have hB2nn : 0 ≤ B2 := (mul_nonneg (by positivity) (norm_nonneg _)).trans (hB2 1 1)
+  -- Notation for a character.
+  let a : chartChars(τ) → ℂ := fun χ ↦ (realHeckeCharacter_parameters χ.val w hw).exists.choose.1
+  let m : chartChars(τ) → ℝ := fun χ ↦
+    ∑ j, ‖bruhatDirectionalDeriv (b j) (fun x : C[F] ↦ (χ.val x : ℂ)) 1‖
+  have hm0 (χ : chartChars(τ)) : 0 ≤ m χ := Finset.sum_nonneg fun j _ ↦ norm_nonneg _
+  have hsum' (χ : chartChars(τ)) :
+      ∑ o, ‖bruhatDirectionalDeriv (b' o) (fun x : C[F] ↦ (χ.val x : ℂ)) 1‖ = ‖a χ‖ + m χ := by
+    rw [Fintype.sum_option]
+    simp only [b', Option.elim]
+    rw [explicitFormula_realFlow_deriv]
+  let V : ℝ := classVolume
+  have hV0 : 0 ≤ V := ENNReal.toReal_nonneg
+  let c : 𝒟(C[F]) → chartChars(τ) → ℝ → ℂ := fun h χ x ↦
+    ∫ u, h.val (radialFlow(τ, x) * (u : C[F])) * (χ.val (u : C[F]) : ℂ)
+      ∂normOneIdeleClassTamagawaMeasure F
+  -- The weight and the bound for one character.
+  let D : chartChars(τ) → ℝ := fun χ ↦ (1 + ‖a χ‖) * (1 + m χ) ^ (d + 2)
+  have hDpos (χ : chartChars(τ)) : 0 < D χ := by
+    have := hm0 χ; positivity
+  have hDle (χ : chartChars(τ)) : D χ ≤ (1 + (‖a χ‖ + m χ)) ^ (d + 2 + 1) := by
+    have h1 : 1 + ‖a χ‖ ≤ 1 + (‖a χ‖ + m χ) := by linarith [hm0 χ]
+    have h2 : (1 + m χ) ^ (d + 2) ≤ (1 + (‖a χ‖ + m χ)) ^ (d + 2) :=
+      pow_le_pow_left₀ (by linarith [hm0 χ]) (by linarith [norm_nonneg (a χ)]) _
+    rw [pow_succ']
+    exact mul_le_mul h1 h2 (by have := hm0 χ; positivity) (by have := hm0 χ; positivity)
+  have hcb (h : 𝒟(C[F])) (B : ℝ) (hB : ∀ (χ : U[F]) (r : C[F]),
+      (1 + ∑ j, ‖bruhatDirectionalDeriv (b' j) (fun x : C[F] ↦ (χ x : ℂ)) 1‖) ^ (d + 2 + 1) *
+        ‖∫ u, h.val (r * (u : C[F])) * (χ (u : C[F]) : ℂ)
+          ∂normOneIdeleClassTamagawaMeasure F‖ ≤ B) (χ : chartChars(τ)) (x : ℝ) :
+      ‖c h χ x‖ ≤ B / D χ := by
+    rw [le_div_iff₀ (hDpos χ)]
+    have := hB χ.val radialFlow(τ, x)
+    rw [hsum'] at this
+    calc ‖c h χ x‖ * D χ ≤ ‖c h χ x‖ * (1 + (‖a χ‖ + m χ)) ^ (d + 2 + 1) :=
+          mul_le_mul_of_nonneg_left (hDle χ) (norm_nonneg _)
+      _ ≤ B := by rw [mul_comm]; exact this
+  -- The profile and its derivative.
+  have hprof (χ : chartChars(τ)) (x : ℝ) : Φ χ x = (V : ℂ)⁻¹ * c f χ x :=
+    explicitFormula_profile_eq τ _hτ f Φ _hM χ x
+  have hderiv (χ : chartChars(τ)) (x : ℝ) :
+      HasDerivAt (Φ χ : ℝ → ℂ) ((V : ℂ)⁻¹ * c Df χ x) x := by
+    have h := (explicitFormula_radial_hasDerivAt brad χ.val f x).const_mul (V : ℂ)⁻¹
+    refine h.congr_of_eventuallyEq (.of_forall fun y ↦ ?_)
+    exact hprof χ y
+  have hVn : ‖(V : ℂ)⁻¹‖ = V⁻¹ := by
+    rw [norm_inv, Complex.norm_real, Real.norm_of_nonneg hV0]
+  let P : chartChars(τ) → ℝ := fun χ ↦ V⁻¹ * ((B1 + B2) / D χ)
+  have hP (χ : chartChars(τ)) (x : ℝ) : ‖Φ χ x‖ ≤ P χ := by
+    rw [hprof, norm_mul, hVn]
+    refine mul_le_mul_of_nonneg_left ((hcb f B1 hB1 χ x).trans ?_) (inv_nonneg.mpr hV0)
+    exact div_le_div_of_nonneg_right (by linarith) (hDpos χ).le
+  have hP' (χ : chartChars(τ)) (x : ℝ) : ‖(V : ℂ)⁻¹ * c Df χ x‖ ≤ P χ := by
+    rw [norm_mul, hVn]
+    refine mul_le_mul_of_nonneg_left ((hcb Df B2 hB2 χ x).trans ?_) (inv_nonneg.mpr hV0)
+    exact div_le_div_of_nonneg_right (by linarith) (hDpos χ).le
+  -- The kernel bound.
+  have hre (χ : chartChars(τ)) : (a χ).re = 0 := explicitFormula_realFlow_re τ w hw χ
+  let I0 : ℝ := ∫ t in Ioi (0 : ℝ), Real.exp (-(t / 4))
+  have hI0 : 0 ≤ I0 := setIntegral_nonneg measurableSet_Ioi fun t _ ↦ (Real.exp_pos _).le
+  have hK (χ : chartChars(τ)) : IntegrableOn (K χ) (Ioi 0) ∧
+      ∫ t in Ioi (0 : ℝ), ‖K χ t‖ ≤ 8 * P χ * (1 + ‖a χ‖) * I0 := by
+    set p := (realHeckeCharacter_parameters χ.val w hw).exists.choose with hp
+    have hε : ‖((p.2.val : ℕ) : ℂ)‖ ≤ 1 := by
+      rw [Complex.norm_natCast]; exact_mod_cast Nat.lt_succ_iff.mp p.2.isLt
+    have hε0 : (0 : ℝ) ≤ ((p.2.val : ℕ) : ℂ).re := by simp
+    have hap : a χ = p.1 := rfl
+    have hre' : p.1.re = 0 := hre χ
+    have hzp : 1 / 4 ≤ ((1 / 2 + p.1 + p.2.val) / 2 : ℂ).re := by
+      simp only [Complex.div_ofNat_re, Complex.add_re, hre', Complex.natCast_re]
+      have : (0 : ℝ) ≤ (p.2.val : ℝ) := Nat.cast_nonneg _
+      norm_num
+      linarith
+    have hzm : 1 / 4 ≤ ((1 / 2 - p.1 + p.2.val) / 2 : ℂ).re := by
+      simp only [Complex.div_ofNat_re, Complex.add_re, Complex.sub_re, hre', Complex.natCast_re]
+      have : (0 : ℝ) ≤ (p.2.val : ℝ) := Nat.cast_nonneg _
+      norm_num
+      linarith
+    have hzp' : ‖((1 / 2 + p.1 + p.2.val) / 2 : ℂ)‖ ≤ 1 + ‖a χ‖ := by
+      rw [norm_div, Complex.norm_ofNat, hap]
+      have h1 := norm_add₃_le (a := (1 / 2 : ℂ)) (b := p.1) (c := ((p.2.val : ℕ) : ℂ))
+      have h2 : ‖(1 / 2 : ℂ)‖ = 1 / 2 := by norm_num
+      rw [div_le_iff₀ (by norm_num)]
+      linarith [norm_nonneg p.1]
+    have hzm' : ‖((1 / 2 - p.1 + p.2.val) / 2 : ℂ)‖ ≤ 1 + ‖a χ‖ := by
+      rw [norm_div, Complex.norm_ofNat, hap, sub_eq_add_neg]
+      have h1 := norm_add₃_le (a := (1 / 2 : ℂ)) (b := -p.1) (c := ((p.2.val : ℕ) : ℂ))
+      have h2 : ‖(1 / 2 : ℂ)‖ = 1 / 2 := by norm_num
+      rw [norm_neg] at h1
+      rw [div_le_iff₀ (by norm_num)]
+      linarith [norm_nonneg p.1]
+    have hb := fun t (ht : 0 < t) ↦ explicitFormula_realKernel_bound (Φ χ)
+      (fun x ↦ (V : ℂ)⁻¹ * c Df χ x) (hderiv χ)
+      (P χ) ‖a χ‖ (hP χ) (hP' χ) (norm_nonneg _) _ _ hzp hzm hzp' hzm' ht
+    have hi := explicitFormula_realKernel_integrable (Φ χ) (Φ χ).continuous _ _ _ hb
+    refine ⟨hi.1, ?_⟩
+    exact hi.2
+  refine ⟨fun χ ↦ (hK χ).1, ?_⟩
+  -- Off the characters trivial on `k ∩ C¹` the kernels vanish.
+  let S : Set chartChars(τ) :=
+    {χ | ∀ u : (ideleClassNorm F).ker, (u : C[F]) ∈ k → χ.val u = 1}
+  let g : chartChars(τ) → ℝ := fun χ ↦ ∫ t in Ioi (0 : ℝ), ‖K χ t‖
+  have hzero : ∀ χ ∉ Set.range ((↑) : S → chartChars(τ)), g χ = 0 := by
+    intro χ hχ
+    have hχS : χ ∉ S := fun h ↦ hχ ⟨⟨χ, h⟩, rfl⟩
+    simp only [S, Set.mem_ofPred_eq, not_forall] at hχS
+    obtain ⟨u, hu, hχu⟩ := hχS
+    have hc0 (x : ℝ) : c f χ x = 0 := by
+      obtain ⟨f', hf'⟩ := explicitFormula_test_translate f radialFlow(τ, x)
+      have h := explicitFormula_coeff_eq_zero_of_invariant f' χ.val u (fun g ↦ by
+        rw [hf', hf', mul_comm g, ← mul_left_comm]
+        exact hinv ⟨u, hu⟩ _) hχu
+      rw [← h]
+      refine integral_congr_ae (.of_forall fun v ↦ ?_)
+      simp only [hf']
+    have hΦ0 : (Φ χ : ℝ → ℂ) = 0 := by
+      funext x
+      rw [hprof, hc0, mul_zero, Pi.zero_apply]
+    have hK0 (t : ℝ) : K χ t = 0 := by
+      simp only [K, heckeArchimedeanDigammaKernel, hΦ0, Pi.zero_apply]
+      ring
+    simp only [g, hK0, norm_zero, integral_zero]
+  refine (Function.Injective.summable_iff Subtype.val_injective hzero).mp ?_
+  have hKc : 0 ≤ 8 * V⁻¹ * (B1 + B2) * I0 := by
+    have := inv_nonneg.mpr hV0
+    positivity
+  refine summable_bruhatMellin_of_polynomialCount_of_polyCount_decay (g := g ∘ Subtype.val)
+    (fun χ : S ↦ m χ.val) (fun χ ↦ hm0 χ.val) C d (8 * V⁻¹ * (B1 + B2) * I0) hKc
+    (fun T ↦ ?_) (fun χ ↦ ?_)
+  · rw [← Subtype.val_injective.encard_image]
+    refine (Set.encard_mono ?_).trans (hcount T)
+    rintro _ ⟨χ, hχ, rfl⟩
+    exact ⟨χ.2, fun j ↦ (Finset.single_le_sum
+      (fun i _ ↦ norm_nonneg (bruhatDirectionalDeriv (b i) (fun x : C[F] ↦ (χ.val.val x : ℂ)) 1))
+      (Finset.mem_univ j)).trans hχ⟩
+  · have hg0 : 0 ≤ g χ.val := setIntegral_nonneg measurableSet_Ioi fun t _ ↦ norm_nonneg _
+    rw [Function.comp_apply, Real.norm_of_nonneg hg0]
+    refine (hK χ.val).2.trans (le_of_eq ?_)
+    have h1 : (1 + ‖a χ.val‖) ≠ 0 := by positivity
+    have h2 : (1 + m χ.val) ^ (d + 2) ≠ 0 := by have := hm0 χ.val; positivity
+    simp only [P, D]
+    field_simp
 
 
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (character sum at a real place `w`).
