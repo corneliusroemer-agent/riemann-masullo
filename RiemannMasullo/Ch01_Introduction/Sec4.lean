@@ -7229,7 +7229,7 @@ private theorem introTraceApprox_spectral_normalized_character
     (τ : ℝ≥0ˣ →ₜ* C𝔽) (hτ : RightInverse τ (ideleClassNorm F)) (χ : U𝔽) :
     ∃ (ψ : U𝔽) (a : ℂ), a.re = 0 ∧ (∀ t, ψ (τ t) = 1) ∧
       ideleClassNormTwist ψ 0 = ideleClassNormTwist χ (-a) := by
-  let n : C𝔽 →ₜ* ℝ≥0ˣ := ⟨ideleClassNorm F, (isProperMap_ideleClassNorm F).continuous⟩
+  let n : C𝔽 →ₜ* ℝ≥0ˣ := continuousIdeleClassNorm F
   let j : Circle →ₜ* ℂ := ⟨Circle.coeHom, continuous_subtype_val⟩
   obtain ⟨a, ⟨ha, hpower⟩, -⟩ :=
     existsUnique_unitaryComplexPower (j.comp (χ.comp τ)) (fun t ↦ Circle.norm_coe _)
