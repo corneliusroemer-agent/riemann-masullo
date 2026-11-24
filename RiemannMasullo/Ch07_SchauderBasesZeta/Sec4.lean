@@ -24,13 +24,14 @@ import all RiemannMasullo.Ch03_IdelicZeta.Sec2
 import all RiemannMasullo.Ch06_LocalGlobal.Sec3
 import RiemannMasullo.AppA_AlgebraicNT.Sec3
 import all RiemannMasullo.Ch03_IdelicZeta.Sec3b
-import all RiemannMasullo.Ch05_ThetaZSpaces.Sec3b
+import RiemannMasullo.Ch05_ThetaZSpaces.Sec3b
 
 import RiemannMasullo.ForMathlib.Analysis.Meromorphic.VerticalStripZeros
 public import RiemannMasullo.Ch04_PeriodicSchauderBases.Sec4
 public import RiemannMasullo.Ch04_PeriodicSchauderBases.Sec5
 public import RiemannMasullo.Ch04_PeriodicSchauderBases.Sec6
 public import RiemannMasullo.ForMathlib.Topology.Algebra.Module.ContinuousLinearMap.Quotient
+import RiemannMasullo.ForMathlib.Analysis.LocallyConvex.WithSeminorms
 
 /-! # §7.4 Nuclearity
 
