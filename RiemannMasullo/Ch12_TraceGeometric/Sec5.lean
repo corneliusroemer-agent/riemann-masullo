@@ -1565,6 +1565,22 @@ theorem spectralStripTrace_eq_localTerms_of_half_le (φ : BruhatCompactSupport C
   exact exteriorZeros_stripTrace_of_isEmpty τ hτ (one_half_pos.trans_le hα) hs
     (exteriorZeros_isEmpty_of_half_le τ hα) φ a b ha hb T hT
 
+/-- Paper: Theorem 12.5.1.1, p. 520, with (12.5.1.4) and Theorem B.4.4.7, p. 623. If the
+conclusion of `traceFormula_exteriorZeros` holds at a half-width α > 0 for every test vanishing on
+the norm-one classes, then the trace identity on the strip quotient holds at α, at every Sobolev
+order s > 1: the trace of any nuclear representative equals the local terms. No nuclearity is
+assumed; where the strip action has no nuclear representative the identity says nothing. -/
+theorem spectralStripTrace_eq_localTerms_of_exteriorZeros (τ : ℝ≥0ˣ →ₜ* C𝔽)
+    (hτ : RightInverse τ (ideleClassNorm F)) {α s : ℝ} (hα : 0 < α) (hs : 1 < s)
+    (hX : ∀ φ : BruhatCompactSupport C𝔽, (∀ g : C₁, φ.val g = 0) →
+      HasSum (fun z : exteriorZeros(τ, α) ↦ zeroTerm(φ, z)) 0)
+    (φ : BruhatCompactSupport C𝔽)
+    (a : archTest) (b : finiteTest) (ha : archRestricts(φ, a)) (hb : finiteRestricts(φ, b))
+    (T : nuclearEndomorphisms stripQuot(hα.le, hs)) (hT : T.val = stripConv(hα.le, hs, φ)) :
+    hilbertTrace T = localTerms(φ, a, b) :=
+  exteriorZeros_stripTrace_of_isEmpty τ hτ hα hs (isEmpty_exteriorZeros_of_hasSum τ hτ α hX)
+    φ a b ha hb T hT
+
 /-- Paper: Theorem 12.5.1.1, pp. 519–520, with (12.5.1.4) and Theorem B.4.4.7, p. 623. Suppose
 that for every positive half-width convolution after spectral projection on the Sobolev order 3
 strip space has a projective tensor kernel (`hK` of (12.5.1.4)), and that the trace of convolution
