@@ -1749,7 +1749,7 @@ private theorem schwartzBruhat_stage_comp_equiv {G H : Type*}
   exact (schwartzBruhatStageInclusion b q (j f)).property
 
 /-- Pullback along a topological group isomorphism preserves Schwartz–Bruhat membership. -/
-private theorem schwartzBruhat_mem_comp_equiv {G H : Type*}
+theorem schwartzBruhat_mem_comp_equiv {G H : Type*}
     [CommGroup G] [CommGroup H] [TopologicalSpace G] [TopologicalSpace H]
     [IsTopologicalGroup G] [IsTopologicalGroup H] [T2Space G] [T2Space H]
     [LocallyCompactSpace G] [LocallyCompactSpace H]

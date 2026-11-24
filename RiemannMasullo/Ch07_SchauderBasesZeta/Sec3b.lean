@@ -12,7 +12,7 @@ import RiemannMasullo.Ch06_LocalGlobal.Sec2
 import RiemannMasullo.Ch06_LocalGlobal.Sec3
 import all RiemannMasullo.Ch07_SchauderBasesZeta.Sec2
 
-public import RiemannMasullo.Ch07_SchauderBasesZeta.Sec3a
+public import RiemannMasullo.Ch07_SchauderBasesZeta.Sec3a_OrbitalJets
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
 import RiemannMasullo.ForMathlib.MeasureTheory.Integral.ProdPi
 import RiemannMasullo.ForMathlib.Analysis.SpecialFunctions.Complex.ExpPolynomial

@@ -1283,7 +1283,7 @@ theorem normOneRestriction_unitaryChart (χ : PontryaginDual G) (s : ℂ) (u : m
 
 include hm in
 /-- A character on the norm-one group and one on the section determine a unitary character. -/
-private theorem exists_character_on_split (σ : ℝ≥0ˣ →ₜ* G) (hσ : RightInverse σ m)
+theorem exists_character_on_split (σ : ℝ≥0ˣ →ₜ* G) (hσ : RightInverse σ m)
     (ω : PontryaginDual m.ker) (η : PontryaginDual ℝ≥0ˣ) :
     ∃ χ : PontryaginDual G, (∀ u : m.ker, χ u.val = ω u) ∧ ∀ t, χ (σ t) = η t := by
   have hrker (g : G) : g / σ (m g) ∈ m.ker := by simp [MonoidHom.mem_ker, hσ (m g)]
