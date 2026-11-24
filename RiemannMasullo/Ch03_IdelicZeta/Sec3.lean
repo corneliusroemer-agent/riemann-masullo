@@ -2042,7 +2042,7 @@ theorem sMultiplicativeTamagawaMeasure_isHaarMeasure : (μₛ).IsHaarMeasure := 
   exact E.isHaarMeasure_map _
 
 /-- Dualizing a norm twist inverts its unitary part and reflects its exponent. -/
-private theorem sLocal_dual_normTwist (χ : PontryaginDual Jₛ) (s : ℂ) :
+theorem sLocal_dual_normTwist (χ : PontryaginDual Jₛ) (s : ℂ) :
     dualQuasiCharacter mₛ hmₛ (chartₛ(χ) s) = chartₛ(χ⁻¹) (1 - s) :=
   dualQuasiCharacter_normTwist mₛ hmₛ χ s
 

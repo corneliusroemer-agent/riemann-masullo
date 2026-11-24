@@ -4237,7 +4237,8 @@ section GlobalTopology
 
 open Set TopologicalSpace
 
-private theorem frechet_of_closed_embedding {X Y : Type*} [AddCommGroup X] [Module ℂ X]
+/-- A space with a continuous linear closed embedding into a Fréchet space is Fréchet. -/
+theorem frechet_of_closed_embedding {X Y : Type*} [AddCommGroup X] [Module ℂ X]
     [TopologicalSpace X] [IsTopologicalAddGroup X] [AddCommGroup Y] [Module ℂ Y]
     [TopologicalSpace Y] (i : X →L[ℂ] Y) (hi : IsClosedEmbedding i) (hY : IsFrechetTVS Y) :
     IsFrechetTVS X := by

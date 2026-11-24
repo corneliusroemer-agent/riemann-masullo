@@ -6,8 +6,8 @@ import RiemannMasullo.ForMathlib.Analysis.LocallyConvex.MittagLefflerLift
 import Mathlib.Analysis.SpecialFunctions.Pow.Asymptotics
 
 import all RiemannMasullo.Ch05_ThetaZSpaces.Sec1
-import all RiemannMasullo.Ch05_ThetaZSpaces.Sec2
-import all RiemannMasullo.Ch05_ThetaZSpaces.Sec5
+import RiemannMasullo.Ch05_ThetaZSpaces.Sec2
+import RiemannMasullo.Ch05_ThetaZSpaces.Sec5
 import RiemannMasullo.Ch06_LocalGlobal.Sec2
 import RiemannMasullo.Ch06_LocalGlobal.Sec3
 import all RiemannMasullo.Ch07_SchauderBasesZeta.Sec2
@@ -18,7 +18,7 @@ import RiemannMasullo.ForMathlib.MeasureTheory.Integral.ProdPi
 import RiemannMasullo.ForMathlib.Analysis.SpecialFunctions.Complex.ExpPolynomial
 import RiemannMasullo.ForMathlib.NumberTheory.LinearFormsInLogarithms
 
-import all RiemannMasullo.Ch03_IdelicZeta.Sec3
+import RiemannMasullo.Ch03_IdelicZeta.Sec3
 
 /-! # §7.3.2–7.3.4 Paley–Wiener levels and archimedean principal parts
 
