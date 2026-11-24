@@ -30,7 +30,6 @@ open Asymptotics Filter Function IsDedekindDomain NumberField Set Topology
 open scoped NNReal NumberField.AdeleRing
 set_option quotPrecheck false
 set_option maxHeartbeats 600000
-set_option Elab.async false
 variable {F : Type*} [Field F] [NumberField F]
 variable {S : Finset (HeightOneSpectrum (𝓞 F))}
 local notation "V" => HeightOneSpectrum (𝓞 F)
@@ -592,7 +591,7 @@ private local instance sLocalOrbitalQuotient_secondCountable : SecondCountableTo
     (sIdeleGroup_description F S).1.secondCountableTopology
   infer_instance
 
-local notation "mGroup" => (⟨mₛ, (isProperMap_sIdeleQuotientNorm F S).continuous⟩ : Jₛ →ₜ* ℝ≥0ˣ)
+local notation "mGroup" => (continuousSIdeleQuotientNorm F S : Jₛ →ₜ* ℝ≥0ˣ)
 local notation "ModelIndex(" p "," ω ")" =>
   {k : PontryaginDual Jₛ × ℕ // k.2 < modulatedPeriodicMultiplicity mGroup ω⁻¹
     (sLocalOrbitalDifferenceGenerator p ω) k.1}

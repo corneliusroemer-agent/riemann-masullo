@@ -10711,9 +10711,9 @@ private theorem sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_radial_m
     (χ : PontryaginDual Jₛ) (f : ℬₛ) (τ : ℝ≥0ˣ →ₜ* Jₛ) (hτ : RightInverse τ mₛ) (p : ℝ → ℂ)
     (hp : ∀ g : Jₛ, (χ g : ℂ) * thetaAt(χ₁(χ)) f g = p (Real.log ((mₛ g).val : ℝ))) :
     (⇑(thetaAt(χ₁(χ)) f) : Jₛ → ℂ) ∈ modulatedExponentialDecaySubmodule
-      ⟨mₛ, (isProperMap_sIdeleQuotientNorm F S).continuous⟩ univ ↔ p ∈ logExponentialDecaySubmodule univ := by
+      (continuousSIdeleQuotientNorm F S) univ ↔ p ∈ logExponentialDecaySubmodule univ := by
   obtain ⟨ht₂, hsc, hlc⟩ := sLocalIdelicZFunction_entire_iff_theta_exponentialDecay_group (F := F) (S := S)
-  let m : Jₛ →ₜ* ℝ≥0ˣ := ⟨mₛ, (isProperMap_sIdeleQuotientNorm F S).continuous⟩
+  let m : Jₛ →ₜ* ℝ≥0ˣ := continuousSIdeleQuotientNorm F S
   obtain ⟨t₀, ht₀⟩ := exists_ne (1 : ℝ≥0ˣ)
   have hm : IsModulation m := ⟨isProperMap_sIdeleQuotientNorm F S, τ t₀, (hτ t₀).trans_ne ht₀⟩
   let v : Jₛ → ℂ := thetaAt(χ₁(χ)) f
@@ -10730,7 +10730,7 @@ norm-one isotype property already supplied by §2.3. -/
 theorem sLocalIdelicZFunction_entire_iff_theta_exponentialDecay (χ : PontryaginDual Jₛ) (f : ℬₛ) :
     AnalyticOnNhd ℂ (fun s ↦ sLocalIdelicZFunction f (chartₛ(χ) s)) univ ↔
       (⇑(thetaAt(χ₁(χ)) f) : Jₛ → ℂ) ∈ modulatedExponentialDecaySubmodule
-        ⟨mₛ, (isProperMap_sIdeleQuotientNorm F S).continuous⟩ univ := by
+        (continuousSIdeleQuotientNorm F S) univ := by
   let r (w : {w : InfinitePlace F // w.IsReal}) :
       {e : w.val.Completion ≃+* ℝ // IsHomeomorph (e : w.val.Completion → ℝ)} :=
     ⟨InfinitePlace.Completion.ringEquivRealOfIsReal w.property,

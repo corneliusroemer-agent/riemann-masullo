@@ -45,7 +45,6 @@ open Function IsDedekindDomain MeasureTheory NumberField Set Topology
 open scoped NNReal NumberField.AdeleRing TensorProduct
 set_option quotPrecheck false
 set_option maxHeartbeats 150000
-set_option Elab.async false
 variable {F : Type*} [Field F] [NumberField F]
 local notation "V" => HeightOneSpectrum (𝓞 F)
 local notation "C𝔽" => IdeleClassGroup (𝓞 F) F

@@ -34,7 +34,7 @@ local notation "C₁" => (ideleClassNorm F).ker
 local notation "V" => HeightOneSpectrum (𝓞 F)
 local notation "μ𝔽" => ideleClassTamagawaMeasure F
 local notation "m𝔽" =>
-  (⟨ideleClassNorm F, (isProperMap_ideleClassNorm F).continuous⟩ : C𝔽 →ₜ* ℝ≥0ˣ)
+  (continuousIdeleClassNorm F : C𝔽 →ₜ* ℝ≥0ˣ)
 local notation "logNorm" => (logIdeleClassNorm F)
 local notation "W(" s ")" => CompactIntervalSobolev μ𝔽 logNorm 0 0 s
 local notation "W'(" s ")" => CompactIntervalSobolev μ𝔽 logNorm 0 0 s true

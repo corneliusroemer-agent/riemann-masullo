@@ -11,7 +11,7 @@ import RiemannMasullo.Ch06_LocalGlobal.Sec2
 import RiemannMasullo.Ch06_LocalGlobal.Sec3
 import RiemannMasullo.Ch07_SchauderBasesZeta.Sec2
 
-public import RiemannMasullo.Ch07_SchauderBasesZeta.Sec3a
+public import RiemannMasullo.Ch07_SchauderBasesZeta.Sec3a_OrbitalJets
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
 import RiemannMasullo.ForMathlib.MeasureTheory.Integral.ProdPi
 import RiemannMasullo.ForMathlib.Analysis.SpecialFunctions.Complex.ExpPolynomial
@@ -33,7 +33,6 @@ namespace RiemannMasullo
 
 set_option quotPrecheck false
 set_option maxHeartbeats 600000
-set_option Elab.async false
 
 variable {F : Type*} [Field F] [NumberField F]
 variable {S T R : Finset (HeightOneSpectrum (𝓞 F))}

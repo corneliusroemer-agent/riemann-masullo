@@ -10255,7 +10255,7 @@ norm section. -/
 private theorem explicitFormula_exists_chartChar (τ : ℝ≥0ˣ →ₜ* C[F])
     (hτ : RightInverse τ (ideleClassNorm F)) (ψ : U[F]) :
     ∃ χ : chartChars(τ), ∀ u : (ideleClassNorm F).ker, χ.val (u : C[F]) = ψ (u : C[F]) := by
-  let N : C[F] →ₜ* ℝ≥0ˣ := ⟨ideleClassNorm F, (isProperMap_ideleClassNorm F).continuous⟩
+  let N : C[F] →ₜ* ℝ≥0ˣ := continuousIdeleClassNorm F
   let ψτ : U[F] := (ψ : C[F] →ₜ* Circle).comp (τ.comp N)
   refine ⟨⟨ψ * ψτ⁻¹, fun t ↦ ?_⟩, fun u ↦ ?_⟩
   · change ψ (τ t) * (ψ (τ (ideleClassNorm F (τ t))))⁻¹ = 1

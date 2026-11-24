@@ -28,7 +28,6 @@ namespace RiemannMasullo
 
 set_option quotPrecheck false
 set_option maxSynthPendingDepth 8
-set_option Elab.async false
 
 variable {F : Type*} [Field F] [NumberField F]
 
@@ -41,9 +40,9 @@ local notation "C₁" => (ideleClassNorm F).ker
 local notation "V" => HeightOneSpectrum (𝓞 F)
 local notation "μ𝔽" => ideleClassTamagawaMeasure F
 local notation "m𝔽" =>
-  (⟨ideleClassNorm F, (isProperMap_ideleClassNorm F).continuous⟩ : C𝔽 →ₜ* ℝ≥0ˣ)
+  (continuousIdeleClassNorm F : C𝔽 →ₜ* ℝ≥0ˣ)
 local notation "mₛ(" S ")" =>
-  (⟨sIdeleQuotientNorm F S, (isProperMap_sIdeleQuotientNorm F S).continuous⟩ :
+  (continuousSIdeleQuotientNorm F S :
     SIdeleQuotient F S →ₜ* ℝ≥0ˣ)
 local notation "logNorm(" m ")" => (fun g ↦ Real.log (((m) g).val : ℝ))
 local notation "h₀" => (le_rfl (a := (0 : ℝ)))

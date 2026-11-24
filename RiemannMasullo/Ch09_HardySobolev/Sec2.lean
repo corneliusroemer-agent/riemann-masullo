@@ -61,7 +61,7 @@ variable {F : Type*} [Field F] [NumberField F]
 local notation "C[" F "]" => IdeleClassGroup (𝓞 F) F
 set_option quotPrecheck false in
 local notation "m[" F "]" =>
-  (⟨ideleClassNorm F, (isProperMap_ideleClassNorm F).continuous⟩ : C[F] →ₜ* ℝ≥0ˣ)
+  (continuousIdeleClassNorm F : C[F] →ₜ* ℝ≥0ˣ)
 set_option quotPrecheck false in
 local notation "hm[" F "]" => (show IsModulation m[F] from
   ⟨isProperMap_ideleClassNorm F, ideleClassNorm_ne_one (F := F)⟩)
