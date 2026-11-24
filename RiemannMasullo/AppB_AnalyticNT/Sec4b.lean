@@ -7524,6 +7524,154 @@ theorem finiteConnesWeilPrincipalValue_changeCharacter (v : Primes(F))
     (congrArg (fun z : ℂ ↦ finiteConnesWeilPrincipalValue v 1 f +
       ((V𝔭(v) * Real.log ‖a.val‖ / Real.log q(v) : ℝ) : ℂ) * z) hzero)
 
+/-- The indicator of a compact open subgroup is a test. -/
+private theorem explicitFormula_subgroupIndicator_test
+    {G : Type*} [CommGroup G] [TopologicalSpace G] [IsTopologicalGroup G]
+    [T2Space G] [LocallyCompactSpace G]
+    (U : Subgroup G) (hU : IsOpen (U : Set G)) (hUc : IsCompact (U : Set G)) :
+    ∃ f : 𝒟(G), f.val = (U : Set G).indicator (fun _ ↦ 1) := by
+  classical
+  let g : G → ℂ := (U : Set G).indicator (fun _ ↦ 1)
+  let : CompactSpace (lcaAnnihilator U) :=
+    isCompact_iff_compactSpace.mp (isCompact_lcaAnnihilator U hU)
+  have hClosed : IsClosed (U : Set G) := U.isClosed_of_isOpen hU
+  have hSmooth : IsBruhatSmooth g := by
+    intro p
+    refine ⟨U, ⟨hClosed, isOpen_lcaAnnihilator U hUc, isCompactlyGeneratedGroup_of_compact⟩,
+      ?_, ?_⟩
+    · intro h x
+      have hmem : h.val * x ∈ (U : Set G) ↔ x ∈ (U : Set G) := by
+        refine ⟨fun hx ↦ ?_, U.mul_mem h.property⟩
+        change x ∈ U
+        simpa only [inv_mul_cancel_left] using U.mul_mem (U.inv_mem h.property) hx
+      simp only [g, indicator_apply, hmem]
+    · intro a ha
+      let f₀ : a.quotient → ℂ := ({1} : Set a.quotient).indicator (fun _ ↦ 1)
+      refine ⟨f₀, fun x ↦ ?_, ?_⟩
+      · simp only [f₀, g, indicator_apply, mem_singleton_iff, a.quotient_mk_eq_one, ha]
+        rfl
+      · intro e z b
+        let : DiscreteTopology a.quotient := QuotientGroup.discreteTopology (by
+          rw [ha]
+          exact hU.preimage continuous_subtype_val)
+        let X := EuclideanSpace ℝ (Fin e.realDim) × EuclideanSpace ℝ (Fin e.torusDim)
+        let q : X → a.quotient := fun x ↦ e.equiv.symm (Multiplicative.ofAdd (elementaryCover x z b))
+        have hq : Continuous q := e.equiv.symm.continuous.comp
+          (continuous_fst.prodMk ((continuous_pi fun j ↦ (AddCircle.continuous_mk' (1 : ℝ)).comp
+            ((PiLp.continuous_apply 2 _ j).comp continuous_snd)).prodMk continuous_const))
+        change ContDiff ℝ (p : ℕ∞) (fun x ↦ f₀ (q x))
+        have heq : (fun x ↦ f₀ (q x)) = fun _ : X ↦ f₀ (q 0) :=
+          funext fun x ↦ congrArg f₀ (TotallyDisconnectedSpace.eq_of_continuous q hq x 0)
+        rw [heq]
+        exact contDiff_const
+  have hSub : Function.support g ⊆ (U : Set G) := support_indicator_subset
+  have hSupport : HasCompactSupport g :=
+    hUc.of_isClosed_subset isClosed_closure (closure_minimal hSub hClosed)
+  exact ⟨⟨g, (mem_bruhatSmoothSubmodule_iff _).mpr hSmooth, hSupport⟩, rfl⟩
+
+/-- Dilating a closed ball by a unit scales its mass by the norm of the unit. -/
+private theorem explicitFormula_closedBall_mass_mul (v : Primes(F))
+    (u : (v.adicCompletion F)ˣ) (R : ℝ) :
+    (∫ y, (Metric.closedBall (0 : v.adicCompletion F) (‖u.val‖ * R)).indicator
+        (fun _ ↦ (1 : ℂ)) y ∂ν𝔭(v)) =
+      ((‖u.val‖ : ℝ) : ℂ) * ∫ z, (Metric.closedBall (0 : v.adicCompletion F) R).indicator
+        (fun _ ↦ (1 : ℂ)) z ∂ν𝔭(v) := by
+  have hu : 0 < ‖u.val‖ := norm_pos_iff.mpr u.ne_zero
+  have h := finiteLocalAdditive_integral_comp_mul v u
+    ((Metric.closedBall (0 : v.adicCompletion F) (‖u.val‖ * R)).indicator (fun _ ↦ (1 : ℂ)))
+  have hind (z : v.adicCompletion F) :
+      (Metric.closedBall (0 : v.adicCompletion F) (‖u.val‖ * R)).indicator
+        (fun _ ↦ (1 : ℂ)) (u.val * z) =
+      (Metric.closedBall (0 : v.adicCompletion F) R).indicator (fun _ ↦ (1 : ℂ)) z := by
+    simp only [indicator, Metric.mem_closedBall, dist_zero_right, norm_mul,
+      mul_le_mul_iff_right₀ hu]
+  simp only [hind] at h
+  rw [h, Complex.real_smul, ← mul_assoc, ← Complex.ofReal_mul, mul_inv_cancel₀ hu.ne',
+    Complex.ofReal_one, one_mul]
+
+/-- Dilating a closed ball by a unit: the logarithmic integral over the dilate. -/
+private theorem explicitFormula_closedBall_log_mul (v : Primes(F))
+    (u : (v.adicCompletion F)ˣ) (R : ℝ) :
+    (∫ y, ((J𝔭(v) y : ℝ) : ℂ) * (Metric.closedBall (0 : v.adicCompletion F) (‖u.val‖ * R)).indicator
+        (fun _ ↦ (1 : ℂ)) y ∂ν𝔭(v)) =
+      ((‖u.val‖ : ℝ) : ℂ) * ((∫ z, ((J𝔭(v) z : ℝ) : ℂ) *
+        (Metric.closedBall (0 : v.adicCompletion F) R).indicator (fun _ ↦ (1 : ℂ)) z ∂ν𝔭(v)) +
+        ((Real.log ‖u.val‖ / Real.log q(v) : ℝ) : ℂ) *
+          ∫ z, (Metric.closedBall (0 : v.adicCompletion F) R).indicator
+            (fun _ ↦ (1 : ℂ)) z ∂ν𝔭(v)) := by
+  let K := v.adicCompletion F
+  let : ProperSpace K := properSpace_adicCompletion v
+  let : BorelSpace K := ⟨rfl⟩
+  let : (ν𝔭(v)).IsAddHaarMeasure := finiteLocalAdditiveTamagawaMeasure_isAddHaar F v
+  have hu : 0 < ‖u.val‖ := norm_pos_iff.mpr u.ne_zero
+  let B : Set K := Metric.closedBall 0 R
+  let ι : K → ℂ := B.indicator (fun _ ↦ (1 : ℂ))
+  have h := finiteLocalAdditive_integral_comp_mul v u
+    (fun y ↦ ((J𝔭(v) y : ℝ) : ℂ) *
+      (Metric.closedBall (0 : K) (‖u.val‖ * R)).indicator (fun _ ↦ (1 : ℂ)) y)
+  have hind (z : K) :
+      (Metric.closedBall (0 : K) (‖u.val‖ * R)).indicator (fun _ ↦ (1 : ℂ)) (u.val * z) = ι z := by
+    simp only [ι, B, indicator, Metric.mem_closedBall, dist_zero_right, norm_mul,
+      mul_le_mul_iff_right₀ hu]
+  have h0 : ∀ᵐ y ∂ν𝔭(v), y ≠ 0 := by
+    have : (𝓝[≠] (0 : K)).NeBot := by
+      let := Valued.toNontriviallyNormedField K _
+      exact NormedField.nhdsNE_neBot 0
+    rw [ae_iff]
+    simp
+  have hae : (fun z ↦ ((J𝔭(v) (u.val * z) : ℝ) : ℂ) *
+      (Metric.closedBall (0 : K) (‖u.val‖ * R)).indicator (fun _ ↦ (1 : ℂ)) (u.val * z)) =ᵐ[ν𝔭(v)]
+      fun z ↦ ((J𝔭(v) z : ℝ) : ℂ) * ι z +
+        ((Real.log ‖u.val‖ / Real.log q(v) : ℝ) : ℂ) * ι z := by
+    filter_upwards [h0] with z hz
+    rw [hind, finiteLog_mul v u hz, add_mul]
+  -- Integrability on the ball.
+  by_cases hR : 0 < R
+  · obtain ⟨g, hg⟩ := finiteLogFourier_eq_neg_haar_clopenTest v B
+      (IsUltrametricDist.isClopen_closedBall 0 hR.ne') (isCompact_closedBall 0 R)
+    have hJI : Integrable (fun z ↦ ((J𝔭(v) z : ℝ) : ℂ) * ι z) ν𝔭(v) :=
+      (finiteLog_integrable_mul_test v g).congr (ae_of_all _ fun z ↦ by simp only [hg]; rfl)
+    have hιI : Integrable ι ν𝔭(v) :=
+      ((continuousOn_const (c := (1 : ℂ))).integrableOn_compact
+        (isCompact_closedBall (0 : K) R)).integrable_indicator
+        Metric.isClosed_closedBall.measurableSet
+    rw [integral_congr_ae hae, integral_add hJI (hιI.const_mul _), integral_const_mul] at h
+    rw [Complex.real_smul] at h
+    have hne : ((‖u.val‖ : ℝ) : ℂ) ≠ 0 := by exact_mod_cast hu.ne'
+    rw [h, ← mul_assoc, ← Complex.ofReal_mul, mul_inv_cancel₀ hu.ne', Complex.ofReal_one, one_mul]
+  · have hB : ∀ z : K, ι z = 0 ∨ z = 0 := by
+      intro z
+      by_cases hz : z ∈ B
+      · right
+        have : ‖z‖ ≤ R := by simpa [B] using hz
+        exact norm_le_zero_iff.mp (this.trans (not_lt.mp hR))
+      · left
+        exact indicator_of_notMem hz _
+    have hι0 : ι =ᵐ[ν𝔭(v)] 0 := by
+      filter_upwards [h0] with z hz
+      rcases hB z with h1 | h1
+      · exact h1
+      · exact absurd h1 hz
+    have hι0' : (Metric.closedBall (0 : K) (‖u.val‖ * R)).indicator (fun _ ↦ (1 : ℂ)) =ᵐ[ν𝔭(v)] 0 := by
+      filter_upwards [h0] with z hz
+      refine indicator_of_notMem (fun hm ↦ hz ?_) _
+      have : ‖z‖ ≤ ‖u.val‖ * R := by simpa using hm
+      exact norm_le_zero_iff.mp (this.trans (mul_nonpos_of_nonneg_of_nonpos hu.le (not_lt.mp hR)))
+    have e1 : (∫ y, ((J𝔭(v) y : ℝ) : ℂ) *
+        (Metric.closedBall (0 : K) (‖u.val‖ * R)).indicator (fun _ ↦ (1 : ℂ)) y ∂ν𝔭(v)) = 0 := by
+      rw [integral_eq_zero_of_ae]
+      filter_upwards [hι0'] with z hz
+      simp [hz]
+    have e2 : (∫ z, ((J𝔭(v) z : ℝ) : ℂ) * ι z ∂ν𝔭(v)) = 0 := by
+      rw [integral_eq_zero_of_ae]
+      filter_upwards [hι0] with z hz
+      simp [hz]
+    have e3 : (∫ z, ι z ∂ν𝔭(v)) = 0 := by
+      rw [integral_eq_zero_of_ae hι0]
+    change _ = _ * ((∫ z, ((J𝔭(v) z : ℝ) : ℂ) * ι z ∂ν𝔭(v)) + _ * ∫ z, ι z ∂ν𝔭(v))
+    rw [e1, e2, e3]
+    simp
+
 -- TODO(paper-gap): In the proof on p. 623 (footnote 24), the annihilator of
 -- the maximal ideal is the inverse maximal ideal times the inverse different.
 -- The second indicator in the printed display uses the different itself.
@@ -7545,7 +7693,225 @@ theorem finiteConnesWeilPrincipalValue_unitsIndicator (v : Primes(F)) :
     ∃ b : 𝒟((v.adicCompletion F)ˣ),
       b.val = indicator ((O(v)).units : Set (v.adicCompletion F)ˣ) (fun _ ↦ 1) ∧
       finiteWeilScale(v) * finiteConnesWeilPrincipalValue v 1 b =
-        -(((differentExp(v) : ℝ) * Real.log q(v) : ℝ) : ℂ) := by sorry
+        -(((differentExp(v) : ℝ) * Real.log q(v) : ℝ) : ℂ) := by
+  let K := v.adicCompletion F
+  let : ProperSpace K := properSpace_adicCompletion v
+  let : BorelSpace K := ⟨rfl⟩
+  let : (ν𝔭(v)).IsAddHaarMeasure := finiteLocalAdditiveTamagawaMeasure_isAddHaar F v
+  have hU : IsOpen (((O(v)).units : Subgroup Kˣ) : Set Kˣ) :=
+    Submonoid.isOpen_units (Valued.isOpen_valuationSubring _)
+  have hUc : IsCompact (((O(v)).units : Subgroup Kˣ) : Set Kˣ) := Submonoid.units_isCompact
+    (isCompact_iff_compactSpace.mpr (compactSpace_adicCompletionIntegers v))
+  obtain ⟨b, hb⟩ := explicitFormula_subgroupIndicator_test _ hU hUc
+  refine ⟨b, hb, ?_⟩
+  have hq : (1 : ℝ) < q(v) := by exact_mod_cast HeightOneSpectrum.one_lt_absNorm v
+  have hq0 : (0 : ℝ) < q(v) := zero_lt_one.trans hq
+  have hlq : 0 < Real.log q(v) := Real.log_pos hq
+  set d : ℕ := differentExp(v) with hd
+  -- The mass of the integer ring, which is also the mass of the integer units.
+  set M : ℝ := (ν𝔭(v) (O(v) : Set K)).toReal with hMdef
+  have hMval : M = (Real.sqrt (q(v) ^ d))⁻¹ := by
+    rw [hMdef, finiteLocalAdditiveTamagawaMeasure_integers, ENNReal.toReal_inv,
+      ENNReal.toReal_ofReal (Real.sqrt_nonneg _)]
+  have hV : V𝔭(v) = M := by
+    rw [hMdef, finiteLocalMultiplicativeTamagawaMeasure_integerUnits,
+      finiteLocalAdditiveTamagawaMeasure_integers]
+  have hqd : 0 < q(v) ^ d := pow_pos hq0 d
+  have hM2 : M * M * q(v) ^ d = 1 := by
+    rw [hMval, ← mul_inv, Real.mul_self_sqrt hqd.le, inv_mul_cancel₀ hqd.ne']
+  have hMpos : 0 < M := by rw [hMval]; exact inv_pos.mpr (Real.sqrt_pos.mpr hqd)
+  -- A uniformizer.
+  let val : Valuation K (WithZero (Multiplicative ℤ)) := Valued.v
+  obtain ⟨π, hπ⟩ := val.exists_isUniformizer_of_isCyclic_of_nontrivial
+  let p : Kˣ := Units.mk0 π.val hπ.ne_zero
+  have hp : ‖p.val‖ = q(v)⁻¹ := norm_uniformizer_adicCompletion v _ hπ
+  let SO : Set K := Metric.closedBall 0 1
+  let SP : Set K := Metric.closedBall 0 (q(v)⁻¹)
+  have hSO : (O(v) : Set K) = SO := by
+    ext y
+    rw [SetLike.mem_coe, HeightOneSpectrum.mem_adicCompletionIntegers,
+      ← Valued.toNormedField.norm_le_one_iff]
+    simp [SO]
+  have hqinv : (0 : ℝ) < q(v)⁻¹ := inv_pos.mpr hq0
+  have hqinv1 : q(v)⁻¹ < 1 := inv_lt_one_of_one_lt₀ hq
+  obtain ⟨gO, hgO⟩ := finiteLogFourier_eq_neg_haar_clopenTest v SO
+    (IsUltrametricDist.isClopen_closedBall 0 one_ne_zero) (isCompact_closedBall 0 1)
+  obtain ⟨gT, hgT₀⟩ := finiteLogFourier_eq_neg_haar_clopenTest v ((fun y ↦ 1 + y) ⁻¹' SP)
+    ((IsUltrametricDist.isClopen_closedBall (0 : K) hqinv.ne').preimage
+      (continuous_const.add continuous_id))
+    ((Homeomorph.addLeft (1 : K)).isCompact_preimage.mpr (isCompact_closedBall 0 _))
+  have hgT (x : K) : gT (Multiplicative.ofAdd x) = SP.indicator (fun _ ↦ (1 : ℂ)) (1 + x) := by
+    rw [hgT₀]
+    simp only [indicator, mem_preimage]
+  -- Small norms are at most `q⁻¹`.
+  have hsmall (x : K) (hx : ‖x‖ < 1) : ‖x‖ ≤ q(v)⁻¹ := by
+    by_contra h
+    exact hx.ne (finiteLogFourier_eq_neg_haar_norm_eq_one v x hx.le (not_le.mp h))
+  have hn1 : ‖(-1 : K)‖ = 1 := by rw [norm_neg, norm_one]
+  -- The weighted translate of the unit indicator is `1_O - 1_{-1+𝔭}`.
+  let A := (exists_finiteWeilTestMap v).choose
+  have hAb : A b = gO - gT := by
+    refine SchwartzBruhat.ext fun x ↦ ?_
+    change addTest(A b) x.toAdd = addTest(gO) x.toAdd - addTest(gT) x.toAdd
+    rw [(exists_finiteWeilTestMap v).choose_spec b]
+    beta_reduce
+    rw [hgO, hgT x.toAdd]
+    set y := x.toAdd
+    have hy1 : ‖y‖ ≤ max ‖1 + y‖ 1 := by
+      have := IsUltrametricDist.norm_add_le_max (1 + y) (-1 : K)
+      rwa [add_neg_cancel_comm, hn1] at this
+    have h1y : ‖1 + y‖ ≤ max ‖y‖ 1 := by
+      have := IsUltrametricDist.norm_add_le_max (1 : K) y
+      rwa [norm_one, max_comm] at this
+    by_cases h0 : (1 : K) + y = 0
+    · have hy : ‖y‖ = 1 := by
+        rw [show y = -1 from by linear_combination h0, hn1]
+      change Function.extend Units.val (b.val : _ → ℂ) (fun _ ↦ 0) (1 + y) / _ = _
+      rw [Function.extend_apply' _ _ _ (fun ⟨u, hu⟩ ↦ u.ne_zero (hu.trans h0)), h0]
+      simp [SO, SP, hy, hqinv.le]
+    · let u : Kˣ := Units.mk0 (1 + y) h0
+      have hu : u.val = 1 + y := rfl
+      change Function.extend Units.val (b.val : _ → ℂ) (fun _ ↦ 0) (1 + y) / _ = _
+      rw [← hu, Units.val_injective.extend_apply, hb]
+      have hmem : u ∈ (O(v)).units ↔ ‖u.val‖ = 1 := by
+        rw [HeightOneSpectrum.adicCompletionIntegers.mem_units_iff_valued_eq_one,
+          Valued.toNormedField.norm_eq_one_iff]
+      rw [hu] at hmem ⊢
+      rcases lt_trichotomy ‖1 + y‖ 1 with hlt | heq | hgt
+      · have hy : ‖y‖ ≤ 1 := hy1.trans (max_le hlt.le le_rfl)
+        have hnm : u ∉ (O(v)).units := fun h ↦ hlt.ne (hmem.mp h)
+        rw [indicator_of_notMem (show u ∈ _ → False from hnm)]
+        simp [SO, SP, hy, hsmall _ hlt]
+      · have hy : ‖y‖ ≤ 1 := hy1.trans (by rw [heq, max_self])
+        have hm : u ∈ ((O(v)).units : Set Kˣ) := hmem.mpr heq
+        rw [indicator_of_mem hm, heq]
+        have : ¬ ‖1 + y‖ ≤ q(v)⁻¹ := by rw [heq]; exact not_le.mpr hqinv1
+        simp [SO, SP, hy, this]
+      · have hy : ¬ ‖y‖ ≤ 1 := fun h ↦ (h1y.trans (max_le h le_rfl)).not_gt hgt
+        have hnm : u ∉ (O(v)).units := fun h ↦ hgt.ne' (hmem.mp h)
+        rw [indicator_of_notMem (show u ∈ _ → False from hnm)]
+        have : ¬ ‖1 + y‖ ≤ q(v)⁻¹ := fun h ↦ (h.trans hqinv1.le).not_gt hgt
+        simp [SO, SP, hy, this]
+  let C := finiteConnesPrincipalValue v 1
+  have hPV : finiteConnesWeilPrincipalValue v 1 b = C gO - C gT := by
+    change C (A b) = _
+    rw [hAb, map_sub]
+  have hnorm1 : ¬ ‖(1 : K)‖ ≤ q(v)⁻¹ := by rw [norm_one]; exact not_le.mpr hqinv1
+  -- Masses of the two balls.
+  have hIO : (∫ y, SO.indicator (fun _ ↦ (1 : ℂ)) y ∂ν𝔭(v)) = M := by
+    rw [integral_indicator Metric.isClosed_closedBall.measurableSet, setIntegral_const,
+      Complex.real_smul, mul_one, measureReal_def, hMdef, hSO]
+  have hpR : ‖p.val‖ * 1 = q(v)⁻¹ := by rw [hp, mul_one]
+  have hIP : (∫ y, SP.indicator (fun _ ↦ (1 : ℂ)) y ∂ν𝔭(v)) = (q(v)⁻¹ : ℝ) * M := by
+    have h := explicitFormula_closedBall_mass_mul v p 1
+    rw [hpR, hp] at h
+    rw [h]
+    exact congrArg _ hIO
+  -- The value on the translated small ball is its multiplicative mass.
+  have hgT0 : addTest(gT) 0 = 0 := by
+    beta_reduce
+    rw [hgT, add_zero]
+    exact indicator_of_notMem (fun h ↦ hnorm1 (by simpa [SP] using h)) _
+  have hCT : C gT = (M / (q(v) - 1) : ℝ) := by
+    change finiteConnesPrincipalValue v 1 gT = _
+    rw [finiteConnesPrincipalValue_one_of_apply_zero v gT hgT0,
+      existsUnique_finiteWeilFourierDistribution_units_integral v
+        (fun x ↦ gT (Multiplicative.ofAdd x))]
+    have hpt : (fun y ↦ addTest(gT) y / ((‖y‖ : ℝ) : ℂ)) =
+        fun y ↦ SP.indicator (fun _ ↦ (1 : ℂ)) (1 + y) := by
+      funext y
+      beta_reduce
+      rw [hgT]
+      by_cases hy : 1 + y ∈ SP
+      · have h1 : ‖1 + y‖ ≤ q(v)⁻¹ := by simpa [SP] using hy
+        have hy1 : ‖y‖ = 1 := by
+          apply le_antisymm
+          · have := IsUltrametricDist.norm_add_le_max (1 + y) (-1 : K)
+            rw [add_neg_cancel_comm, hn1] at this
+            exact this.trans (max_le (h1.trans hqinv1.le) le_rfl)
+          · have := IsUltrametricDist.norm_add_le_max (1 + y) (-y)
+            rw [add_neg_cancel_right, norm_one, norm_neg] at this
+            rcases le_max_iff.mp this with h | h
+            · exact (lt_irrefl (1 : ℝ) (h.trans_lt (h1.trans_lt hqinv1))).elim
+            · exact h
+        rw [hy1, Complex.ofReal_one, div_one]
+      · rw [indicator_of_notMem hy, zero_div]
+    rw [show (fun y ↦ (fun x ↦ gT (Multiplicative.ofAdd x)) y / ((‖y‖ : ℝ) : ℂ)) =
+      fun y ↦ SP.indicator (fun _ ↦ (1 : ℂ)) (1 + y) from hpt,
+      integral_add_left_eq_self (fun y ↦ SP.indicator (fun _ ↦ (1 : ℂ)) y) 1, hIP]
+    have hqc : ((q(v) : ℝ) : ℂ) ≠ 0 := by exact_mod_cast hq0.ne'
+    push_cast
+    field_simp
+    rw [mul_div_mul_left _ _ (by exact_mod_cast hq0.ne')]
+  -- The logarithmic integral over the integer ring, by self-similarity.
+  set Aint : ℂ := ∫ y, ((J𝔭(v) y : ℝ) : ℂ) * SO.indicator (fun _ ↦ (1 : ℂ)) y ∂ν𝔭(v) with hAint
+  have hJP : (∫ y, ((J𝔭(v) y : ℝ) : ℂ) * SP.indicator (fun _ ↦ (1 : ℂ)) y ∂ν𝔭(v)) = Aint := by
+    refine integral_congr_ae (ae_of_all _ fun y ↦ ?_)
+    by_cases h1 : ‖y‖ ≤ q(v)⁻¹
+    · have h2 : ‖y‖ ≤ 1 := h1.trans hqinv1.le
+      simp [SO, SP, h1, h2]
+    · by_cases h2 : ‖y‖ ≤ 1
+      · have he := finiteLogFourier_eq_neg_haar_norm_eq_one v y h2 (not_le.mp h1)
+        simp [SO, SP, he]
+      · simp [SO, SP, h1, h2]
+  have hlogp : Real.log ‖p.val‖ / Real.log q(v) = -1 := by
+    rw [hp, Real.log_inv, neg_div, div_self hlq.ne']
+  have hAeq : Aint = ((q(v)⁻¹ : ℝ) : ℂ) * (Aint + ((-1 : ℝ) : ℂ) * M) := by
+    have h := explicitFormula_closedBall_log_mul v p 1
+    rw [hpR, hlogp, hp] at h
+    have h2 : (∫ y, ((J𝔭(v) y : ℝ) : ℂ) * SP.indicator (fun _ ↦ (1 : ℂ)) y ∂ν𝔭(v)) =
+        ((q(v)⁻¹ : ℝ) : ℂ) * (Aint + ((-1 : ℝ) : ℂ) * M) := by
+      rw [hAint, ← hIO]
+      exact h
+    exact hJP.symm.trans h2
+  have hqc : ((q(v) : ℝ) : ℂ) ≠ 0 := by exact_mod_cast hq0.ne'
+  have hq1c : ((q(v) : ℝ) : ℂ) - 1 ≠ 0 := by
+    rw [sub_ne_zero]; exact_mod_cast hq.ne'
+  have hAval : Aint = -(M : ℂ) / (((q(v) : ℝ) : ℂ) - 1) := by
+    rw [eq_div_iff hq1c]
+    have hinv : ((q(v) : ℝ) : ℂ) * ((q(v)⁻¹ : ℝ) : ℂ) = 1 := by
+      rw [← Complex.ofReal_mul, mul_inv_cancel₀ hq0.ne', Complex.ofReal_one]
+    have h := hAeq
+    rw [Complex.ofReal_neg, Complex.ofReal_one] at h
+    linear_combination ((q(v) : ℝ) : ℂ) * h + (Aint - M) * hinv
+  -- The logarithmic integral over the inverse different.
+  let u : Kˣ := p⁻¹ ^ d
+  have hu : ‖u.val‖ = q(v) ^ d := by
+    simp [u, Units.val_pow_eq_pow_val, norm_pow, norm_inv, hp]
+  have hD : {x : K | ‖x‖ ≤ (v.asIdeal.absNorm : ℝ) ^ differentExp(v)} =
+      Metric.closedBall (0 : K) (‖u.val‖ * 1) := by
+    ext x
+    simp [hu, d]
+  have hlogu : Real.log ‖u.val‖ / Real.log q(v) = d := by
+    rw [hu, Real.log_pow, mul_div_assoc, div_self hlq.ne', mul_one]
+  have hB := explicitFormula_closedBall_log_mul v u 1
+  rw [← hD, hlogu, hu] at hB
+  change _ = ((q(v) ^ d : ℝ) : ℂ) * ((∫ z, ((J𝔭(v) z : ℝ) : ℂ) * SO.indicator (fun _ ↦ (1 : ℂ)) z
+    ∂ν𝔭(v)) + ((d : ℝ) : ℂ) * ∫ z, SO.indicator (fun _ ↦ (1 : ℂ)) z ∂ν𝔭(v)) at hB
+  rw [← hAint, hIO] at hB
+  -- The value on the integer ring through its Fourier transform.
+  have hgOf : addTest(gO) = (O(v) : Set K).indicator (fun _ ↦ (1 : ℂ)) := by
+    funext y
+    rw [hgO, hSO]
+  have hCO : C gO = -(M : ℂ) * ((M : ℂ) * ∫ y, ((J𝔭(v) y : ℝ) : ℂ) *
+      {x : K | ‖x‖ ≤ (v.asIdeal.absNorm : ℝ) ^ differentExp(v)}.indicator (fun _ ↦ (1 : ℂ)) y
+        ∂ν𝔭(v)) := by
+    change finiteConnesPrincipalValue v 1 gO = _
+    rw [existsUnique_finiteWeilFourierDistribution_principalValue, hgOf,
+      finiteLocalTamagawaFourier_integers, ← finiteLocalAdditiveTamagawaMeasure_integers, hV]
+    congr 1
+    rw [← integral_const_mul]
+    refine integral_congr_ae (ae_of_all _ fun y ↦ ?_)
+    simp only [Pi.smul_apply, smul_eq_mul]
+    ring
+  rw [hPV, hCO, hCT, hB, hAval, hV]
+  have hMc : (M : ℂ) ≠ 0 := by exact_mod_cast hMpos.ne'
+  have hM2n : (M : ℂ) ^ 2 * ((v.asIdeal.absNorm : ℕ) : ℂ) ^ d = 1 := by
+    rw [sq]; exact_mod_cast hM2
+  push_cast
+  field_simp
+  rw [hM2n]
+  ring
 
 /-- Paper: Lemma B.4.4.5, p. 622. The rescaled finite principal value is
 the unit-subtracted finite part with the different correction. -/
