@@ -10201,15 +10201,176 @@ theorem idelicExplicitFormula_finiteMatching_inversion (τ : ℝ≥0ˣ →ₜ* C
   rw [explicitFormula_profile_eq τ _hτ f Φ _hM χ 0, h0]
   simp only [one_mul]
 
+local notation "conductorExponents(" χ ", " v ")" =>
+  ({n : ℕ | ∀ u : (HeightOneSpectrum.adicCompletion F v)ˣ, ‖u.val‖ = 1 →
+    ‖u.val - 1‖ ≤ q(v) ^ (-(n : ℤ)) →
+      χ (IdeleClassGroup.ofAdicCompletion (𝓞 F) F v u) = 1} : Set ℕ)
+
+section ExplicitFormulaFiniteLocal
+
+/-- The class norm is bounded above and below on the support of a test. -/
+private theorem explicitFormula_tsupport_norm_bound (f : 𝒟(C[F])) :
+    ∃ M : ℝ, ∀ g ∈ tsupport f.val, ((ideleClassNorm F g : ℝ≥0) : ℝ) ≤ M ∧
+      ((ideleClassNorm F g : ℝ≥0) : ℝ)⁻¹ ≤ M := by
+  let n : C[F] → ℝ := fun g ↦ ((ideleClassNorm F g : ℝ≥0) : ℝ)
+  have hn : Continuous n := NNReal.continuous_coe.comp
+    (Units.continuous_val.comp (isProperMap_ideleClassNorm F).continuous)
+  have hpos (g : C[F]) : 0 < n g := NNReal.coe_pos.mpr (Units.zero_lt _)
+  obtain ⟨M₁, hM₁⟩ := f.property.2.exists_bound_of_continuousOn hn.continuousOn
+  obtain ⟨M₂, hM₂⟩ := f.property.2.exists_bound_of_continuousOn
+    (hn.inv₀ fun g ↦ (hpos g).ne').continuousOn
+  refine ⟨max M₁ M₂, fun g hg ↦ ⟨?_, ?_⟩⟩
+  · have h := hM₁ g hg
+    rw [Real.norm_eq_abs, abs_of_pos (hpos g)] at h
+    exact h.trans (le_max_left _ _)
+  · have h := hM₂ g hg
+    rw [Pi.inv_apply, Real.norm_eq_abs, abs_of_pos (inv_pos.mpr (hpos g))] at h
+    exact h.trans (le_max_right _ _)
+
+/-- The radial profiles of a test vanish outside a fixed interval, uniformly in the
+character. -/
+private theorem explicitFormula_profile_support (τ : ℝ≥0ˣ →ₜ* C[F])
+    (hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F]))
+    (Φ : chartChars(τ) → 𝓢(ℝ, ℂ))
+    (hM : ∀ χ s, (∫ g, classMellinIntegrand(f, ideleClassNormTwist χ.val s, -1 / 2) g
+      ∂classMeasure) / (classVolume : ℂ) = logMellin (Φ χ) (s - 1 / 2))
+    {M : ℝ} (hMb : ∀ g ∈ tsupport f.val, ((ideleClassNorm F g : ℝ≥0) : ℝ) ≤ M ∧
+      ((ideleClassNorm F g : ℝ≥0) : ℝ)⁻¹ ≤ M)
+    (χ : chartChars(τ)) (y : ℝ) (hy : Φ χ y ≠ 0) :
+    Real.exp y ≤ M ∧ Real.exp (-y) ≤ M := by
+  rw [explicitFormula_profile_eq τ hτ f Φ hM χ y] at hy
+  have hI := right_ne_zero_of_mul hy
+  obtain ⟨u, hu⟩ : ∃ u : (ideleClassNorm F).ker,
+      f.val (radialFlow(τ, y) * (u : C[F])) ≠ 0 := by
+    by_contra h
+    push Not at h
+    refine hI (integral_eq_zero_of_ae (.of_forall fun u ↦ ?_))
+    simp only [h u, zero_mul, Pi.zero_apply]
+  have hn : ((ideleClassNorm F (radialFlow(τ, y) * (u : C[F])) : ℝ≥0) : ℝ) = Real.exp y := by
+    rw [map_mul, hτ, MonoidHom.mem_ker.mp u.property, mul_one]
+    have h := positiveRealLogEquiv_apply (positiveRealLogEquiv.symm (Multiplicative.ofAdd y))
+    rw [ContinuousMulEquiv.apply_symm_apply, toAdd_ofAdd] at h
+    exact (Real.exp_log (NNReal.coe_pos.mpr (Units.zero_lt _))).symm.trans
+      (congrArg Real.exp h.symm)
+  obtain ⟨h1, h2⟩ := hMb _ (subset_tsupport _ hu)
+  rw [hn] at h1 h2
+  exact ⟨h1, by rwa [Real.exp_neg]⟩
+
+/-- At a place where a test is invariant under the integer units, the radial profile of a
+character ramified there vanishes at `0` (orthogonality of characters on `C¹`). -/
+private theorem explicitFormula_profile_ramified (τ : ℝ≥0ˣ →ₜ* C[F])
+    (hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F]))
+    (Φ : chartChars(τ) → 𝓢(ℝ, ℂ))
+    (hM : ∀ χ s, (∫ g, classMellinIntegrand(f, ideleClassNormTwist χ.val s, -1 / 2) g
+      ∂classMeasure) / (classVolume : ℂ) = logMellin (Φ χ) (s - 1 / 2))
+    (v : Primes(F))
+    (hv : ∀ u ∈ (O(v)).units, ∀ g : C[F], f.val (g * finiteClassMap(v) u) = f.val g)
+    (χ : chartChars(τ)) (hχ : sInf (conductorExponents(χ.val, v)) ≠ 0) : Φ χ 0 = 0 := by
+  obtain ⟨u, hu1, hχu⟩ : ∃ u : (v.adicCompletion F)ˣ, ‖u.val‖ = 1 ∧
+      χ.val (finiteClassMap(v) u) ≠ 1 := by
+    have h0 : (0 : ℕ) ∉ conductorExponents(χ.val, v) := fun h ↦
+      hχ (Nat.sInf_eq_zero.mpr (Or.inl h))
+    simp only [Set.mem_ofPred_eq, not_forall] at h0
+    obtain ⟨u, h1, -, h⟩ := h0
+    exact ⟨u, h1, h⟩
+  have hq : (1 : ℝ) < q(v) := by exact_mod_cast HeightOneSpectrum.one_lt_absNorm v
+  have huO : u ∈ (O(v)).units := by
+    by_contra h
+    rcases explicitFormula_finiteUnits_norm_shell v u h with h' | h'
+    · rw [hu1] at h'
+      linarith
+    · rw [hu1] at h'
+      have := inv_lt_one_of_one_lt₀ hq
+      linarith
+  have hw : finiteClassMap(v) u ∈ (ideleClassNorm F).ker := by
+    rw [MonoidHom.mem_ker, ideleClassNorm_ofAdicCompletion]
+    ext
+    change ‖u.val‖ = 1
+    exact hu1
+  let w : (ideleClassNorm F).ker := ⟨_, hw⟩
+  have h0 : radialFlow(τ, (0 : ℝ)) = 1 := by
+    rw [ofAdd_zero, map_one, map_one]
+  rw [explicitFormula_profile_eq τ hτ f Φ hM χ 0, h0]
+  simp only [one_mul]
+  let mK : MeasurableSpace (ideleClassNorm F).ker := Subtype.instMeasurableSpace
+  let : (normOneIdeleClassTamagawaMeasure F).IsHaarMeasure :=
+    (multiplicativeTamagawaMeasures_existsUnique F).exists.choose_spec.2.2.2.1
+  let : BorelSpace C[F] := ⟨rfl⟩
+  have hB : @BorelSpace (ideleClassNorm F).ker _ mK := Subtype.borelSpace _
+  have : @MeasurableMul (ideleClassNorm F).ker mK _ := @ContinuousMul.measurableMul _ _ mK hB _ _
+  set I := ∫ u, f.val (u : C[F]) * (χ.val (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F
+    with hIdef
+  have hI : I = (χ.val (w : C[F]) : ℂ) * I := by
+    rw [← integral_const_mul]
+    refine (integral_mul_left_eq_self (μ := normOneIdeleClassTamagawaMeasure F)
+      (fun u : (ideleClassNorm F).ker ↦ f.val (u : C[F]) * (χ.val (u : C[F]) : ℂ)) w).symm.trans ?_
+    refine integral_congr_ae (.of_forall fun u ↦ ?_)
+    simp only [Subgroup.coe_mul, map_mul, Circle.coe_mul]
+    rw [mul_comm (w : C[F]) (u : C[F]), hv _ huO]
+    ring
+  have hχw : (χ.val (w : C[F]) : ℂ) ≠ 1 := fun h ↦ hχu (Circle.ext h)
+  have : (1 - (χ.val (w : C[F]) : ℂ)) * I = 0 := by rw [sub_mul, one_mul, ← hI, sub_self]
+  rw [show I = 0 from (mul_eq_zero.mp this).resolve_left (sub_ne_zero.mpr hχw.symm), mul_zero]
+
+end ExplicitFormulaFiniteLocal
+
+/-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (prime-power terms at one place). Summed
+over the characters trivial on the image of the norm section, the prime-power terms at a
+finite place `v` of the explicit formula of Theorem B.4.2.2 for the radial profiles `Φ_χ` of
+`f` give `(log q_v / vol O_v^×) ∫_{|u| ≠ 1} f_v(u) |u|^{1/2} / |1 - u| d^×u`.
+
+Computation. Only the characters unramified at `v` contribute; for those,
+`χ(π_v)^m Φ_χ(m log q_v)` is the Fourier coefficient of `f(π_v^{-m} ·)` on `C¹`, and Fourier
+inversion over the characters unramified at `v` (the characters of `C¹` trivial on the image
+of `O_v^×`) averages `f(π_v^{∓m} ·)` over `O_v^×`. On the shell `|u| = q_v^{∓m}` the weight
+`|u|^{1/2} / |1 - u|` is `q_v^{-m/2} = e^{-x/2}` with `x = m log q_v`. -/
+theorem idelicExplicitFormula_finiteMatching_primePowersLocal (τ : ℝ≥0ˣ →ₜ* C[F])
+    (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F]))
+    (testF : ∀ v : Primes(F), 𝒟((v.adicCompletion F)ˣ))
+    (_hF : ∀ v u, (testF v).val u = f.val (finiteClassMap(v) u))
+    (Φ : chartChars(τ) → 𝓢(ℝ, ℂ)) (_hΦ : ∀ χ, ExponentialDecay (Φ χ))
+    (_hM : ∀ χ s, (∫ g, classMellinIntegrand(f, ideleClassNormTwist χ.val s, -1 / 2) g
+      ∂classMeasure) / (classVolume : ℂ) = logMellin (Φ χ) (s - 1 / 2)) (v : Primes(F)) :
+    HasSum (fun χ : chartChars(τ) ↦ ∑' m : ℕ, explicitPrimeTerm(χ.val, Φ χ) (v, m))
+      (finiteWeilScale(v) *
+        ∫ u in ((O(v)).units : Set (v.adicCompletion F)ˣ)ᶜ,
+          (testF v).val u * (Real.sqrt ‖u.val‖ : ℂ) / ((‖1 - u.val‖ : ℝ) : ℂ) ∂μ𝔭(v)) := by
+  sorry
+
+/-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (conductor terms at one place). Summed
+over the characters trivial on the image of the norm section, `log q_v` times the conductor
+exponent at `v` times `Φ_χ(0)` gives minus
+`(log q_v / vol O_v^×) ∫_{O_v^×} (f_v(u) - f_v(1)) |u|^{1/2} / |1 - u| d^×u`.
+
+Computation. The sum over `χ` groups by the restriction `η` of `χ` to `O_v^×`; for `η` of
+conductor exponent `a`, `∫_{O_v^×} (η(u) - 1) / |1 - u| du = -a · vol O_v^×` (summing over the
+filtration `U_n`), and Fourier inversion on `C¹` recombines the terms. -/
+theorem idelicExplicitFormula_finiteMatching_conductorLocal (τ : ℝ≥0ˣ →ₜ* C[F])
+    (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F]))
+    (testF : ∀ v : Primes(F), 𝒟((v.adicCompletion F)ˣ))
+    (_hF : ∀ v u, (testF v).val u = f.val (finiteClassMap(v) u))
+    (Φ : chartChars(τ) → 𝓢(ℝ, ℂ)) (_hΦ : ∀ χ, ExponentialDecay (Φ χ))
+    (_hM : ∀ χ s, (∫ g, classMellinIntegrand(f, ideleClassNormTwist χ.val s, -1 / 2) g
+      ∂classMeasure) / (classVolume : ℂ) = logMellin (Φ χ) (s - 1 / 2)) (v : Primes(F)) :
+    HasSum (fun χ : chartChars(τ) ↦
+        ((Real.log q(v) * (sInf (conductorExponents(χ.val, v)) : ℕ) : ℝ) : ℂ) * Φ χ 0)
+      (-(finiteWeilScale(v) *
+        ∫ u in ((O(v)).units : Set (v.adicCompletion F)ˣ),
+          ((testF v).val u - (testF v).val 1) * (Real.sqrt ‖u.val‖ : ℂ) /
+            ((‖1 - u.val‖ : ℝ) : ℂ) ∂μ𝔭(v))) := by
+  sorry
+
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (prime-power terms). Summed over the
 characters trivial on the image of the norm section, the prime-power terms of the explicit
 formula of Theorem B.4.2.2 for the radial profiles `Φ_χ` of `f` give the sum over the finite
 places of `(log q_v / vol O_v^×) ∫_{|u| ≠ 1} f_v(u) |u|^{1/2} / |1 - u| d^×u`, a sum with only
 finitely many nonzero terms.
 
-Computation. Only the characters unramified at `v` contribute at `v`; for those,
-`χ(π_v)^m Φ_χ(m log q_v)` is the Fourier coefficient of `f(π_v^{-m} ·)` on `C¹`, and Fourier
-inversion over the characters unramified at `v` averages `f(π_v^{∓m} ·)` over `O_v^×`. -/
+Proof. The profiles vanish outside a fixed interval (the class norm is bounded above and below
+on the support of `f`), so only the finitely many prime powers of bounded norm contribute, for
+every character at once, and `f_v` vanishes off the integer units at the other places. The sum
+over the characters is then a finite sum of the local sums
+`idelicExplicitFormula_finiteMatching_primePowersLocal`. -/
 theorem idelicExplicitFormula_finiteMatching_primePowers (τ : ℝ≥0ˣ →ₜ* C[F])
     (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F]))
     (testF : ∀ v : Primes(F), 𝒟((v.adicCompletion F)ˣ))
@@ -10222,7 +10383,86 @@ theorem idelicExplicitFormula_finiteMatching_primePowers (τ : ℝ≥0ˣ →ₜ*
         (testF v).val u * (Real.sqrt ‖u.val‖ : ℂ) / ((‖1 - u.val‖ : ℝ) : ℂ) ∂μ𝔭(v)
     Summable outside ∧
       HasSum (fun χ : chartChars(τ) ↦ ∑' j, explicitPrimeTerm(χ.val, Φ χ) j) (∑' v, outside v) := by
-  sorry
+  intro outside
+  obtain ⟨M, hMb⟩ := explicitFormula_tsupport_norm_bound f
+  have hq (v : Primes(F)) : (1 : ℝ) < q(v) := by
+    exact_mod_cast HeightOneSpectrum.one_lt_absNorm v
+  have hfin : {v : Primes(F) | q(v) ≤ M}.Finite := by
+    refine ((Ring.HasFiniteQuotients.finite_absNorm_le (S := 𝓞 F) ⌊M⌋₊).preimage
+      fun v _ w _ h ↦ HeightOneSpectrum.ext h).subset fun v hv ↦ ?_
+    exact Nat.le_floor (show ((Ideal.absNorm v.asIdeal : ℕ) : ℝ) ≤ M from hv)
+  let T : Finset Primes(F) := hfin.toFinset
+  let K : ℕ := ⌈M⌉₊
+  -- A nonzero prime-power term has `q_v^(m+1) ≤ M`.
+  have hbound (χ : chartChars(τ)) (v : Primes(F)) (m : ℕ)
+      (h : explicitPrimeTerm(χ.val, Φ χ) (v, m) ≠ 0) : q(v) ^ (m + 1) ≤ M := by
+    by_contra hlt
+    push Not at hlt
+    apply h
+    have hx : Real.exp (((m + 1 : ℕ) : ℝ) * Real.log q(v)) = q(v) ^ (m + 1) := by
+      rw [Real.exp_nat_mul, Real.exp_log (zero_lt_one.trans (hq v))]
+    have h1 : Φ χ (((m + 1 : ℕ) : ℝ) * Real.log q(v)) = 0 := by
+      by_contra h1
+      have := (explicitFormula_profile_support τ _hτ f Φ _hM hMb χ _ h1).1
+      rw [hx] at this
+      linarith
+    have h2 : Φ χ (-(((m + 1 : ℕ) : ℝ) * Real.log q(v))) = 0 := by
+      by_contra h2
+      have := (explicitFormula_profile_support τ _hτ f Φ _hM hMb χ _ h2).2
+      rw [neg_neg, hx] at this
+      linarith
+    simp only [h1, h2, mul_zero, add_zero, ite_self]
+  have hmemT (χ : chartChars(τ)) (v : Primes(F)) (m : ℕ)
+      (h : explicitPrimeTerm(χ.val, Φ χ) (v, m) ≠ 0) : v ∈ T ∧ m < K := by
+    have hb := hbound χ v m h
+    refine ⟨hfin.mem_toFinset.mpr ((le_self_pow₀ (hq v).le (by omega)).trans hb), ?_⟩
+    have h2 : (2 : ℝ) ≤ q(v) := by
+      have : 1 < Ideal.absNorm v.asIdeal := HeightOneSpectrum.one_lt_absNorm v
+      exact_mod_cast this
+    have hm : ((m + 1 : ℕ) : ℝ) ≤ q(v) ^ (m + 1) := by
+      have h3 : ((m + 1 : ℕ) : ℝ) < 2 ^ (m + 1) := by exact_mod_cast Nat.lt_two_pow_self
+      exact h3.le.trans (pow_le_pow_left₀ (by norm_num) h2 _)
+    have : (m : ℝ) < M := by push_cast at hm; linarith
+    exact Nat.lt_ceil.mpr this
+  have hout (v : Primes(F)) (hv : v ∉ T) : outside v = 0 := by
+    have hvM : M < q(v) := by
+      by_contra h
+      exact hv (hfin.mem_toFinset.mpr (not_lt.mp h))
+    have hz : ∀ x : (v.adicCompletion F)ˣ, x ∉ (O(v)).units → (testF v).val x = 0 := by
+      intro x hx
+      rw [_hF]
+      by_contra h0
+      obtain ⟨h₁, h₂⟩ := hMb _ (subset_tsupport _ h0)
+      have hnι : ((ideleClassNorm F (finiteClassMap(v) x) : ℝ≥0) : ℝ) = ‖x.val‖ := by
+        simp only [ideleClassNorm_ofAdicCompletion]
+        rfl
+      rw [hnι] at h₁ h₂
+      have hx0 : 0 < ‖x.val‖ := norm_pos_iff.mpr x.ne_zero
+      have hq0 : 0 < q(v) := zero_lt_one.trans (hq v)
+      rcases explicitFormula_finiteUnits_norm_shell v x hx with h | h
+      · linarith
+      · have : q(v) ≤ ‖x.val‖⁻¹ := by
+          rw [le_inv_comm₀ hq0 hx0]
+          exact h
+        linarith
+    change finiteWeilScale(v) * _ = 0
+    rw [setIntegral_eq_zero_of_forall_eq_zero fun x hx ↦ by
+      rw [hz x hx, zero_mul, zero_div], mul_zero]
+  have hχsum (χ : chartChars(τ)) : ∑' j, explicitPrimeTerm(χ.val, Φ χ) j =
+      ∑ v ∈ T, ∑' m : ℕ, explicitPrimeTerm(χ.val, Φ χ) (v, m) := by
+    rw [tsum_eq_sum (s := T ×ˢ Finset.range K) fun j hj ↦ by
+      by_contra h
+      obtain ⟨h1, h2⟩ := hmemT χ j.1 j.2 h
+      exact hj (Finset.mem_product.mpr ⟨h1, Finset.mem_range.mpr h2⟩), Finset.sum_product]
+    refine Finset.sum_congr rfl fun v _ ↦ (tsum_eq_sum fun m hm ↦ ?_).symm
+    by_contra h
+    exact hm (Finset.mem_range.mpr (hmemT χ v m h).2)
+  refine ⟨summable_of_ne_finset_zero hout, ?_⟩
+  rw [tsum_eq_sum hout]
+  convert hasSum_sum (fun v _ ↦
+    idelicExplicitFormula_finiteMatching_primePowersLocal τ _hτ f testF _hF Φ _hΦ _hM v) using 1
+  funext χ
+  exact hχsum χ
 
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (conductor terms). Summed over the
 characters trivial on the image of the norm section, the conductor part of the
@@ -10230,10 +10470,10 @@ discriminant–conductor term (Equation (B.4.2.3)) times `Φ_χ(0)` gives minus 
 finite places of `(log q_v / vol O_v^×) ∫_{O_v^×} (f_v(u) - f_v(1)) |u|^{1/2} / |1 - u| d^×u`,
 a sum with only finitely many nonzero terms.
 
-Computation. At each `v` the sum over `χ` groups by the restriction `η` of `χ` to `O_v^×`;
-for `η` of conductor exponent `a`, `∫_{O_v^×} (η(u) - 1) / |1 - u| du = -a · vol O_v^×`
-(summing over the filtration `U_n`), and Fourier inversion on `C¹` recombines the terms. At
-the places where `f` is invariant under `O_v^×` both sides vanish. -/
+Proof. `f` is invariant under the integer units at all but finitely many places. There both
+sides vanish: the integrand is zero, and `Φ_χ(0)` is zero for every `χ` ramified at `v`
+(orthogonality on `C¹`). The sum over the characters is then a finite sum of the local sums
+`idelicExplicitFormula_finiteMatching_conductorLocal`. -/
 theorem idelicExplicitFormula_finiteMatching_conductor (τ : ℝ≥0ˣ →ₜ* C[F])
     (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F]))
     (testF : ∀ v : Primes(F), 𝒟((v.adicCompletion F)ˣ))
@@ -10249,7 +10489,49 @@ theorem idelicExplicitFormula_finiteMatching_conductor (τ : ℝ≥0ˣ →ₜ* C
       HasSum (fun χ : chartChars(τ) ↦
         ((heckeLogDiscriminantConductor χ.val - Real.log (Int.natAbs (NumberField.discr F)) :
           ℝ) : ℂ) * Φ χ 0) (-∑' v, inside v) := by
-  sorry
+  intro inside
+  obtain ⟨k, hk, hinv, _⟩ := (mem_bruhatSmoothSubmodule_iff _).mp f.property.1 0
+  obtain ⟨W, hW, hpow⟩ := explicitFormula_smallPowers (G := C[F]) k hk
+  have hI : ∀ᶠ v : Primes(F) in cofinite,
+      ∀ u ∈ (O(v)).units, ∀ g : C[F], f.val (g * finiteClassMap(v) u) = f.val g := by
+    filter_upwards [explicitFormula_eventually_units_mem W hW] with v hv u hu g
+    have hk' : finiteClassMap(v) u ∈ k := hpow _ fun n ↦ by
+      rw [← map_pow]
+      exact hv _ ((O(v)).units.pow_mem hu n)
+    rw [mul_comm]
+    exact hinv ⟨_, hk'⟩ g
+  let T : Finset Primes(F) := (Filter.eventually_cofinite.mp hI).toFinset
+  have hP (v : Primes(F)) (hv : v ∉ T) :
+      ∀ u ∈ (O(v)).units, ∀ g : C[F], f.val (g * finiteClassMap(v) u) = f.val g := by
+    by_contra h
+    exact hv ((Filter.eventually_cofinite.mp hI).mem_toFinset.mpr h)
+  have hin (v : Primes(F)) (hv : v ∉ T) : inside v = 0 := by
+    change finiteWeilScale(v) * _ = 0
+    rw [setIntegral_eq_zero_of_forall_eq_zero fun u hu ↦ by
+      have h := hP v hv u hu 1
+      rw [one_mul] at h
+      rw [_hF, _hF, h, map_one, sub_self, zero_mul, zero_div], mul_zero]
+  have hχsum (χ : chartChars(τ)) :
+      ((heckeLogDiscriminantConductor χ.val - Real.log (Int.natAbs (NumberField.discr F)) :
+        ℝ) : ℂ) * Φ χ 0 = ∑ v ∈ T,
+        ((Real.log q(v) * (sInf (conductorExponents(χ.val, v)) : ℕ) : ℝ) : ℂ) * Φ χ 0 := by
+    rw [heckeLogDiscriminantConductor, add_sub_cancel_left]
+    by_cases h0 : Φ χ 0 = 0
+    · simp only [h0, mul_zero, Finset.sum_const_zero]
+    rw [finsum_eq_sum_of_support_subset (s := T) _ fun v hv ↦ ?_, ← Finset.sum_mul]
+    · push_cast
+      rfl
+    · by_contra hvT
+      apply hv
+      by_cases ha : sInf (conductorExponents(χ.val, v)) = 0
+      · simp only [ha, Nat.cast_zero, mul_zero]
+      · exact absurd (explicitFormula_profile_ramified τ _hτ f Φ _hM v (hP v hvT) χ ha) h0
+  refine ⟨summable_of_ne_finset_zero hin, ?_⟩
+  rw [tsum_eq_sum hin, ← Finset.sum_neg_distrib]
+  convert hasSum_sum (fun v _ ↦
+    idelicExplicitFormula_finiteMatching_conductorLocal τ _hτ f testF _hF Φ _hΦ _hM v) using 1
+  funext χ
+  exact hχsum χ
 
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (finite places). Let `Φ_χ` be the
 radial profiles of a test `f` (Mellin transforms matching the idelic Mellin integrals, as in
