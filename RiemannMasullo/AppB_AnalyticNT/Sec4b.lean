@@ -10122,21 +10122,84 @@ private theorem explicitFormula_log_discr_eq_tsum :
 
 end ExplicitFormulaFiniteMatching
 
+section ExplicitFormulaInversion
+
+open scoped FourierTransform in
+/-- The radial profiles fixed by their Mellin transforms are the normalized `C¹`-integrals:
+two Schwartz functions with the same two-sided Laplace transform on the imaginary axis have
+the same Fourier transform, hence agree. -/
+private theorem explicitFormula_profile_eq (τ : ℝ≥0ˣ →ₜ* C[F])
+    (hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F]))
+    (Φ : chartChars(τ) → 𝓢(ℝ, ℂ))
+    (hM : ∀ χ s, (∫ g, classMellinIntegrand(f, ideleClassNormTwist χ.val s, -1 / 2) g
+      ∂classMeasure) / (classVolume : ℂ) = logMellin (Φ χ) (s - 1 / 2))
+    (χ : chartChars(τ)) (x : ℝ) :
+    Φ χ x = (classVolume : ℂ)⁻¹ * ∫ u, f.val (radialFlow(τ, x) * (u : C[F])) *
+      (χ.val (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F := by
+  obtain ⟨Ψ, -, hΨ⟩ := idelicExplicitFormula_radialProfile τ hτ f χ.val (classVolume : ℂ)⁻¹
+  suffices h : Φ χ = Ψ by rw [h, hΨ]
+  have hL (w : ℂ) : ∫ x : ℝ, Complex.exp (w * x) * Φ χ x =
+      ∫ x : ℝ, Complex.exp (w * x) * Ψ x := by
+    have h := hM χ (w + 1 / 2)
+    rw [explicitFormula_mellin_radial τ hτ f χ.val χ.property, show w + 1 / 2 - 1 / 2 = w by ring] at h
+    beta_reduce at h
+    rw [explicitFormula_logMellin_eq] at h
+    rw [← h, div_eq_inv_mul, ← integral_const_mul]
+    refine integral_congr_ae (.of_forall fun y ↦ ?_)
+    simp only [hΨ]
+    ring
+  have hF : 𝓕 (Φ χ) = 𝓕 Ψ := by
+    ext ξ
+    change 𝓕 (Φ χ : ℝ → ℂ) ξ = 𝓕 (Ψ : ℝ → ℂ) ξ
+    rw [Real.fourier_real_eq_integral_exp_smul, Real.fourier_real_eq_integral_exp_smul]
+    have h := hL (-2 * Real.pi * ξ * Complex.I)
+    simp only [smul_eq_mul]
+    convert h using 3 with y y <;> push_cast <;> ring_nf
+  rw [← FourierTransform.fourierInv_fourier_eq (F := 𝓢(ℝ, ℂ)) (Φ χ), hF,
+    FourierTransform.fourierInv_fourier_eq]
+
+end ExplicitFormulaInversion
+
+/-- Paper: Theorem B.4.4.7, pp. 625–626 (Fourier inversion on `C¹`). For a test `f` on the
+idele classes and a norm-one class `c`, the Fourier series of `f` on the compact group `C¹`
+converges absolutely to `f(c)`: summed over the characters trivial on the image of the norm
+section `τ` (these restrict bijectively to the characters of `C¹`), the coefficients
+`vol(C¹)⁻¹ ∫_{C¹} f(u) χ(u) du` times `χ(c)⁻¹` have sum `f(c)`.
+
+Why it holds. `f` is invariant under an open subgroup of the finite idele units and smooth in
+the archimedean directions, so on `C¹` it factors through a compact abelian Lie group (a torus
+times a finite group), on which it is smooth. Its Fourier coefficients there decay faster than
+any power of the frequency, hence are absolutely summable, and the characters of that quotient
+are complete (Fourier series on the torus, finite Fourier analysis on the finite factor).
+Characters of `C¹` that are nontrivial on the subgroup have coefficient `0`. -/
+theorem idelicExplicitFormula_normOneFourierInversion (τ : ℝ≥0ˣ →ₜ* C[F])
+    (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F])) (c : (ideleClassNorm F).ker) :
+    HasSum (fun χ : chartChars(τ) ↦ ((classVolume : ℂ)⁻¹ *
+      ∫ u, f.val (u : C[F]) * (χ.val (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F) *
+        (((χ.val (c : C[F]))⁻¹ : Circle) : ℂ)) (f.val c) := by
+  sorry
+
 /-- Paper: Theorem B.4.4.7, pp. 625–626 (Fourier inversion on `C¹` at the identity). The
 values at `0` of the radial profiles `Φ_χ` of a test `f` (fixed by their Mellin transforms
 as in `idelicExplicitFormula_finiteMatching`) sum over the characters trivial on the image
 of the norm section to `f(1)`.
 
-Computation. `Φ_χ(0) = vol(C¹)⁻¹ ∫_{C¹} f(u) χ(u) du`, the characters trivial on `τ` are the
-characters of `C¹`, and `f` restricted to `C¹` is smooth on a Lie quotient, so its Fourier
-series converges absolutely to `f(1)` at the identity. -/
+Proof. `Φ_χ(0) = vol(C¹)⁻¹ ∫_{C¹} f(u) χ(u) du` (the Mellin transform on the imaginary axis is
+the Fourier transform, which determines a Schwartz function), and
+`idelicExplicitFormula_normOneFourierInversion` at the identity. -/
 theorem idelicExplicitFormula_finiteMatching_inversion (τ : ℝ≥0ˣ →ₜ* C[F])
     (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F]))
     (Φ : chartChars(τ) → 𝓢(ℝ, ℂ)) (_hΦ : ∀ χ, ExponentialDecay (Φ χ))
     (_hM : ∀ χ s, (∫ g, classMellinIntegrand(f, ideleClassNormTwist χ.val s, -1 / 2) g
       ∂classMeasure) / (classVolume : ℂ) = logMellin (Φ χ) (s - 1 / 2)) :
     HasSum (fun χ : chartChars(τ) ↦ Φ χ 0) (f.val 1) := by
-  sorry
+  have h := idelicExplicitFormula_normOneFourierInversion τ _hτ f 1
+  have h0 : radialFlow(τ, (0 : ℝ)) = 1 := by
+    rw [ofAdd_zero, map_one, map_one]
+  simp only [OneMemClass.coe_one, map_one, inv_one, Circle.coe_one, mul_one] at h
+  convert h using 2 with χ
+  rw [explicitFormula_profile_eq τ _hτ f Φ _hM χ 0, h0]
+  simp only [one_mul]
 
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (prime-power terms). Summed over the
 characters trivial on the image of the norm section, the prime-power terms of the explicit
