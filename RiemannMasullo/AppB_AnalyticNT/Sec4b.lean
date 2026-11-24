@@ -14322,30 +14322,28 @@ private theorem explicitFormula_vanishing_plus_integrable (g : ℝ → ℂ) (P �
 
 end ExplicitFormulaRealVanishingIntegrable
 
-/-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a real place `w`, tests
-vanishing at `1`). The identity of `idelicExplicitFormula_infiniteMatching_realLocal` for a
-test `f` on `F_w^× = ℝ^×` with `f(1) = 0`.
+section ExplicitFormulaRealHalfExpPieces
 
-Computation. With `f(1) = 0` the `e^{-t}/t` term and the `log π` term vanish. The rest of the
-integrand is `-½ e^{-t/4} (Q(t/2) + Q(-t/2)) / (1 - e^{-t})`, and
-`e^{-t/4} (1 ± e^{-t/2}) / (2 (1 - e^{-t})) = e^{-t/4} / (2 (1 ∓ e^{-t/2}))`, which is
-`½ |u|^{1/2} / |1 - u|` at `u = ±e^{t/2}` and at `u = ±e^{-t/2}`. With `y = ±t/2` and
-`d^×u = dy` on each half-line, the left side is `-½ ∫ f(u) |u|^{1/2} / |1 - u| d^×u`, which is
-`-infiniteConnesWeilPrincipalValue w f` by `realConnesWeilPrincipalValue_of_apply_one_zero`. -/
-theorem idelicExplicitFormula_infiniteMatching_realLocal_vanishing (w : InfinitePlace F)
-    (hw : w.IsReal) (testI : 𝒟(w.Completionˣ)) (_h1 : testI.val 1 = 0) :
+/-- The four substitutions `x = ±e^{±t/2}` turn the real-coordinate density
+`|x|⁻¹ f(x) |x|^{1/2} / |1 - x|` of the principal value into the test in logarithmic coordinates
+times `k∓(t) = e^{-t/4} / (2 (1 ∓ e^{-t/2}))`. -/
+private theorem explicitFormula_realLocal_halfExp_pieces (w : InfinitePlace F) (hw : w.IsReal)
+    (testI : 𝒟(w.Completionˣ)) :
     let e : ℝˣ →* w.Completionˣ :=
       Units.map (InfinitePlace.Completion.ringEquivRealOfIsReal hw).symm.toMonoidHom
     let gp : ℝ → ℂ := fun y ↦ testI.val (e (Units.mk0 (Real.exp y) (Real.exp_pos y).ne'))
     let gm : ℝ → ℂ := fun y ↦ testI.val (e (-Units.mk0 (Real.exp y) (Real.exp_pos y).ne'))
-    let Q : ℝ → ℝ → ℂ := fun t y ↦
-      (gp y + gm y) / 2 + (Real.exp (-(t / 2)) : ℂ) * (gp y - gm y) / 2
-    (∫ t in Ioi (0 : ℝ), (1 / 2 : ℂ) * (2 * (Real.exp (-t) : ℂ) * testI.val 1 / (t : ℂ) -
-          (Real.exp (-(t / 4)) : ℂ) * (Q t (t / 2) + Q t (-(t / 2))) /
-            (1 - (Real.exp (-t) : ℂ)))) -
-        (Real.log Real.pi : ℂ) * testI.val 1 =
-      -infiniteConnesWeilPrincipalValue w testI := by
-  intro e gp gm Q
+    let km : ℝ → ℝ := fun t ↦ Real.exp (-(t / 4)) / (2 * (1 - Real.exp (-(t / 2))))
+    let kp : ℝ → ℝ := fun t ↦ Real.exp (-(t / 4)) / (2 * (1 + Real.exp (-(t / 2))))
+    let φ : w.Completionˣ → ℂ := fun u ↦
+      testI.val u * (Real.sqrt ‖u.val‖ : ℂ) / ((‖1 - u.val‖ : ℝ) : ℂ)
+    let H : ℝ → ℂ := fun x ↦ if hx : x = 0 then 0 else (|x|⁻¹ : ℝ) • φ (e (Units.mk0 x hx))
+    ∀ t : ℝ, 0 < t →
+      (Real.exp (t / 2) / 2) • H (Real.exp (t / 2)) = gp (t / 2) * (km t : ℂ) ∧
+      (Real.exp (-(t / 2)) / 2) • H (Real.exp (-(t / 2))) = gp (-(t / 2)) * (km t : ℂ) ∧
+      (Real.exp (t / 2) / 2) • H (-Real.exp (t / 2)) = gm (t / 2) * (kp t : ℂ) ∧
+      (Real.exp (-(t / 2)) / 2) • H (-Real.exp (-(t / 2))) = gm (-(t / 2)) * (kp t : ℂ) := by
+  intro e gp gm km kp φ H
   let r := InfinitePlace.Completion.ringEquivRealOfIsReal hw
   let j := InfinitePlace.Completion.isometryEquivRealOfIsReal hw
   have hnorm (x : ℝ) : ‖r.symm x‖ = |x| := by
@@ -14356,14 +14354,6 @@ theorem idelicExplicitFormula_infiniteMatching_realLocal_vanishing (w : Infinite
   have hnorm1 (u : ℝˣ) : ‖(e u).val‖ = |u.val| := by rw [hval, hnorm]
   have hnorm2 (u : ℝˣ) : ‖1 - (e u).val‖ = |1 - u.val| := by
     rw [hval, ← hnorm, map_sub, map_one]
-  -- The Lebesgue form of the principal value.
-  let φ : w.Completionˣ → ℂ := fun u ↦
-    testI.val u * (Real.sqrt ‖u.val‖ : ℂ) / ((‖1 - u.val‖ : ℝ) : ℂ)
-  let H : ℝ → ℂ := fun x ↦ if hx : x = 0 then 0 else (|x|⁻¹ : ℝ) • φ (e (Units.mk0 x hx))
-  have hPV : infiniteConnesWeilPrincipalValue w testI = (1 / 2 : ℂ) * ∫ x, H x := by
-    rw [realConnesWeilPrincipalValue_of_apply_one_zero w hw testI _h1]
-    congr 1
-    exact explicitFormula_realTamagawa_integral w hw φ
   have hHp (y : ℝ) : H (Real.exp y) = (|Real.exp y|⁻¹ : ℝ) •
       (gp y * (Real.sqrt |Real.exp y| : ℂ) / ((|1 - Real.exp y| : ℝ) : ℂ)) := by
     simp only [H, dite_eq_right (Real.exp_pos y).ne', φ, hnorm1, hnorm2, Units.val_mk0]
@@ -14375,8 +14365,6 @@ theorem idelicExplicitFormula_infiniteMatching_realLocal_vanishing (w : Infinite
       Units.ext (by simp)
     simp only [H, dite_eq_right hne, φ, hnorm1, hnorm2, Units.val_mk0, abs_neg, sub_neg_eq_add]
     rw [hu]
-  let km : ℝ → ℝ := fun t ↦ Real.exp (-(t / 4)) / (2 * (1 - Real.exp (-(t / 2))))
-  let kp : ℝ → ℝ := fun t ↦ Real.exp (-(t / 4)) / (2 * (1 + Real.exp (-(t / 2))))
   have key (G : ℂ) (c a d k : ℝ) (h : c * (a⁻¹ * (Real.sqrt a / d)) = k) :
       c • ((a⁻¹ : ℝ) • (G * (Real.sqrt a : ℂ) / (d : ℂ))) = G * (k : ℂ) := by
     rw [← h]; simp only [Complex.real_smul]; push_cast; ring
@@ -14426,6 +14414,53 @@ theorem idelicExplicitFormula_infiniteMatching_realLocal_vanishing (w : Infinite
     simp only [kp]
     rw [hxm2, hxm4, Real.sqrt_inv, Real.sqrt_mul_self (by positivity)]
     field_simp
+  exact fun t ht ↦ ⟨q1 t ht, q2 t ht, q3 t ht, q4 t ht⟩
+
+end ExplicitFormulaRealHalfExpPieces
+
+/-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a real place `w`, tests
+vanishing at `1`). The identity of `idelicExplicitFormula_infiniteMatching_realLocal` for a
+test `f` on `F_w^× = ℝ^×` with `f(1) = 0`.
+
+Computation. With `f(1) = 0` the `e^{-t}/t` term and the `log π` term vanish. The rest of the
+integrand is `-½ e^{-t/4} (Q(t/2) + Q(-t/2)) / (1 - e^{-t})`, and
+`e^{-t/4} (1 ± e^{-t/2}) / (2 (1 - e^{-t})) = e^{-t/4} / (2 (1 ∓ e^{-t/2}))`, which is
+`½ |u|^{1/2} / |1 - u|` at `u = ±e^{t/2}` and at `u = ±e^{-t/2}`. With `y = ±t/2` and
+`d^×u = dy` on each half-line, the left side is `-½ ∫ f(u) |u|^{1/2} / |1 - u| d^×u`, which is
+`-infiniteConnesWeilPrincipalValue w f` by `realConnesWeilPrincipalValue_of_apply_one_zero`. -/
+theorem idelicExplicitFormula_infiniteMatching_realLocal_vanishing (w : InfinitePlace F)
+    (hw : w.IsReal) (testI : 𝒟(w.Completionˣ)) (_h1 : testI.val 1 = 0) :
+    let e : ℝˣ →* w.Completionˣ :=
+      Units.map (InfinitePlace.Completion.ringEquivRealOfIsReal hw).symm.toMonoidHom
+    let gp : ℝ → ℂ := fun y ↦ testI.val (e (Units.mk0 (Real.exp y) (Real.exp_pos y).ne'))
+    let gm : ℝ → ℂ := fun y ↦ testI.val (e (-Units.mk0 (Real.exp y) (Real.exp_pos y).ne'))
+    let Q : ℝ → ℝ → ℂ := fun t y ↦
+      (gp y + gm y) / 2 + (Real.exp (-(t / 2)) : ℂ) * (gp y - gm y) / 2
+    (∫ t in Ioi (0 : ℝ), (1 / 2 : ℂ) * (2 * (Real.exp (-t) : ℂ) * testI.val 1 / (t : ℂ) -
+          (Real.exp (-(t / 4)) : ℂ) * (Q t (t / 2) + Q t (-(t / 2))) /
+            (1 - (Real.exp (-t) : ℂ)))) -
+        (Real.log Real.pi : ℂ) * testI.val 1 =
+      -infiniteConnesWeilPrincipalValue w testI := by
+  intro e gp gm Q
+  -- The Lebesgue form of the principal value.
+  let φ : w.Completionˣ → ℂ := fun u ↦
+    testI.val u * (Real.sqrt ‖u.val‖ : ℂ) / ((‖1 - u.val‖ : ℝ) : ℂ)
+  let H : ℝ → ℂ := fun x ↦ if hx : x = 0 then 0 else (|x|⁻¹ : ℝ) • φ (e (Units.mk0 x hx))
+  have hPV : infiniteConnesWeilPrincipalValue w testI = (1 / 2 : ℂ) * ∫ x, H x := by
+    rw [realConnesWeilPrincipalValue_of_apply_one_zero w hw testI _h1]
+    congr 1
+    exact explicitFormula_realTamagawa_integral w hw φ
+  have pieces := explicitFormula_realLocal_halfExp_pieces w hw testI
+  let km : ℝ → ℝ := fun t ↦ Real.exp (-(t / 4)) / (2 * (1 - Real.exp (-(t / 2))))
+  let kp : ℝ → ℝ := fun t ↦ Real.exp (-(t / 4)) / (2 * (1 + Real.exp (-(t / 2))))
+  have q1 (t : ℝ) (ht : 0 < t) : (Real.exp (t / 2) / 2) • H (Real.exp (t / 2)) =
+      gp (t / 2) * (km t : ℂ) := (pieces t ht).1
+  have q2 (t : ℝ) (ht : 0 < t) : (Real.exp (-(t / 2)) / 2) • H (Real.exp (-(t / 2))) =
+      gp (-(t / 2)) * (km t : ℂ) := (pieces t ht).2.1
+  have q3 (t : ℝ) (ht : 0 < t) : (Real.exp (t / 2) / 2) • H (-Real.exp (t / 2)) =
+      gm (t / 2) * (kp t : ℂ) := (pieces t ht).2.2.1
+  have q4 (t : ℝ) (ht : 0 < t) : (Real.exp (-(t / 2)) / 2) • H (-Real.exp (-(t / 2))) =
+      gm (-(t / 2)) * (kp t : ℂ) := (pieces t ht).2.2.2
   -- Integrability of the four pieces.
   let β := explicitFormula_localRealFlow w hw
   obtain ⟨P, hP⟩ := explicitFormula_localTest_flow w hw testI
@@ -14579,6 +14614,45 @@ theorem idelicExplicitFormula_infiniteMatching_realLocal_regularization (g g' : 
           2 * ((Real.log 2 + Real.eulerMascheroniConstant : ℝ) : ℂ) * g 0)) := by
   sorry
 
+section ExplicitFormulaRealCutoff
+
+/-- `g(σ t) e^{-t/4} / (2 (1 - e^{-t/2}))` is integrable on `(τ, ∞)`, `τ > 0`, for bounded
+continuous `g`. -/
+private theorem explicitFormula_cutoff_minus_integrable (g : ℝ → ℂ) (P σ τ : ℝ)
+    (hgc : Continuous g) (hgb : ∀ y, ‖g y‖ ≤ P) (hτ : 0 < τ) :
+    IntegrableOn (fun t : ℝ ↦ g (σ * t) *
+      ((Real.exp (-(t / 4)) / (2 * (1 - Real.exp (-(t / 2)))) : ℝ) : ℂ)) (Ioi τ) := by
+  have hmeas : Measurable (fun t : ℝ ↦ g (σ * t) *
+      ((Real.exp (-(t / 4)) / (2 * (1 - Real.exp (-(t / 2)))) : ℝ) : ℂ)) := by
+    have : Measurable (fun t : ℝ ↦ (Real.exp (-(t / 4)) / (2 * (1 - Real.exp (-(t / 2)))))) := by
+      fun_prop
+    exact (hgc.measurable.comp (measurable_const_mul σ)).mul
+      (Complex.measurable_ofReal.comp this)
+  have hP : 0 ≤ P := (norm_nonneg _).trans (hgb 0)
+  have hd : 0 < 1 - Real.exp (-(τ / 2)) := by
+    rw [sub_pos, Real.exp_lt_one_iff]; linarith
+  refine Integrable.mono' ((exp_neg_integrableOn_Ioi τ (by norm_num : (0 : ℝ) < 1 / 4)).const_mul
+    (P / (2 * (1 - Real.exp (-(τ / 2)))))) hmeas.aestronglyMeasurable
+    (ae_restrict_of_forall_mem measurableSet_Ioi fun t ht ↦ ?_)
+  have ht : τ < t := ht
+  have hdt : 1 - Real.exp (-(τ / 2)) ≤ 1 - Real.exp (-(t / 2)) := by
+    have := Real.exp_le_exp.mpr (show -(t / 2) ≤ -(τ / 2) by linarith)
+    linarith
+  have hk : 0 ≤ Real.exp (-(t / 4)) / (2 * (1 - Real.exp (-(t / 2)))) := by
+    have := hd.trans_le hdt
+    positivity
+  rw [norm_mul, Complex.norm_real, Real.norm_of_nonneg hk]
+  have hk1 : Real.exp (-(t / 4)) / (2 * (1 - Real.exp (-(t / 2)))) ≤
+      Real.exp (-(1 / 4) * t) / (2 * (1 - Real.exp (-(τ / 2)))) := by
+    rw [show -(1 / 4) * t = -(t / 4) by ring]
+    gcongr
+  calc ‖g (σ * t)‖ * (Real.exp (-(t / 4)) / (2 * (1 - Real.exp (-(t / 2)))))
+      ≤ P * (Real.exp (-(1 / 4) * t) / (2 * (1 - Real.exp (-(τ / 2))))) :=
+        mul_le_mul (hgb _) hk1 hk hP
+    _ = P / (2 * (1 - Real.exp (-(τ / 2)))) * Real.exp (-(1 / 4) * t) := by ring
+
+end ExplicitFormulaRealCutoff
+
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a real place `w`, the
 cutoff integral in logarithmic coordinates). For a test `f` on `F_w^× = ℝ^×` with weighted
 translate `F(x) = f(1 + x) / |1 + x|^{1/2}` and `0 < ε < 1`,
@@ -14605,7 +14679,168 @@ theorem idelicExplicitFormula_infiniteMatching_realLocal_cutoff (w : InfinitePla
       (∫ t in Ioi (2 * Real.log (1 + ε)), gp (t / 2) * km t) +
         (∫ t in Ioi (-(2 * Real.log (1 - ε))), gp (-(t / 2)) * km t) +
         ((∫ t in Ioi (0 : ℝ), gm (t / 2) * kp t) + ∫ t in Ioi (0 : ℝ), gm (-(t / 2)) * kp t) := by
-  sorry
+  intro e gp gm km kp
+  let : BorelSpace w.Completion := ⟨rfl⟩
+  let r := InfinitePlace.Completion.ringEquivRealOfIsReal hw
+  let j := InfinitePlace.Completion.isometryEquivRealOfIsReal hw
+  let m := j.symm.toHomeomorph.toMeasurableEquiv
+  have hnorm (x : ℝ) : ‖m x‖ = |x| := by
+    change ‖j.symm x‖ = ‖x‖
+    rw [← dist_zero_right, ← dist_zero_right x, ← j.symm.dist_eq x 0,
+      show j.symm 0 = 0 from map_zero r.symm]
+  have hmult : w.mult = 1 := by simp [InfinitePlace.mult, hw]
+  let φ : w.Completionˣ → ℂ := fun u ↦
+    testI.val u * (Real.sqrt ‖u.val‖ : ℂ) / ((‖1 - u.val‖ : ℝ) : ℂ)
+  let H : ℝ → ℂ := fun x ↦ if hx : x = 0 then 0 else (|x|⁻¹ : ℝ) • φ (e (Units.mk0 x hx))
+  have pieces := explicitFormula_realLocal_halfExp_pieces w hw testI
+  have q1 (t : ℝ) (ht : 0 < t) : (Real.exp (t / 2) / 2) • H (Real.exp (t / 2)) =
+      gp (t / 2) * km t := (pieces t ht).1
+  have q2 (t : ℝ) (ht : 0 < t) : (Real.exp (-(t / 2)) / 2) • H (Real.exp (-(t / 2))) =
+      gp (-(t / 2)) * km t := (pieces t ht).2.1
+  have q3 (t : ℝ) (ht : 0 < t) : (Real.exp (t / 2) / 2) • H (-Real.exp (t / 2)) =
+      gm (t / 2) * kp t := (pieces t ht).2.2.1
+  have q4 (t : ℝ) (ht : 0 < t) : (Real.exp (-(t / 2)) / 2) • H (-Real.exp (-(t / 2))) =
+      gm (-(t / 2)) * kp t := (pieces t ht).2.2.2
+  let Hε : ℝ → ℂ := fun u ↦ if ε ≤ |u - 1| then H u else 0
+  -- The cutoff integral in the real coordinate `u = 1 + x`.
+  let Fz : w.Completion → ℂ := Function.extend Units.val (testI.val : _ → ℂ) (fun _ ↦ 0)
+  have hFu (u : w.Completionˣ) : Fz u.val = testI.val u := Units.val_injective.extend_apply _ _ u
+  have hT : ∫ x in {x : w.Completion | ε ≤ ‖x‖},
+      addTest((exists_infiniteWeilTestMap w).choose testI) x / ((‖x‖ : ℝ) : ℂ) ∂ν∞(w) =
+      ∫ u, Hε u := by
+    rw [infiniteLocalAdditiveTamagawaMeasure, dite_eq_left hw,
+      show (r.symm : ℝ → w.Completion) = m from rfl, setIntegral_map_equiv]
+    have hpre : m ⁻¹' {x : w.Completion | ε ≤ ‖x‖} = {y : ℝ | ε ≤ |y|} := by
+      ext y; simp only [mem_preimage, mem_ofPred_eq, hnorm]
+    rw [hpre, ← integral_indicator (measurableSet_le measurable_const continuous_abs.measurable),
+      ← integral_add_left_eq_self Hε 1]
+    congr 1
+    funext y
+    have hA := (exists_infiniteWeilTestMap w).choose_spec testI (m y)
+    have h1m : 1 + m y = m (1 + y) := by
+      change 1 + r.symm y = r.symm (1 + y)
+      rw [map_add, map_one]
+    simp only [Set.indicator_apply, mem_ofPred_eq, Hε, add_sub_cancel_left]
+    split_ifs with hy
+    · have hA' : ((exists_infiniteWeilTestMap w).choose testI) (Multiplicative.ofAdd (m y)) =
+          Fz (1 + m y) / (Real.sqrt (‖1 + m y‖ ^ w.mult) : ℂ) := hA
+      change ((exists_infiniteWeilTestMap w).choose testI) (Multiplicative.ofAdd (m y)) /
+        ((‖m y‖ : ℝ) : ℂ) = H (1 + y)
+      rw [hA']
+      rw [h1m, hnorm, hnorm, hmult, pow_one]
+      by_cases hu : 1 + y = 0
+      · have h0 : Fz (m (1 + y)) = 0 := by
+          rw [hu, show m 0 = 0 from map_zero r.symm]
+          exact Function.extend_apply' _ _ _
+            (fun (h : ∃ u : w.Completionˣ, u.val = 0) ↦ h.elim fun u hu ↦ u.ne_zero hu)
+        simp only [H, h0, zero_div, dite_eq_left hu]
+      · have hval : m (1 + y) = (e (Units.mk0 (1 + y) hu)).val := rfl
+        have hn1 : ‖(e (Units.mk0 (1 + y) hu)).val‖ = |1 + y| := by rw [← hval, hnorm]
+        have hn2 : ‖1 - (e (Units.mk0 (1 + y) hu)).val‖ = |y| := by
+          rw [← hval, show (1 : w.Completion) - m (1 + y) = m (-y) by
+            change 1 - r.symm (1 + y) = r.symm (-y)
+            rw [map_neg, map_add, map_one]; ring, hnorm, abs_neg]
+        simp only [H, dite_eq_right hu, φ, hn1, hn2]
+        rw [hval, hFu]
+        have hpos : 0 < |1 + y| := abs_pos.mpr hu
+        have hs : 0 < Real.sqrt |1 + y| := Real.sqrt_pos.mpr hpos
+        have hsq : |1 + y| = Real.sqrt |1 + y| * Real.sqrt |1 + y| :=
+          (Real.mul_self_sqrt hpos.le).symm
+        have hy0 : (|y| : ℝ) ≠ 0 := by
+          have : 0 < |y| := lt_of_lt_of_le _hε hy
+          exact this.ne'
+        rw [Complex.real_smul, hsq, Complex.ofReal_inv]
+        rw [← hsq]
+        have hsC : (Real.sqrt |1 + y| : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr hs.ne'
+        have hyC : ((|y| : ℝ) : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr hy0
+        have hsq' : ((|1 + y| : ℝ) : ℂ) = (Real.sqrt |1 + y| : ℂ) * (Real.sqrt |1 + y| : ℂ) := by
+          exact_mod_cast hsq
+        rw [hsq']
+        field_simp
+    · rfl
+  -- The cutoff in logarithmic coordinates.
+  have hτ1 : 0 < 2 * Real.log (1 + ε) := by have := Real.log_pos (by linarith : 1 < 1 + ε); linarith
+  have hτ2 : 0 < -(2 * Real.log (1 - ε)) := by
+    have := Real.log_neg (by linarith : 0 < 1 - ε) (by linarith : 1 - ε < 1); linarith
+  have c1 (t : ℝ) (ht : 0 < t) : ε ≤ |Real.exp (t / 2) - 1| ↔ 2 * Real.log (1 + ε) ≤ t := by
+    have he : 1 < Real.exp (t / 2) := Real.one_lt_exp_iff.mpr (by linarith)
+    have hl := Real.log_le_iff_le_exp (x := 1 + ε) (y := t / 2) (by linarith)
+    rw [abs_of_nonneg (by linarith)]
+    constructor
+    · intro h; linarith [hl.mpr (by linarith)]
+    · intro h; linarith [hl.mp (by linarith)]
+  have c2 (t : ℝ) (ht : 0 < t) : ε ≤ |Real.exp (-(t / 2)) - 1| ↔ -(2 * Real.log (1 - ε)) ≤ t := by
+    have he : Real.exp (-(t / 2)) < 1 := Real.exp_lt_one_iff.mpr (by linarith)
+    have hl := Real.le_log_iff_exp_le (x := -(t / 2)) (y := 1 - ε) (by linarith)
+    rw [abs_of_neg (by linarith)]
+    constructor
+    · intro h; linarith [hl.mpr (by linarith)]
+    · intro h; linarith [hl.mp (by linarith)]
+  have c3 (y : ℝ) : ε ≤ |-Real.exp y - 1| := by
+    rw [abs_of_neg (by linarith [Real.exp_pos y])]
+    linarith [Real.exp_pos y]
+  have r1 (t : ℝ) (ht : t ∈ Ioi 0) : (Real.exp (t / 2) / 2) • Hε (Real.exp (t / 2)) =
+      (Ici (2 * Real.log (1 + ε))).indicator (fun t ↦ gp (t / 2) * km t) t := by
+    simp only [Hε, Set.indicator_apply, mem_Ici, ← c1 t ht]
+    split_ifs
+    · exact q1 t ht
+    · exact smul_zero _
+  have r2 (t : ℝ) (ht : t ∈ Ioi 0) : (Real.exp (-(t / 2)) / 2) • Hε (Real.exp (-(t / 2))) =
+      (Ici (-(2 * Real.log (1 - ε)))).indicator (fun t ↦ gp (-(t / 2)) * km t) t := by
+    simp only [Hε, Set.indicator_apply, mem_Ici, ← c2 t ht]
+    split_ifs
+    · exact q2 t ht
+    · exact smul_zero _
+  have r3 (t : ℝ) (ht : t ∈ Ioi 0) : (Real.exp (t / 2) / 2) • Hε (-Real.exp (t / 2)) =
+      gm (t / 2) * kp t := by
+    simp only [Hε, ite_eq_left (c3 _)]
+    exact q3 t ht
+  have r4 (t : ℝ) (ht : t ∈ Ioi 0) : (Real.exp (-(t / 2)) / 2) • Hε (-Real.exp (-(t / 2))) =
+      gm (-(t / 2)) * kp t := by
+    simp only [Hε, ite_eq_left (c3 _)]
+    exact q4 t ht
+  -- Integrability.
+  let β := explicitFormula_localRealFlow w hw
+  obtain ⟨P, hP⟩ := explicitFormula_localTest_flow w hw testI
+  let m1 : w.Completionˣ := e (-1)
+  have hgp (y : ℝ) : gp y = testI.val (1 * β (Multiplicative.ofAdd y)) := by
+    rw [one_mul, explicitFormula_localRealFlow_apply]
+  have hgm (y : ℝ) : gm y = testI.val (m1 * β (Multiplicative.ofAdd y)) := by
+    rw [explicitFormula_localRealFlow_apply, ← map_mul, neg_one_mul]
+  have hgpc : Continuous gp := continuous_iff_continuousAt.mpr fun y ↦
+    ((hP 1 y).1.congr_of_eventuallyEq (.of_forall fun z ↦ hgp z)).continuousAt
+  have hgmc : Continuous gm := continuous_iff_continuousAt.mpr fun y ↦
+    ((hP m1 y).1.congr_of_eventuallyEq (.of_forall fun z ↦ hgm z)).continuousAt
+  have hgpb (y : ℝ) : ‖gp y‖ ≤ P := by rw [hgp]; exact (hP _ 0).2.1
+  have hgmb (y : ℝ) : ‖gm y‖ ≤ P := by rw [hgm]; exact (hP _ 0).2.1
+  have ip1 : IntegrableOn (fun t ↦ gp (t / 2) * km t) (Ioi (2 * Real.log (1 + ε))) :=
+    (explicitFormula_cutoff_minus_integrable gp P (1 / 2) _ hgpc hgpb hτ1).congr_fun
+      (fun t _ ↦ by simp only [km]; rw [show 1 / 2 * t = t / 2 by ring]) measurableSet_Ioi
+  have ip2 : IntegrableOn (fun t ↦ gp (-(t / 2)) * km t) (Ioi (-(2 * Real.log (1 - ε)))) :=
+    (explicitFormula_cutoff_minus_integrable gp P (-1 / 2) _ hgpc hgpb hτ2).congr_fun
+      (fun t _ ↦ by simp only [km]; rw [show -1 / 2 * t = -(t / 2) by ring]) measurableSet_Ioi
+  have i3 : IntegrableOn (fun t ↦ gm (t / 2) * kp t) (Ioi 0) :=
+    (explicitFormula_vanishing_plus_integrable gm P (1 / 2) hgmc hgmb).congr_fun
+      (fun t _ ↦ by simp only [kp]; rw [show 1 / 2 * t = t / 2 by ring]) measurableSet_Ioi
+  have i4 : IntegrableOn (fun t ↦ gm (-(t / 2)) * kp t) (Ioi 0) :=
+    (explicitFormula_vanishing_plus_integrable gm P (-1 / 2) hgmc hgmb).congr_fun
+      (fun t _ ↦ by simp only [kp]; rw [show -1 / 2 * t = -(t / 2) by ring]) measurableSet_Ioi
+  have ind {τ : ℝ} (hτ : 0 < τ) {p : ℝ → ℂ} (hp : IntegrableOn p (Ioi τ)) :
+      IntegrableOn ((Ici τ).indicator p) (Ioi 0) ∧
+        ∫ t in Ioi 0, (Ici τ).indicator p t = ∫ t in Ioi τ, p t := by
+    refine ⟨(integrable_indicator_iff measurableSet_Ici).mpr
+      ((integrableOn_Ici_iff_integrableOn_Ioi (b := τ) (f := p)).mpr hp).restrict, ?_⟩
+    rw [setIntegral_indicator measurableSet_Ici,
+      Set.inter_eq_right.mpr (Ici_subset_Ioi.mpr hτ), integral_Ici_eq_integral_Ioi]
+  obtain ⟨j1, e1⟩ := ind hτ1 ip1
+  obtain ⟨j2, e2⟩ := ind hτ2 ip2
+  have hsym {f g : ℝ → ℂ} (h : ∀ t ∈ Ioi (0 : ℝ), f t = g t) : EqOn g f (Ioi 0) :=
+    fun t ht ↦ (h t ht).symm
+  rw [hT, explicitFormula_integral_four_halfExp Hε
+      (j1.congr_fun (hsym r1) measurableSet_Ioi) (j2.congr_fun (hsym r2) measurableSet_Ioi)
+      (i3.congr_fun (hsym r3) measurableSet_Ioi) (i4.congr_fun (hsym r4) measurableSet_Ioi),
+    setIntegral_congr_fun measurableSet_Ioi r1, setIntegral_congr_fun measurableSet_Ioi r2,
+    setIntegral_congr_fun measurableSet_Ioi r3, setIntegral_congr_fun measurableSet_Ioi r4, e1, e2]
 
 
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a real place `w`, one
