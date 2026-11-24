@@ -1,6 +1,7 @@
 module
 
 public import RiemannMasullo.Ch05_ThetaZSpaces.Sec3a
+public import RiemannMasullo.Ch05_ThetaZSpaces.Sec2b
 
 import RiemannMasullo.Ch02_AdelicTheta.Sec2b
 public import RiemannMasullo.AppD_SchwartzBruhat.Sec3b
