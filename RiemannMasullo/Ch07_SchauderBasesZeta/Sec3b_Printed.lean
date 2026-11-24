@@ -1,6 +1,7 @@
 module
 
 public import RiemannMasullo.Ch07_SchauderBasesZeta.Sec3b
+import RiemannMasullo.Ch07_SchauderBasesZeta.Sec3a
 
 import Mathlib.Topology.Algebra.IsOpenUnits
 import RiemannMasullo.ForMathlib.MeasureTheory.Group.Arithmetic
