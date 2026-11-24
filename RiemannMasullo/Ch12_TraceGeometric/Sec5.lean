@@ -1348,8 +1348,10 @@ private theorem exteriorZeros_exists_width (χ : PontryaginDual C₁ → Pontrya
     exact Set.countable_coe_iff.mp countable_of_Lindelof_of_discrete
   let S := ⋃ ω, (fun z : ℂ ↦ |z.re - 1 / 2|) '' zeros ω
   have hS : S.Countable := countable_iUnion fun ω ↦ (hc ω).image _
-  obtain ⟨β, hβI, hβS⟩ :=
-    (hS.dense_compl ℝ).inter_open_nonempty (Ioo 0 α) isOpen_Ioo (nonempty_Ioo.mpr hα)
+  obtain ⟨β, hβI, hβS⟩ : (Ioo 0 α \ S).Nonempty := by
+    apply MeasureTheory.nonempty_of_measure_ne_zero (μ := MeasureTheory.volume)
+    rw [MeasureTheory.measure_diff_null (hS.measure_zero _)]
+    simp [Real.volume_Ioo, hα]
   exact ⟨β, hβI.1, hβI.2.le, fun ω z hz h ↦ hβS (mem_iUnion.mpr ⟨ω, z, hz, h⟩)⟩
 
 /-- With both edges free of zeros, the closed-strip sum of (12.5.1.4) for the lifts of a norm
