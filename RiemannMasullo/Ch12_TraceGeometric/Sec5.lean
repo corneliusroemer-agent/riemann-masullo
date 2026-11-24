@@ -1585,9 +1585,9 @@ theorem spectralStripTrace_eq_localTerms_of_exteriorZeros (τ : ℝ≥0ˣ →ₜ
     φ a b ha hb T hT
 
 /-- Paper: Theorem 12.5.1.1, pp. 519–520, with (12.5.1.4) and Theorem B.4.4.7, p. 623. Suppose
-that for every positive half-width convolution after spectral projection on the Sobolev order 3
-strip space has a projective tensor kernel (`hK` of (12.5.1.4)), and that the trace of convolution
-on the strip quotient equals the local terms for every test vanishing on the norm-one classes.
+that for every positive half-width and every test vanishing on the norm-one classes, convolution
+after spectral projection on the Sobolev order 3 strip space has a projective tensor kernel (`hK`
+of (12.5.1.4)), and that the trace of convolution on the strip quotient equals the local terms.
 Then the conclusion of `traceFormula_exteriorZeros` holds: for such a test the zero terms
 omitted by a positive-width open strip sum to zero. At a width β ≤ α whose edges carry no zeros,
 `spectralStripConvolution_trace` gives the trace as the sum over the zeros inside the strip and
@@ -1595,7 +1595,7 @@ Theorem B.4.4.7 gives the local terms as the sum over all zeros, so the zeros ou
 every test, and by `isEmpty_exteriorZeros_of_hasSum` there are none. -/
 theorem traceFormula_exteriorZeros_of_stripTrace (τ : ℝ≥0ˣ →ₜ* C𝔽)
     (hτ : RightInverse τ (ideleClassNorm F))
-    (hK : ∀ {β : ℝ} (hβ : 0 < β) (φ : BruhatCompactSupport C𝔽),
+    (hK : ∀ {β : ℝ} (hβ : 0 < β) (φ : BruhatCompactSupport C𝔽), (∀ g : C₁, φ.val g = 0) →
       stripTensorExists(hβ.le, three, φ))
     (htrace : ∀ (φ : BruhatCompactSupport C𝔽), (∀ g : C₁, φ.val g = 0) →
       ∀ {β : ℝ} (hβ : 0 < β) (a : archTest) (b : finiteTest),
@@ -1610,7 +1610,7 @@ theorem traceFormula_exteriorZeros_of_stripTrace (τ : ℝ≥0ˣ →ₜ* C𝔽)
     exteriorZeros_hasSum_of_width τ hτ hβ three
       (fun ψ hψ z hz ↦ hedge (ψ.comp restriction) z
         (by rw [hlift ψ hψ]; exact (exteriorZeros_ord_pos_iff _ _).mp hz)) φ'
-      ⟨_, spectralStripConvolution_nuclear_of_projectiveKernel hβ.le three φ' (hK hβ φ')⟩ rfl
+      ⟨_, spectralStripConvolution_nuclear_of_projectiveKernel hβ.le three φ' (hK hβ φ' hφ')⟩ rfl
       (fun a b ha hb ↦ htrace φ' hφ' hβ a b ha hb _ rfl)
   have : IsEmpty exteriorZeros(τ, α) :=
     ⟨fun z ↦ hE.false ⟨z.val, z.property.1, hβα.trans z.property.2⟩⟩
