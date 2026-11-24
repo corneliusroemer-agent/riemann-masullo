@@ -1,6 +1,7 @@
 module
 
 public import RiemannMasullo.Ch05_ThetaZSpaces.Sec3a
+public import RiemannMasullo.Ch05_ThetaZSpaces.Sec2b
 
 import RiemannMasullo.Ch02_AdelicTheta.Sec2b
 public import RiemannMasullo.AppD_SchwartzBruhat.Sec3b
@@ -1298,7 +1299,7 @@ private theorem iteratedDeriv_exponentialDecay_stage_slice
         e.equiv.injective ((show k (j (.ofAdd t)) = 1 from ht).trans (map_one e.equiv).symm)
       have hkernel := (a.quotient_mk_eq_one _).mp hqt
       let m := archimedeanUnitModulation ℝ 1
-      have hm : m (expU (.ofAdd t)) = 1 := compactSubgroup_le_modulation_ker m _ (compact_bruhat_kernel a) hkernel
+      have hm : m (expU (.ofAdd t)) = 1 := compactSubgroup_le_modulation_ker m _ (isCompact_bruhatStructuralPair_kernel a) hkernel
       have ht0 := congrArg (fun v : ℝ≥0ˣ ↦ (v.val : ℝ)) hm
       change ((archimedeanUnitModulation ℝ 1 (expU (.ofAdd t))).val : ℝ) = 1 at ht0
       rw [archimedeanUnitModulation_apply, pow_one] at ht0

@@ -8,7 +8,7 @@ public import Mathlib.Analysis.LocallyConvex.WeakSpace
 public import Mathlib.Analysis.Normed.Module.Completion
 public import Mathlib.Topology.Algebra.Module.ContinuousLinearMap.Quotient
 import Mathlib.Algebra.Module.ULift
-import Mathlib.Analysis.LocallyConvex.Barrelled
+public import Mathlib.Analysis.LocallyConvex.Barrelled
 public import Mathlib.Analysis.LocallyConvex.Montel
 import Mathlib.Analysis.LocallyConvex.Separation
 import Mathlib.Analysis.InnerProductSpace.Dual
@@ -1907,7 +1907,7 @@ theorem isLimitSubspace_top [T2Space E] (hX : ∀ k, IsFrechetTVS (X k))
 
 /-- Lower semicontinuous seminorms on an LF-space are continuous, since their restrictions
 to its Fréchet stages are continuous by the Baire category theorem. -/
-private theorem IsLFSpace.barrelled {E : Type*} [AddCommGroup E] [Module ℂ E]
+theorem IsLFSpace.barrelled {E : Type*} [AddCommGroup E] [Module ℂ E]
     [TopologicalSpace E] (hE : IsLFSpace E) : BarrelledSpace ℂ E := by
   obtain ⟨_, X, _, _, _, hX, j, i, h⟩ := hE
   refine ⟨fun p hp ↦ ?_⟩

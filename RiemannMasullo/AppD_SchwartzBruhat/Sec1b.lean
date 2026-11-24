@@ -456,7 +456,7 @@ variable [IsTopologicalGroup G] [T2Space G] [LocallyCompactSpace G]
 open scoped Pointwise in
 /-- Circle-valued characters lift to real logarithms on a simply connected chart.
 These logarithms rule out nontrivial cyclic subgroups in a smaller neighborhood. -/
-private theorem exists_nhds_one_of_isLocallyEuclidean (hG : IsLocallyEuclidean G) :
+theorem exists_nhds_one_of_isLocallyEuclidean (hG : IsLocallyEuclidean G) :
     ∃ W ∈ 𝓝 (1 : G), ∀ x : G, (∀ k : ℕ, x ^ k ∈ W) → x = 1 := by
   obtain ⟨n, ⟨charts⟩⟩ := hG
   let E := EuclideanSpace ℝ (Fin n)
@@ -1000,7 +1000,7 @@ theorem isCompactlyGeneratedGroup_quotient (hG : IsCompactlyGeneratedGroup G)
 
 omit [IsTopologicalGroup G] [T2Space G] [LocallyCompactSpace G] in
 /-- The real, torus and discrete factors of an elementary presentation give product charts. -/
-private theorem locallyEuclidean_of_elementaryPresentation
+theorem locallyEuclidean_of_elementaryPresentation
     (e : ElementaryLCAPresentation G) : IsLocallyEuclidean G := by
   let R := Fin e.realDim → ℝ
   let T := ModelPi (fun _ : Fin e.torusDim ↦ ℝ)
@@ -3131,7 +3131,7 @@ private theorem continuous_schwartzBruhatStage_eval
 
 include hTop hT2 hLC in
 /-- A good subgroup is compact by double annihilation. -/
-private theorem compact_bruhat_kernel (a : BruhatStructuralPair G) :
+theorem isCompact_bruhatStructuralPair_kernel (a : BruhatStructuralPair G) :
     IsCompact ((OrderDual.ofDual a.val.2 : Subgroup G) : Set G) := by
   let k := OrderDual.ofDual a.val.2
   change IsCompact (k : Set G)
@@ -3742,7 +3742,7 @@ private lemma kernelStage_realization_mono {a b : BruhatStructuralPair G} (h : a
         Subtype.val ⁻¹' ((OrderDual.ofDual a.val.2 : Subgroup G) : Set G) := Set.ext hker
     rw [heq]
     exact (a.val.1.isClosed_of_isOpen a.property.1).isClosedEmbedding_subtypeVal.isCompact_preimage
-      (compact_bruhat_kernel a)
+      (isCompact_bruhatStructuralPair_kernel a)
   obtain ⟨t, hon, hoff⟩ := stage_pullback_common p pc po q hq hk hK s
   refine ⟨t, funext fun x ↦ ?_⟩
   rw [schwartzBruhatStageRealization_apply, schwartzBruhatStageRealization_apply]
@@ -4372,7 +4372,7 @@ theorem schwartzBruhatStage_isEmbedding [SecondCountableTopology G]
 
 omit hTop hT2 hLC in
 /-- The inclusion of a stage is continuous by the definition of the generating seminorms. -/
-private theorem continuous_schwartzBruhatStageInclusion
+theorem continuous_schwartzBruhatStageInclusion
     (a : BruhatStructuralPair G) (e : ElementaryLCAPresentation a.quotient) :
     Continuous (show SchwartzBruhatStage e →ₗ[ℂ] SchwartzBruhat G from
       schwartzBruhatStageInclusion a e) := by
@@ -4457,7 +4457,7 @@ variable {G : Type*} [CommGroup G] [TopologicalSpace G] [IsTopologicalGroup G]
   [T2Space G] [LocallyCompactSpace G]
 
 /-- A seminorm continuous on all elementary stages belongs to the defining family. -/
-private theorem schwartzBruhat_continuous_seminorm (p : Seminorm ℂ (SchwartzBruhat G))
+theorem continuous_seminorm_of_continuous_stages (p : Seminorm ℂ (SchwartzBruhat G))
     (hp : ∀ (a : BruhatStructuralPair G) (e : ElementaryLCAPresentation a.quotient),
       Continuous (p ∘ schwartzBruhatStageInclusion a e)) : Continuous p :=
   (withGeneratingSeminorms_spec _ (Subtype.val : {q : Seminorm ℂ (schwartzBruhatSubmodule G) //
@@ -4466,7 +4466,7 @@ private theorem schwartzBruhat_continuous_seminorm (p : Seminorm ℂ (SchwartzBr
 
 /-- Lower semicontinuous seminorms are continuous on each barrelled elementary stage. -/
 private theorem schwartzBruhat_barrelled_of_stages : BarrelledSpace ℂ (SchwartzBruhat G) := by
-  refine ⟨fun p hp ↦ schwartzBruhat_continuous_seminorm p ?_⟩
+  refine ⟨fun p hp ↦ continuous_seminorm_of_continuous_stages p ?_⟩
   intro a e
   let : BarrelledSpace ℂ (SchwartzBruhatStage e) := elementarySchwartz_barrelled
   exact (p.comp (schwartzBruhatStageInclusion a e)).continuous_of_lowerSemicontinuous
@@ -4503,7 +4503,7 @@ theorem schwartzBruhat_bornological :
       (∀ B : Set (SchwartzBruhat G), IsVonNBounded ℂ B → BddAbove (p '' B)) →
         Continuous p := by
   intro p hp
-  apply schwartzBruhat_continuous_seminorm
+  apply continuous_seminorm_of_continuous_stages
   intro a e
   let : MetrizableSpace (SchwartzBruhatStage e) := elementarySchwartz_isFrechet.choose_spec.2.1
   exact continuous_stage_seminorm_of_bounded (schwartzBruhatStageCLM a e) p hp
@@ -4845,13 +4845,13 @@ theorem schwartzBruhatStage_average_eq_of_inf
   let F := schwartzBruhatStageRealization b e f
   let q := QuotientGroup.mk' B
   let T := A.map q
-  let : CompactSpace A := isCompact_iff_compactSpace.mp (compact_bruhat_kernel a)
-  let : CompactSpace C := isCompact_iff_compactSpace.mp (compact_bruhat_kernel c)
+  let : CompactSpace A := isCompact_iff_compactSpace.mp (isCompact_bruhatStructuralPair_kernel a)
+  let : CompactSpace C := isCompact_iff_compactSpace.mp (isCompact_bruhatStructuralPair_kernel c)
   let : T1Space (G ⧸ B) := QuotientGroup.t1Space_iff.mpr b.property.2.2.1.1
   let : CompactSpace T := isCompact_iff_compactSpace.mp
-    ((compact_bruhat_kernel a).image (QuotientGroup.continuous_mk (N := B)))
-  have heq : C.map q = T := (compact_kernel_images_eq A B C (compact_bruhat_kernel a)
-    (compact_bruhat_kernel b) (compact_bruhat_kernel c) hKernel).symm
+    ((isCompact_bruhatStructuralPair_kernel a).image (QuotientGroup.continuous_mk (N := B)))
+  have heq : C.map q = T := (compact_kernel_images_eq A B C (isCompact_bruhatStructuralPair_kernel a)
+    (isCompact_bruhatStructuralPair_kernel b) (isCompact_bruhatStructuralPair_kernel c) hKernel).symm
   obtain ⟨g, hg, hF⟩ := exists_continuous_stage_descent b e f
   funext x
   change (if x ∈ a.val.1 then compactHaarIntegral (fun h : A ↦ F (h.val * x)) else 0) =
@@ -5202,7 +5202,7 @@ private theorem stage_cut_shift_bounded (a c : BruhatStructuralPair G)
         (if x ∈ a.val.1 then schwartzBruhatStageRealization c e s (h.val * x) else 0) := by
   classical
   let K := OrderDual.ofDual a.val.2
-  let : CompactSpace K := isCompact_iff_compactSpace.mp (compact_bruhat_kernel a)
+  let : CompactSpace K := isCompact_iff_compactSpace.mp (isCompact_bruhatStructuralPair_kernel a)
   let q : c.val.1 →* c.quotient := QuotientGroup.mk' _
   let π := e.equiv.toMulEquiv.toMonoidHom.comp q
   have hπ : Continuous π := e.equiv.continuous.comp QuotientGroup.continuous_mk
@@ -5256,7 +5256,7 @@ private theorem stage_average_mem_compact_convex (a : BruhatStructuralPair G) (u
   let K : Subgroup G := OrderDual.ofDual a.val.2
   let : MeasurableSpace K := borel _
   let : BorelSpace K := ⟨rfl⟩
-  let : CompactSpace K := isCompact_iff_compactSpace.mp (compact_bruhat_kernel a)
+  let : CompactSpace K := isCompact_iff_compactSpace.mp (isCompact_bruhatStructuralPair_kernel a)
   let μ := Measure.haarMeasure (⟨⟨univ, isCompact_univ⟩, by simp⟩ : PositiveCompacts K)
   let : IsProbabilityMeasure μ := ⟨Measure.haarMeasure_self⟩
   let F (h : K) (x : G) := if x ∈ a.val.1 then u (h.val * x) else 0
@@ -5322,7 +5322,7 @@ private theorem exists_schwartzBruhat_uniform_seminorm :
     rw [Seminorm.iSup_apply hb]
     exact ciSup_le fun x ↦ norm_stage_realization_le a e s x
   refine ⟨p, ?_, fun f x ↦ ?_⟩
-  · exact schwartzBruhat_continuous_seminorm p hp
+  · exact continuous_seminorm_of_continuous_stages p hp
   · exact (le_ciSup hb x : q x ≤ p) f
 
 /-- Normalized averaging is linear on continuous functions, is invariant under
@@ -5342,7 +5342,7 @@ private theorem schwartzBruhatStage_average_properties (a : BruhatStructuralPair
   let K := OrderDual.ofDual a.val.2
   let : MeasurableSpace K := borel _
   let : BorelSpace K := ⟨rfl⟩
-  let : CompactSpace K := isCompact_iff_compactSpace.mp (compact_bruhat_kernel a)
+  let : CompactSpace K := isCompact_iff_compactSpace.mp (isCompact_bruhatStructuralPair_kernel a)
   let μ := Measure.haarMeasure (⟨⟨univ, isCompact_univ⟩, by simp⟩ : PositiveCompacts K)
   let : IsProbabilityMeasure μ := ⟨Measure.haarMeasure_self⟩
   have hav (f : G → ℂ) (x : G) : schwartzBruhatStageAverage a f x =
