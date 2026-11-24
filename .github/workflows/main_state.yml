@@ -57,7 +57,9 @@ jobs:
   build:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # A build that times out saves nothing, so the next one starts from an older saved build with
+    # more to compile. The nightly build from scratch already takes close to an hour.
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
         with:
