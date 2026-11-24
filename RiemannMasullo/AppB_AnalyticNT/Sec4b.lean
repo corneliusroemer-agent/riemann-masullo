@@ -14589,6 +14589,338 @@ private theorem explicitFormula_exists_localTest_one (w : InfinitePlace F) :
     B.one_of_mem_closedBall (by simp [B]), Complex.ofReal_one]
 
 end ExplicitFormulaLocalTestOne
+
+section ExplicitFormulaCopyExpSubtraction
+
+/-! Copied from the private lemmas `log_exp_weight`, `signed_tail_slice` and `exp_subtraction` of
+`RiemannMasullo/ForMathlib/Analysis/Fourier/Log.lean`. -/
+
+private theorem explicitFormula_copy_logExpWeight (b : ℝ) (hb : 0 < b) :
+    IntegrableOn (fun t ↦ b * Real.exp (-b * t) * Real.log t) (Ioi 0) ∧
+    (∫ t in Ioi 0, b * Real.exp (-b * t) * Real.log t) =
+      -Real.log b - Real.eulerMascheroniConstant := by
+  have hunit : IntegrableOn (fun t ↦ Real.exp (-t) * Real.log t) (Ioi 0) := by
+    have hlocal : IntegrableOn Real.log (Ioc (0 : ℝ) 1) :=
+      (intervalIntegrable_iff_integrableOn_Ioc_of_le zero_le_one).mp
+        intervalIntegral.intervalIntegrable_log'
+    have h₁ : IntegrableOn (fun t ↦ Real.exp (-t) * Real.log t) (Ioc (0 : ℝ) 1) := by
+      refine hlocal.norm.mono' (by fun_prop) ?_
+      filter_upwards [ae_restrict_mem measurableSet_Ioc] with t ht
+      rw [norm_mul, Real.norm_eq_abs, abs_of_pos (Real.exp_pos _)]
+      exact mul_le_of_le_one_left (norm_nonneg _) (Real.exp_le_one_iff.mpr (by linarith [ht.1]))
+    have htail : IntegrableOn (fun t : ℝ ↦ t * Real.exp (-t)) (Ioi 1) := by
+      apply IntegrableOn.mono_set _ (Ioi_subset_Ioi zero_le_one)
+      simpa only [Real.rpow_one, neg_one_mul] using
+        (integrableOn_rpow_mul_exp_neg_rpow (p := 1) (s := 1) (by norm_num) one_pos)
+    have h₂ : IntegrableOn (fun t ↦ Real.exp (-t) * Real.log t) (Ioi 1) := by
+      refine htail.mono' (by fun_prop) ?_
+      filter_upwards [ae_restrict_mem measurableSet_Ioi] with t ht
+      have ht' : 1 < t := ht
+      rw [Real.norm_eq_abs, abs_of_nonneg (mul_nonneg (Real.exp_pos _).le (Real.log_nonneg ht'.le))]
+      rw [mul_comm t]
+      exact mul_le_mul_of_nonneg_left (Real.log_le_self (by linarith)) (Real.exp_pos _).le
+    simpa [Ioc_union_Ioi_eq_Ioi zero_le_one] using h₁.union h₂
+  have hshift : IntegrableOn (fun s ↦ Real.exp (-s) * (Real.log s - Real.log b)) (Ioi 0) := by
+    rw [show (fun s ↦ Real.exp (-s) * (Real.log s - Real.log b)) =
+      (fun t ↦ Real.exp (-t) * Real.log t) - (fun s ↦ Real.exp (-s) * Real.log b) by
+        ext s; exact mul_sub _ _ _]
+    exact hunit.sub ((integrableOn_exp_mul_Ioi (by norm_num : (-1 : ℝ) < 0) 0).mul_const (Real.log b) |>.congr (by simp))
+  let g (s : ℝ) := Real.exp (-s) * (Real.log s - Real.log b)
+  have hg (t : ℝ) (ht : t ∈ Ioi (0 : ℝ)) : b * Real.exp (-b * t) * Real.log t = b * g (b * t) := by
+    have ht' : 0 < t := ht
+    simp only [g, Real.log_mul hb.ne' ht'.ne', add_sub_cancel_left, neg_mul, mul_assoc]
+  have hcomp : IntegrableOn (fun t ↦ g (b * t)) (Ioi 0) := by
+    have hgi : Integrable ((Ioi (0 : ℝ)).indicator g) :=
+      (integrable_indicator_iff measurableSet_Ioi).2 hshift
+    refine (hgi.comp_mul_left' hb.ne').integrableOn.congr_fun ?_ measurableSet_Ioi
+    intro t ht
+    exact indicator_of_mem (mem_Ioi.mpr (mul_pos hb ht)) _
+  have hscaled : IntegrableOn (fun t ↦ b * g (b * t)) (Ioi 0) := hcomp.const_mul b
+  refine ⟨hscaled.congr_fun (fun t ht ↦ (hg t ht).symm) measurableSet_Ioi, ?_⟩
+  rw [setIntegral_congr_fun measurableSet_Ioi hg, integral_const_mul]
+  have hs := integral_comp_mul_left_Ioi' g 0 hb
+  rw [mul_zero, smul_eq_mul] at hs
+  rw [hs]
+  change (∫ s in Ioi (0 : ℝ), Real.exp (-s) * (Real.log s - Real.log b)) = _
+  simp_rw [mul_sub]
+  have he : IntegrableOn (fun s : ℝ ↦ Real.exp (-s)) (Ioi 0) := by
+    simpa using integrableOn_exp_mul_Ioi (by norm_num : (-1 : ℝ) < 0) 0
+  have heq : (∫ s in Ioi (0 : ℝ), Real.exp (-s)) = 1 := by
+    simpa using integral_exp_mul_Ioi (a := -1) (by norm_num) 0
+  rw [integral_sub hunit (he.mul_const _), integral_mul_const, heq, one_mul]
+  have hγ := Real.eulerMascheroniConstant_eq_neg_integral_log
+  simp_rw [mul_comm (Real.log _) (Real.exp _)] at hγ
+  linarith
+
+private theorem explicitFormula_copy_signedTailSlice (a : ℝ) :
+    let d (s : ℝ) := (if s ≤ a then (1 : ℝ) else 0) - if s ≤ 0 then 1 else 0
+    Integrable d ∧ (∫ s, d s) = a ∧ (∫ s, ‖d s‖) = |a| := by
+  dsimp
+  rcases le_total 0 a with ha | ha
+  · have he (s : ℝ) : (if s ≤ a then (1 : ℝ) else 0) - (if s ≤ 0 then 1 else 0) =
+        (Ioc 0 a).indicator (fun _ ↦ 1) s := by
+      by_cases hs : s ≤ 0
+      · simp [hs, hs.trans ha, not_lt.mpr hs]
+      · by_cases h : s ≤ a <;> simp [hs, h, lt_of_not_ge hs]
+    have hi : Integrable ((Ioc 0 a).indicator (fun _ ↦ (1 : ℝ))) :=
+      (integrable_indicator_iff measurableSet_Ioc).2 (integrableOn_const measure_Ioc_lt_top.ne)
+    simp_rw [he]
+    refine ⟨hi, ?_, ?_⟩
+    · simp [integral_indicator measurableSet_Ioc, ha]
+    · have hp (s : ℝ) : 0 ≤ (Ioc 0 a).indicator (fun _ ↦ (1 : ℝ)) s := by
+        by_cases hs : s ∈ Ioc 0 a <;> simp [hs]
+      simp [abs_of_nonneg (hp _), integral_indicator measurableSet_Ioc, ha, abs_of_nonneg ha]
+  · have he (s : ℝ) : (if s ≤ a then (1 : ℝ) else 0) - (if s ≤ 0 then 1 else 0) =
+        -((Ioc a 0).indicator (fun _ ↦ 1) s) := by
+      by_cases hs : s ≤ a
+      · simp [hs, hs.trans ha, not_lt.mpr hs]
+      · by_cases hs' : s ≤ 0 <;> simp [hs, hs', lt_of_not_ge hs]
+    have hi : Integrable ((Ioc a 0).indicator (fun _ ↦ (1 : ℝ))) :=
+      (integrable_indicator_iff measurableSet_Ioc).2 (integrableOn_const measure_Ioc_lt_top.ne)
+    simp_rw [he]
+    refine ⟨hi.neg, ?_, ?_⟩
+    · simp [integral_neg, integral_indicator measurableSet_Ioc, ha]
+    · have hp (s : ℝ) : 0 ≤ (Ioc a 0).indicator (fun _ ↦ (1 : ℝ)) s := by
+        by_cases hs : s ∈ Ioc a 0 <;> simp [hs]
+      simp [abs_of_nonneg (hp _), integral_indicator measurableSet_Ioc, ha, abs_of_nonpos ha]
+
+private theorem explicitFormula_copy_expSubtraction {b : ℝ} (hb : 0 < b) :
+    let p (x : ℝ) := (Real.exp (-b * x) - (if x ≤ 1 then 1 else 0)) / x
+    IntegrableOn p (Ioi 0) ∧ (∫ x in Ioi 0, p x) = -Real.log b - Real.eulerMascheroniConstant := by
+  let W (t : ℝ) := b * Real.exp (-b * t)
+  -- The difference of tails has signed length `log t` and absolute length `|log t|`.
+  let D (t s : ℝ) := (if s ≤ Real.log t then (1 : ℝ) else 0) - (if s ≤ 0 then 1 else 0)
+  let F (t s : ℝ) := W t * D t s
+  let μ := (volume : Measure ℝ).restrict (Ioi 0)
+  have hFi : Integrable (Function.uncurry F) (μ.prod volume) := by
+    have hw : Measurable (fun p : ℝ × ℝ ↦ W p.1) := by unfold W; fun_prop
+    have h₁ : Measurable (fun p : ℝ × ℝ ↦ if p.2 ≤ Real.log p.1 then (1 : ℝ) else 0) :=
+      Measurable.ite (measurableSet_le measurable_snd (Real.measurable_log.comp measurable_fst))
+        measurable_const measurable_const
+    have h₂ : Measurable (fun p : ℝ × ℝ ↦ if p.2 ≤ 0 then (1 : ℝ) else 0) :=
+      Measurable.ite (measurableSet_le measurable_snd measurable_const) measurable_const measurable_const
+    have hm : Measurable (Function.uncurry F) := hw.mul (h₁.sub h₂)
+    apply (integrable_prod_iff hm.aestronglyMeasurable).2
+    refine ⟨.of_forall fun t ↦ (explicitFormula_copy_signedTailSlice (Real.log t)).1.const_mul (W t), ?_⟩
+    apply (explicitFormula_copy_logExpWeight b hb).1.norm.congr
+    filter_upwards with t
+    have hs : (∫ s : ℝ, ‖D t s‖) = |Real.log t| := (explicitFormula_copy_signedTailSlice _).2.2
+    simp only [Function.uncurry_apply_pair, F, norm_mul, integral_const_mul, hs, Real.norm_eq_abs (Real.log t)]
+    simp only [W, norm_mul]
+  have htail (x : ℝ) (hx : 0 < x) : (∫ t in Ioi (0 : ℝ), W t * (if x ≤ t then 1 else 0)) =
+      Real.exp (-b * x) := by
+    calc
+      _ = ∫ t in Ici x, W t := by
+        have he (t : ℝ) : W t * (if x ≤ t then 1 else 0) = (Ici x).indicator W t := by
+          by_cases ht : x ≤ t <;> simp [ht]
+        simp_rw [he, integral_indicator measurableSet_Ici, Measure.restrict_restrict measurableSet_Ici,
+          inter_eq_left.mpr (Ici_subset_Ioi.mpr hx)]
+      _ = ∫ t in Ioi x, W t := integral_Ici_eq_integral_Ioi
+      _ = _ := by
+        unfold W
+        rw [integral_const_mul, integral_exp_mul_Ioi (neg_neg_of_pos hb)]
+        field_simp
+  have hslice (s : ℝ) : (∫ t, F t s ∂μ) = Real.exp (-b * Real.exp s) - (if s ≤ 0 then 1 else 0) := by
+    have hW : Integrable W μ := (integrableOn_exp_mul_Ioi (neg_neg_of_pos hb) 0).const_mul b
+    have h₁ : Integrable (fun t ↦ W t * (if Real.exp s ≤ t then 1 else 0)) μ := by
+      refine (hW.indicator (measurableSet_Ici (a := Real.exp s))).congr (.of_forall fun t ↦ ?_)
+      by_cases ht : Real.exp s ≤ t <;> simp [ht]
+    change (∫ t, W t * D t s ∂μ) = _
+    simp only [D, mul_sub]
+    rw [integral_sub]
+    · rw [integral_mul_const, show (∫ t, W t ∂μ) = 1 by
+        dsimp [μ, W]; rw [integral_const_mul, integral_exp_mul_Ioi (neg_neg_of_pos hb)]; simp [hb.ne'], one_mul]
+      congr 1
+      rw [← htail _ (Real.exp_pos s)]
+      apply setIntegral_congr_fun measurableSet_Ioi
+      intro t ht
+      simp only [Real.le_log_iff_exp_le (show 0 < t from ht)]
+    · apply h₁.congr
+      filter_upwards [ae_restrict_mem (μ := (volume : Measure ℝ)) measurableSet_Ioi] with t ht
+      simp only [Real.le_log_iff_exp_le (show 0 < t from ht)]
+    · exact hW.mul_const _
+  let q (s : ℝ) := Real.exp (-b * Real.exp s) - (if s ≤ 0 then 1 else 0)
+  have hq : Integrable q := by
+    exact hFi.integral_prod_right.congr (.of_forall hslice)
+  have hqeq : (∫ s, q s) = -Real.log b - Real.eulerMascheroniConstant := by
+    simp_rw [q, ← hslice]
+    rw [← integral_integral_swap (μ := μ) (ν := volume) (f := F) hFi]
+    have hs (t : ℝ) : (∫ s : ℝ, D t s) = Real.log t := (explicitFormula_copy_signedTailSlice _).2.1
+    simpa only [F, W, integral_const_mul, hs] using (explicitFormula_copy_logExpWeight b hb).2
+  have he (x : ℝ) (hx : x ∈ Ioi (0 : ℝ)) :
+      x⁻¹ • q (Real.log x) = (Real.exp (-b * x) - (if x ≤ 1 then 1 else 0)) / x := by
+    rw [smul_eq_mul, div_eq_inv_mul]
+    simp [q, Real.exp_log (show 0 < x from hx), Real.log_nonpos_iff (show 0 < x from hx).le]
+  exact ⟨((integrableOn_comp_log_Ioi_zero q).mpr hq).congr_fun he measurableSet_Ioi,
+    (setIntegral_congr_fun measurableSet_Ioi (fun x hx ↦ (he x hx).symm)).trans
+      ((integral_comp_log_Ioi_zero q).trans hqeq)⟩
+
+
+end ExplicitFormulaCopyExpSubtraction
+
+section ExplicitFormulaRealRegularization
+
+/-- `∫_{τ}^{∞} f → ∫_0^∞ f` as `τ → 0⁺` for `f` integrable on `(0, ∞)`. -/
+private theorem explicitFormula_tendsto_setIntegral_Ioi {E : Type*} [NormedAddCommGroup E]
+    [NormedSpace ℝ E] (f : ℝ → E) (hf : IntegrableOn f (Ioi 0)) :
+    Tendsto (fun τ : ℝ ↦ ∫ t in Ioi τ, f t) (𝓝[>] 0) (𝓝 (∫ t in Ioi (0 : ℝ), f t)) := by
+  have h : Tendsto (fun τ : ℝ ↦ ∫ t in Ioi (0 : ℝ), (Ioi τ).indicator f t) (𝓝[>] 0)
+      (𝓝 (∫ t in Ioi (0 : ℝ), f t)) := by
+    refine tendsto_integral_filter_of_dominated_convergence (fun t ↦ ‖f t‖)
+      (.of_forall fun τ ↦ hf.aestronglyMeasurable.indicator measurableSet_Ioi)
+      (.of_forall fun τ ↦ .of_forall fun t ↦ norm_indicator_le_norm_self _ _) hf.norm ?_
+    refine ae_restrict_of_forall_mem measurableSet_Ioi fun t ht ↦ ?_
+    refine tendsto_const_nhds.congr' ?_
+    filter_upwards [Ioo_mem_nhdsGT (show (0 : ℝ) < t from ht)] with τ hτ
+    rw [indicator_of_mem (mem_Ioi.mpr hτ.2)]
+  refine h.congr' ?_
+  filter_upwards [self_mem_nhdsWithin] with τ hτ
+  have hτ : (0 : ℝ) < τ := hτ
+  rw [setIntegral_indicator measurableSet_Ioi, Ioi_inter_Ioi, max_eq_right hτ.le]
+
+/-- `e^{-t}/t` is integrable on `(τ, ∞)` for `τ > 0`. -/
+private theorem explicitFormula_integrableOn_exp_div (τ : ℝ) (hτ : 0 < τ) :
+    IntegrableOn (fun t : ℝ ↦ Real.exp (-t) / t) (Ioi τ) := by
+  refine Integrable.mono' ((exp_neg_integrableOn_Ioi τ one_pos).const_mul τ⁻¹)
+    (by fun_prop : Measurable (fun t : ℝ ↦ Real.exp (-t) / t)).aestronglyMeasurable
+    (ae_restrict_of_forall_mem measurableSet_Ioi fun t ht ↦ ?_)
+  have ht : τ < t := ht
+  rw [Real.norm_of_nonneg (div_nonneg (Real.exp_pos _).le (hτ.trans ht).le), neg_one_mul,
+    div_eq_mul_inv, mul_comm]
+  exact mul_le_mul_of_nonneg_right (inv_anti₀ hτ ht.le) (Real.exp_pos _).le
+
+/-- `∫_τ^∞ e^{-t}/t dt + log τ → -γ` as `τ → 0⁺`. -/
+private theorem explicitFormula_tendsto_expIntegral_add_log :
+    Tendsto (fun τ : ℝ ↦ (∫ t in Ioi τ, Real.exp (-t) / t) + Real.log τ) (𝓝[>] 0)
+      (𝓝 (-Real.eulerMascheroniConstant)) := by
+  obtain ⟨hp, hpi⟩ := explicitFormula_copy_expSubtraction (b := 1) one_pos
+  set p : ℝ → ℝ := fun x ↦ (Real.exp (-1 * x) - if x ≤ 1 then 1 else 0) / x with hp_def
+  have h := explicitFormula_tendsto_setIntegral_Ioi p hp
+  rw [hpi, Real.log_one, neg_zero, zero_sub] at h
+  refine h.congr' ?_
+  filter_upwards [Ioo_mem_nhdsGT (show (0 : ℝ) < 1 from one_pos)] with τ hτ
+  have he (x : ℝ) : p x = Real.exp (-x) / x - (Iic (1 : ℝ)).indicator (fun t ↦ t⁻¹) x := by
+    simp only [hp_def, neg_one_mul, sub_div]
+    by_cases hx : x ≤ 1
+    · simp [hx]
+    · simp [hx]
+  have hr : IntegrableOn ((Iic (1 : ℝ)).indicator (fun t ↦ t⁻¹)) (Ioi τ) := by
+    rw [IntegrableOn, integrable_indicator_iff measurableSet_Iic, IntegrableOn,
+      Measure.restrict_restrict measurableSet_Iic, Iic_inter_Ioi]
+    exact (continuousOn_inv₀.mono fun x (hx : x ∈ Icc τ 1) ↦ ne_of_gt (hτ.1.trans_le hx.1)
+      ).integrableOn_Icc.mono_set Ioc_subset_Icc_self
+  simp_rw [he]
+  rw [integral_sub (explicitFormula_integrableOn_exp_div τ hτ.1) hr,
+    setIntegral_indicator measurableSet_Iic, Ioi_inter_Iic, ← intervalIntegral.integral_of_le
+      hτ.2.le, integral_inv_of_pos hτ.1 one_pos, Real.log_div one_ne_zero hτ.1.ne', Real.log_one]
+  ring
+
+/-- `log(2 log(1 + ε)) - log ε → log 2` and `log(-2 log(1 - ε)) - log ε → log 2` as `ε → 0⁺`,
+and both `2 log(1 + ε)` and `-2 log(1 - ε)` tend to `0⁺`. -/
+private theorem explicitFormula_tendsto_logCutoffs :
+    Tendsto (fun ε : ℝ ↦ 2 * Real.log (1 + ε)) (𝓝[>] 0) (𝓝[>] 0) ∧
+    Tendsto (fun ε : ℝ ↦ -(2 * Real.log (1 - ε))) (𝓝[>] 0) (𝓝[>] 0) ∧
+    Tendsto (fun ε : ℝ ↦ Real.log (2 * Real.log (1 + ε)) - Real.log ε) (𝓝[>] 0)
+      (𝓝 (Real.log 2)) ∧
+    Tendsto (fun ε : ℝ ↦ Real.log (-(2 * Real.log (1 - ε))) - Real.log ε) (𝓝[>] 0)
+      (𝓝 (Real.log 2)) := by
+  have hd := Real.hasDerivAt_log (one_ne_zero (α := ℝ))
+  have h1 : Tendsto (fun ε : ℝ ↦ ε⁻¹ * Real.log (1 + ε)) (𝓝[>] 0) (𝓝 1) := by
+    simpa [Real.log_one] using hd.tendsto_slope_zero_right
+  have h2 : Tendsto (fun ε : ℝ ↦ ε⁻¹ * -Real.log (1 - ε)) (𝓝[>] 0) (𝓝 1) := by
+    have hl : Tendsto (fun ε : ℝ ↦ -ε) (𝓝[>] 0) (𝓝[<] 0) := by
+      refine tendsto_nhdsWithin_iff.mpr ⟨?_, ?_⟩
+      · simpa using (continuous_neg.tendsto (0 : ℝ)).mono_left nhdsWithin_le_nhds
+      · filter_upwards [self_mem_nhdsWithin] with ε hε
+        exact neg_neg_of_pos hε
+    have := (hd.tendsto_slope_zero_left).comp hl
+    simp only [Function.comp_def, Real.log_one, sub_zero, smul_eq_mul, inv_one] at this
+    refine this.congr fun ε ↦ ?_
+    rw [inv_neg, ← sub_eq_add_neg]
+    ring
+  have hpos1 : ∀ᶠ ε in 𝓝[>] (0 : ℝ), 0 < 2 * Real.log (1 + ε) := by
+    filter_upwards [self_mem_nhdsWithin] with ε hε
+    have : (0 : ℝ) < ε := hε
+    have := Real.log_pos (show (1 : ℝ) < 1 + ε by linarith)
+    positivity
+  have hpos2 : ∀ᶠ ε in 𝓝[>] (0 : ℝ), 0 < -(2 * Real.log (1 - ε)) := by
+    filter_upwards [Ioo_mem_nhdsGT (show (0 : ℝ) < 1 from one_pos)] with ε hε
+    have := Real.log_neg (show (0 : ℝ) < 1 - ε by linarith [hε.2]) (by linarith [hε.1])
+    linarith
+  have hc1 : Tendsto (fun ε : ℝ ↦ 2 * Real.log (1 + ε)) (𝓝[>] 0) (𝓝 0) := by
+    have : ContinuousAt (fun ε : ℝ ↦ 2 * Real.log (1 + ε)) 0 :=
+      ((continuousAt_const.add continuousAt_id).log (by norm_num)).const_mul 2
+    simpa using this.tendsto.mono_left nhdsWithin_le_nhds
+  have hc2 : Tendsto (fun ε : ℝ ↦ -(2 * Real.log (1 - ε))) (𝓝[>] 0) (𝓝 0) := by
+    have : ContinuousAt (fun ε : ℝ ↦ -(2 * Real.log (1 - ε))) 0 :=
+      (((continuousAt_const.sub continuousAt_id).log (by norm_num)).const_mul 2).neg
+    simpa using this.tendsto.mono_left nhdsWithin_le_nhds
+  have hlog2 : ContinuousAt Real.log (2 * 1) := Real.continuousAt_log (by norm_num)
+  refine ⟨tendsto_nhdsWithin_iff.mpr ⟨hc1, hpos1⟩, tendsto_nhdsWithin_iff.mpr ⟨hc2, hpos2⟩, ?_, ?_⟩
+  · have := (hlog2.tendsto.comp (h1.const_mul 2))
+    rw [mul_one] at this
+    refine this.congr' ?_
+    filter_upwards [self_mem_nhdsWithin, hpos1] with ε hε hp
+    have hε : (0 : ℝ) < ε := hε
+    simp only [Function.comp_apply]
+    rw [← Real.log_div hp.ne' hε.ne']
+    congr 1
+    field_simp
+  · have := (hlog2.tendsto.comp (h2.const_mul 2))
+    rw [mul_one] at this
+    refine this.congr' ?_
+    filter_upwards [self_mem_nhdsWithin, hpos2] with ε hε hp
+    have hε : (0 : ℝ) < ε := hε
+    simp only [Function.comp_apply]
+    rw [← Real.log_div hp.ne' hε.ne']
+    congr 1
+    field_simp
+
+/-- The regularized integrand `2 e^{-t} g(0)/t - (g(t/2) + g(-t/2)) k(t)` is the sum of the two real
+digamma kernels with exponents `1/4` and `3/4`, hence integrable on `(0, ∞)`. -/
+private theorem explicitFormula_regularization_integrable (g g' : ℝ → ℂ) (P : ℝ)
+    (hg : ∀ y, HasDerivAt g (g' y) y) (hgb : ∀ y, ‖g y‖ ≤ P) (hg'b : ∀ y, ‖g' y‖ ≤ P) :
+    IntegrableOn (fun t : ℝ ↦ 2 * (Real.exp (-t) : ℂ) * g 0 / (t : ℂ) -
+        (g (t / 2) + g (-(t / 2))) *
+          ((Real.exp (-(t / 4)) / (2 * (1 - Real.exp (-(t / 2)))) : ℝ) : ℂ)) (Ioi 0) := by
+  have hgc : Continuous g := continuous_iff_continuousAt.mpr fun y ↦ (hg y).continuousAt
+  have hK (z : ℝ) (hz : 1 / 4 ≤ z) (hz' : z ≤ 2) :
+      IntegrableOn (heckeArchimedeanDigammaKernel (1 / 2) (z : ℂ) (z : ℂ) g) (Ioi 0) := by
+    refine (explicitFormula_realKernel_integrable g hgc _ _ (8 * P * (1 + 1)) fun t ht ↦ ?_).1
+    have hz0 : ‖(z : ℂ)‖ ≤ 1 + 1 := by
+      rw [Complex.norm_real, Real.norm_of_nonneg (by linarith)]; linarith
+    exact explicitFormula_realKernel_bound g g' hg P 1 hgb hg'b zero_le_one _ _
+      (by simpa using hz) (by simpa using hz) hz0 hz0 ht
+  refine ((hK (1 / 4) (by norm_num) (by norm_num)).add (hK (3 / 4) (by norm_num)
+    (by norm_num))).congr_fun (fun t ht ↦ ?_) measurableSet_Ioi
+  have ht : 0 < t := ht
+  simp only [heckeArchimedeanDigammaKernel, Pi.add_apply]
+  have hc (c : ℝ) : Complex.exp (-(c : ℂ) * (t : ℂ)) = ((Real.exp (-(c * t)) : ℝ) : ℂ) := by
+    push_cast; ring_nf
+  rw [hc, hc, show (1 / 2 : ℝ) * t = t / 2 by ring]
+  set a := Real.exp (-(t / 4)) with ha
+  have ha0 : 0 < a := Real.exp_pos _
+  have ha1 : a < 1 := Real.exp_lt_one_iff.mpr (by linarith)
+  have hpow (n : ℕ) : Real.exp (-(n * (t / 4))) = a ^ n := by
+    rw [ha, ← Real.exp_nat_mul]; ring_nf
+  rw [show -t = -((4 : ℕ) * (t / 4)) by push_cast; ring, hpow,
+    show -(1 / 4 * t) = -((1 : ℕ) * (t / 4)) by push_cast; ring, hpow,
+    show -(3 / 4 * t) = -((3 : ℕ) * (t / 4)) by push_cast; ring, hpow,
+    show -(t / 2) = -((2 : ℕ) * (t / 4)) by push_cast; ring, hpow]
+  have h2 : (1 : ℂ) - (a : ℂ) ^ 2 ≠ 0 := by
+    rw [← Complex.ofReal_pow, ← Complex.ofReal_one, ← Complex.ofReal_sub, Complex.ofReal_ne_zero]
+    nlinarith
+  have h4 : (1 : ℂ) - (a : ℂ) ^ 4 ≠ 0 := by
+    rw [← Complex.ofReal_pow, ← Complex.ofReal_one, ← Complex.ofReal_sub, Complex.ofReal_ne_zero]
+    have : a ^ 4 < 1 := pow_lt_one₀ ha0.le ha1 (by norm_num)
+    linarith
+  have h0 : (t : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr ht.ne'
+  push_cast
+  field_simp
+  ring
+
+end ExplicitFormulaRealRegularization
+
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a real place `w`, the
 `e^{-t}/t` regularization). For `g` of class `C¹` with `g` and `g'` bounded and
 `k(t) = e^{-t/4} / (2 (1 - e^{-t/2}))`, the function `2 e^{-t} g(0) / t - (g(t/2) + g(-t/2)) k(t)`
@@ -14612,7 +14944,83 @@ theorem idelicExplicitFormula_infiniteMatching_realLocal_regularization (g g' : 
         (𝓝 (-(∫ t in Ioi (0 : ℝ), (2 * (Real.exp (-t) : ℂ) * g 0 / (t : ℂ) -
             (g (t / 2) + g (-(t / 2))) * k t)) -
           2 * ((Real.log 2 + Real.eulerMascheroniConstant : ℝ) : ℂ) * g 0)) := by
-  sorry
+  intro k
+  have hIint := explicitFormula_regularization_integrable g g' P hg hgb hg'b
+  set I : ℝ → ℂ := fun t ↦ 2 * (Real.exp (-t) : ℂ) * g 0 / (t : ℂ) -
+    (g (t / 2) + g (-(t / 2))) * k t with hI
+  refine ⟨hIint, ?_⟩
+  -- the odd part `(g(t/2) - g(-t/2)) k(t)` is integrable since it vanishes at `t = 0`
+  have hDint : IntegrableOn (fun t ↦ (g (t / 2) - g (-(t / 2))) * k t) (Ioi 0) := by
+    have hd (y : ℝ) : HasDerivAt (fun y ↦ g y - g (-y)) (g' y + g' (-y)) y := by
+      have := (hg y).sub ((hg (-y)).scomp y (hasDerivAt_neg y))
+      simp only [Function.comp_def, neg_one_smul, sub_neg_eq_add] at this
+      exact this
+    have hb (y : ℝ) : ‖g' y + g' (-y)‖ ≤ 2 * P := by
+      linarith [norm_add_le (g' y) (g' (-y)), hg'b y, hg'b (-y)]
+    refine (explicitFormula_vanishing_minus_integrable (fun y ↦ g y - g (-y)) _ (2 * P) (1 / 2)
+      hd hb (by simp) (by norm_num [abs_of_pos])).congr_fun (fun t _ ↦ ?_) measurableSet_Ioi
+    simp only [k, show (1 / 2 : ℝ) * t = t / 2 by ring]
+  let e : ℝ → ℂ := fun t ↦ ((Real.exp (-t) / t : ℝ) : ℂ)
+  let Bp : ℝ → ℂ := fun t ↦ g (t / 2) * k t - g 0 * e t
+  let Bm : ℝ → ℂ := fun t ↦ g (-(t / 2)) * k t - g 0 * e t
+  have hBp_eq (t : ℝ) : Bp t = ((g (t / 2) - g (-(t / 2))) * k t - I t) / 2 := by
+    simp only [Bp, I, e]; push_cast; ring
+  have hBm_eq (t : ℝ) : Bm t = (-((g (t / 2) - g (-(t / 2))) * k t) - I t) / 2 := by
+    simp only [Bm, I, e]; push_cast; ring
+  have hBp : IntegrableOn Bp (Ioi 0) :=
+    IntegrableOn.congr_fun ((hDint.sub hIint).div_const 2) (fun t _ ↦ (hBp_eq t).symm) measurableSet_Ioi
+  have hBm : IntegrableOn Bm (Ioi 0) :=
+    IntegrableOn.congr_fun ((hDint.neg.sub hIint).div_const 2) (fun t _ ↦ (hBm_eq t).symm) measurableSet_Ioi
+  have hsum : (∫ t in Ioi (0 : ℝ), Bp t) + (∫ t in Ioi (0 : ℝ), Bm t) =
+      -∫ t in Ioi (0 : ℝ), I t := by
+    rw [← integral_add hBp hBm, ← integral_neg]
+    congr 1
+    funext t
+    rw [hBp_eq, hBm_eq]
+    ring
+  let E : ℝ → ℝ := fun τ ↦ ∫ t in Ioi τ, Real.exp (-t) / t
+  have hsplit (B F : ℝ → ℂ) (hB : IntegrableOn B (Ioi 0)) (hF : ∀ t, F t = B t + g 0 * e t)
+      (τ : ℝ) (hτ : 0 < τ) :
+      (∫ t in Ioi τ, F t) = (∫ t in Ioi τ, B t) + g 0 * (E τ : ℂ) := by
+    simp_rw [hF]
+    have he : IntegrableOn (fun t ↦ g 0 * e t) (Ioi τ) :=
+      (explicitFormula_integrableOn_exp_div τ hτ).ofReal.const_mul _
+    rw [integral_add (hB.mono_set (Ioi_subset_Ioi hτ.le)) he, integral_const_mul]
+    have hc : (∫ t in Ioi τ, ((Real.exp (-t) / t : ℝ) : ℂ)) =
+        ((∫ t in Ioi τ, Real.exp (-t) / t : ℝ) : ℂ) := integral_ofReal
+    simp only [e, E, hc]
+  obtain ⟨hτ1, hτ2, hl1, hl2⟩ := explicitFormula_tendsto_logCutoffs
+  have hE := explicitFormula_tendsto_expIntegral_add_log
+  let R : ℝ → ℝ := fun ε ↦ (E (2 * Real.log (1 + ε)) + Real.log (2 * Real.log (1 + ε))) +
+    (E (-(2 * Real.log (1 - ε))) + Real.log (-(2 * Real.log (1 - ε)))) -
+    (Real.log (2 * Real.log (1 + ε)) - Real.log ε) -
+    (Real.log (-(2 * Real.log (1 - ε))) - Real.log ε)
+  have hR : Tendsto R (𝓝[>] 0) (𝓝 (-Real.eulerMascheroniConstant + -Real.eulerMascheroniConstant -
+      Real.log 2 - Real.log 2)) :=
+    (((hE.comp hτ1).add (hE.comp hτ2)).sub hl1).sub hl2
+  have key := ((((explicitFormula_tendsto_setIntegral_Ioi Bp hBp).comp hτ1).add
+    ((explicitFormula_tendsto_setIntegral_Ioi Bm hBm).comp hτ2)).add
+    ((tendsto_const_nhds (x := g 0)).mul ((Complex.continuous_ofReal.tendsto _).comp hR)))
+  rw [hsum] at key
+  have hval : -(∫ t in Ioi (0 : ℝ), I t) -
+      2 * ((Real.log 2 + Real.eulerMascheroniConstant : ℝ) : ℂ) * g 0 =
+      -(∫ t in Ioi (0 : ℝ), I t) + g 0 * ((-Real.eulerMascheroniConstant +
+        -Real.eulerMascheroniConstant - Real.log 2 - Real.log 2 : ℝ) : ℂ) := by
+    push_cast; ring
+  rw [hval]
+  refine key.congr' ?_
+  · filter_upwards [Ioo_mem_nhdsGT (show (0 : ℝ) < 1 from one_pos)] with ε hε
+    have hp1 : 0 < 2 * Real.log (1 + ε) := by
+      have := Real.log_pos (show (1 : ℝ) < 1 + ε by linarith [hε.1]); positivity
+    have hp2 : 0 < -(2 * Real.log (1 - ε)) := by
+      have := Real.log_neg (show (0 : ℝ) < 1 - ε by linarith [hε.2]) (by linarith [hε.1])
+      linarith
+    simp only [Function.comp_apply]
+    rw [hsplit Bp (fun t ↦ g (t / 2) * k t) hBp (fun t ↦ by simp only [Bp]; ring) _ hp1,
+      hsplit Bm (fun t ↦ g (-(t / 2)) * k t) hBm (fun t ↦ by simp only [Bm]; ring) _ hp2]
+    simp only [R]
+    push_cast
+    ring
 
 section ExplicitFormulaRealCutoff
 
