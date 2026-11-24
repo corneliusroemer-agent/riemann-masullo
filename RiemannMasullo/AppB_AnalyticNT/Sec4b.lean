@@ -9356,6 +9356,91 @@ local notation "explicitArchTerm(" χ ", " w ", " f ")" =>
       (1 / 2 - p.1 + (p.2.natAbs : ℂ) / 2) f t) -
         2 * (Real.log (2 * Real.pi) : ℂ) * f 0)
 
+section ExplicitFormulaRadialProfile
+
+/-- Differentiation under the integral over the compact norm-one classes along a one-parameter
+subgroup: the radial profile of a test has the radial profile of its flow derivative as
+derivative. -/
+private theorem explicitFormula_radial_hasDerivAt (b : Multiplicative ℝ →ₜ* C[F]) (χ : U[F])
+    (f : 𝒟(C[F])) (x : ℝ) :
+    HasDerivAt (fun y : ℝ ↦ ∫ u, f.val (b (Multiplicative.ofAdd y) * (u : C[F])) *
+        (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F)
+      (∫ u, bruhatDirectionalDeriv b f.val (b (Multiplicative.ofAdd x) * (u : C[F])) *
+        (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F) x := by
+  -- The Tamagawa measure on `C¹` lives on the subtype σ-algebra.
+  let : BorelSpace C[F] := ⟨rfl⟩
+  let mK : MeasurableSpace (ideleClassNorm F).ker := Subtype.instMeasurableSpace
+  have : OpensMeasurableSpace (ideleClassNorm F).ker := Subtype.opensMeasurableSpace (α := C[F]) _
+  have : IsFiniteMeasure (normOneIdeleClassTamagawaMeasure F) :=
+    ⟨by rw [normOneIdeleClassTamagawaMeasure_volume]; exact ENNReal.ofReal_lt_top⟩
+  let : CompactSpace (ideleClassNorm F).ker := (ideleClassGroup_finiteness F).2.1
+  let β : ℝ → C[F] := fun t ↦ b (Multiplicative.ofAdd t)
+  have hβadd (t u : ℝ) : β (t + u) = β t * β u := by
+    simp only [β, ofAdd_add, map_mul]
+  have hf1 : IsBruhatContDiff 1 f.val := (mem_bruhatSmoothSubmodule_iff _).mp f.property.1 1
+  have hfc : Continuous f.val := explicitTest_continuous f
+  let D := bruhatDirectionalDeriv b f.val
+  have hDc : Continuous D := bruhatDirectionalDeriv_continuous b hf1
+  have hDs : HasCompactSupport D := (explicitFormula_flowDeriv_mem b f).2
+  obtain ⟨C, hC⟩ := hDc.bounded_above_of_compact_support hDs
+  have hdt (g : C[F]) (t : ℝ) : HasDerivAt (fun y : ℝ ↦ f.val (β y * g)) (D (β t * g)) t := by
+    have h0 : HasDerivAt (fun y ↦ f.val (g * β t * β y)) (D (g * β t)) (t - t) := by
+      rw [sub_self]
+      exact hasDerivAt_bruhatDirectionalDeriv b hf1 _
+    have h := h0.comp_sub_const t t
+    rw [mul_comm g] at h
+    refine h.congr_of_eventuallyEq (.of_forall fun y ↦ ?_)
+    change f.val (β y * g) = f.val (β t * g * β (y - t))
+    rw [mul_comm (β t) g, mul_assoc, ← hβadd, add_sub_cancel, mul_comm]
+  have hχc : Continuous (fun u : (ideleClassNorm F).ker ↦ (χ (u : C[F]) : ℂ)) :=
+    continuous_subtype_val.comp (χ.continuous.comp continuous_subtype_val)
+  have hFc (y : ℝ) : Continuous (fun u : (ideleClassNorm F).ker ↦
+      f.val (β y * (u : C[F])) * (χ (u : C[F]) : ℂ)) :=
+    (hfc.comp (continuous_const.mul continuous_subtype_val)).mul hχc
+  have hF'c (y : ℝ) : Continuous (fun u : (ideleClassNorm F).ker ↦
+      D (β y * (u : C[F])) * (χ (u : C[F]) : ℂ)) :=
+    (hDc.comp (continuous_const.mul continuous_subtype_val)).mul hχc
+  have hmain := hasDerivAt_integral_of_dominated_loc_of_deriv_le
+    (μ := normOneIdeleClassTamagawaMeasure F)
+    (F := fun y u ↦ f.val (β y * (u : C[F])) * (χ (u : C[F]) : ℂ))
+    (F' := fun y u ↦ D (β y * (u : C[F])) * (χ (u : C[F]) : ℂ)) (x₀ := x)
+    (bound := fun _ ↦ C) (Metric.ball_mem_nhds x one_pos)
+    (.of_forall fun y ↦ (hFc y).aestronglyMeasurable)
+    ((hFc x).integrable_of_hasCompactSupport (HasCompactSupport.of_compactSpace _))
+    (hF'c x).aestronglyMeasurable
+    (.of_forall fun u y _ ↦ by
+      simp only [norm_mul, Circle.norm_coe, mul_one]
+      exact hC _)
+    (integrable_const C)
+    (.of_forall fun u y _ ↦ (hdt u y).mul_const _)
+  exact hmain.2
+
+/-- The radial profile of a test along a one-parameter subgroup is smooth. -/
+private theorem explicitFormula_radial_contDiff (b : Multiplicative ℝ →ₜ* C[F]) (χ : U[F])
+    (n : ℕ) : ∀ f : 𝒟(C[F]), ContDiff ℝ n (fun y : ℝ ↦ ∫ u,
+      f.val (b (Multiplicative.ofAdd y) * (u : C[F])) * (χ (u : C[F]) : ℂ)
+        ∂normOneIdeleClassTamagawaMeasure F) := by
+  induction n with
+  | zero =>
+    intro f
+    exact contDiff_zero.mpr (continuous_iff_continuousAt.mpr fun x ↦
+      (explicitFormula_radial_hasDerivAt b χ f x).continuousAt)
+  | succ n ih =>
+    intro f
+    let f' : 𝒟(C[F]) := ⟨bruhatDirectionalDeriv b f.val, explicitFormula_flowDeriv_mem b f⟩
+    rw [Nat.cast_succ, contDiff_succ_iff_deriv]
+    refine ⟨fun x ↦ (explicitFormula_radial_hasDerivAt b χ f x).differentiableAt,
+      fun h ↦ absurd h (by simp), ?_⟩
+    have hd : deriv (fun y : ℝ ↦ ∫ u, f.val (b (Multiplicative.ofAdd y) * (u : C[F])) *
+        (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F) = fun y : ℝ ↦ ∫ u,
+          f'.val (b (Multiplicative.ofAdd y) * (u : C[F])) * (χ (u : C[F]) : ℂ)
+            ∂normOneIdeleClassTamagawaMeasure F :=
+      funext fun x ↦ (explicitFormula_radial_hasDerivAt b χ f x).deriv
+    rw [hd]
+    exact ih f'
+
+end ExplicitFormulaRadialProfile
+
 /-- Paper: Theorem B.4.4.7, pp. 623–624 (the decomposition `C[F] = C¹ × ℝ_{>0}` and the
 character expansion of the test). For a test `f` on the idele classes, a continuous section `τ`
 of the class norm and a unitary character `χ`, the radial profile
@@ -9367,7 +9452,48 @@ theorem idelicExplicitFormula_radialProfile (τ : ℝ≥0ˣ →ₜ* C[F])
     ∃ Φ : 𝓢(ℝ, ℂ), ExponentialDecay Φ ∧ ∀ x : ℝ, Φ x = c *
       ∫ u, f.val (radialFlow(τ, x) * (u : C[F])) * (χ (u : C[F]) : ℂ)
         ∂normOneIdeleClassTamagawaMeasure F := by
-  sorry
+  let b : Multiplicative ℝ →ₜ* C[F] :=
+    ⟨τ.toMonoidHom.comp positiveRealLogEquiv.symm.toMulEquiv.toMonoidHom,
+      τ.continuous.comp positiveRealLogEquiv.symm.continuous⟩
+  let I : ℝ → ℂ := fun y ↦ ∫ u, f.val (b (Multiplicative.ofAdd y) * (u : C[F])) *
+    (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F
+  have hI : ContDiff ℝ ((⊤ : ℕ∞) : WithTop ℕ∞) I :=
+    contDiff_infty.mpr fun n ↦ explicitFormula_radial_contDiff b χ n f
+  -- Compact support: the class norm of `b(eʸ) u` is `eʸ`, and `f` has compact support.
+  let N : C[F] → ℝ := fun g ↦ ((ideleClassNorm F g).val : ℝ)
+  have hNpos (g : C[F]) : 0 < N g := NNReal.coe_pos.mpr (Units.zero_lt _)
+  have hNc : Continuous N := NNReal.continuous_coe.comp
+    (Units.continuous_val.comp (isProperMap_ideleClassNorm F).continuous)
+  have hN (y : ℝ) (u : (ideleClassNorm F).ker) :
+      Real.log (N (b (Multiplicative.ofAdd y) * (u : C[F]))) = y := by
+    change Real.log (((ideleClassNorm F (τ (positiveRealLogEquiv.symm
+      (Multiplicative.ofAdd y)) * (u : C[F]))).val : ℝ)) = y
+    rw [map_mul, _hτ, MonoidHom.mem_ker.mp u.property, mul_one]
+    have h := positiveRealLogEquiv_apply (positiveRealLogEquiv.symm (Multiplicative.ofAdd y))
+    rw [ContinuousMulEquiv.apply_symm_apply, toAdd_ofAdd] at h
+    exact h.symm
+  have hIc : HasCompactSupport I := by
+    refine HasCompactSupport.intro (f.property.2.isCompact.image
+      (hNc.log fun g ↦ (hNpos g).ne')) fun y hy ↦ ?_
+    refine integral_eq_zero_of_ae (.of_forall fun u ↦ ?_)
+    have hu : b (Multiplicative.ofAdd y) * (u : C[F]) ∉ tsupport f.val := fun hmem ↦
+      hy ⟨_, hmem, hN y u⟩
+    simp only [image_eq_zero_of_notMem_tsupport hu, zero_mul, Pi.zero_apply]
+  let Φ : 𝓢(ℝ, ℂ) := c • hIc.toSchwartzMap hI
+  have hΦ (x : ℝ) : Φ x = c * I x := rfl
+  have hΦc : HasCompactSupport (Φ : ℝ → ℂ) := by
+    rw [show (Φ : ℝ → ℂ) = fun x ↦ c * I x from funext hΦ]
+    exact hIc.mul_left
+  have hz (j : ℕ) : iteratedDeriv j (Φ : ℝ → ℂ) =ᶠ[cocompact ℝ] 0 := by
+    have hh := hΦc.iteratedFDeriv (𝕜 := ℝ) j
+    rw [hasCompactSupport_iff_eventuallyEq, coclosedCompact_eq_cocompact] at hh
+    filter_upwards [hh] with x hx
+    rw [iteratedDeriv_eq_iteratedFDeriv, hx]
+    rfl
+  exact ⟨Φ, ⟨fun j _ _ ↦ ((hz j).filter_mono atTop_le_cocompact).trans_isBigO
+    (Asymptotics.isBigO_zero _ _), fun j _ _ ↦ ((hz j).filter_mono atBot_le_cocompact).trans_isBigO
+    (Asymptotics.isBigO_zero _ _)⟩, hΦ⟩
+
 
 section ExplicitFormulaMellinMatching
 
