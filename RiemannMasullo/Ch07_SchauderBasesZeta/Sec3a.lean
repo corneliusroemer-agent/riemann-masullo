@@ -2314,6 +2314,446 @@ theorem sLocalOrbitalFourierJet_range_le_ker
   exact (natCast_le_analyticOrderAt_iff_iteratedDeriv_eq_zero hg).mp ha j.val.2 j.property.2
 
 
+open Complex Metric in
+/-- A nonzero entire function is bounded away from zero on an arbitrarily small circle about each point. -/
+private theorem primaryFourier_periodic_sphere {p : ℂ → ℂ} (hp : AnalyticOnNhd ℂ p univ)
+    (hne : ∃ z, p z ≠ 0) (δ : ℝ) (hδ : 0 < δ) (c : ℂ) :
+    ∃ r : ℝ, 0 < r ∧ r ≤ δ ∧ ∃ d > (0 : ℝ), ∀ w ∈ sphere c r, d ≤ ‖p w‖ := by
+  have hcod := (hp.eqOn_zero_or_eventually_ne_zero_of_preconnected isPreconnected_univ).resolve_left
+    (fun h ↦ let ⟨z, hz⟩ := hne; hz (h (mem_univ z)))
+  obtain ⟨R, hR, hnonzero⟩ := Metric.mem_nhdsWithin_iff.mp (nhdsNE_le_codiscrete c hcod)
+  let r := min (R / 2) δ
+  have hr : 0 < r := lt_min (half_pos hR) hδ
+  have hrR : r < R := (min_le_left _ _).trans_lt (half_lt_self hR)
+  have hex : (sphere c r).Nonempty := NormedSpace.sphere_nonempty.mpr hr.le
+  obtain ⟨w, hw, hmin⟩ := (isCompact_sphere c r).exists_isMinOn hex
+    (fun z _ ↦ (hp z trivial).continuousAt.continuousWithinAt.norm)
+  have hw' : w ∈ ball c R ∩ {c}ᶜ := by
+    rw [mem_sphere] at hw
+    exact ⟨mem_ball.mpr (hw.trans_lt hrR), by
+      rintro rfl
+      exact hr.ne' (by simpa only [dist_self] using hw.symm)⟩
+  exact ⟨r, hr, min_le_right _ _, ‖p w‖, norm_pos_iff.mpr (hnonzero hw'), fun z hz ↦ hmin hz⟩
+
+open Complex Metric in
+/-- Removing an analytic multiplier periodic in height preserves boundedness on
+closed vertical strips inside the half-plane of holomorphy. -/
+private theorem primaryFourier_periodic_strip {p f : ℂ → ℂ} {T : ℝ} (hT : 0 < T)
+    (hperiod : Periodic p ((T : ℂ) * I)) (hp : AnalyticOnNhd ℂ p univ) (hne : ∃ z, p z ≠ 0)
+    (U : Set ℝ) (hf : DifferentiableOn ℂ f (Complex.re ⁻¹' U)) {a b δ : ℝ}
+    (hδ : 0 < δ) (hU : Icc (a - δ) (b + δ) ⊆ U)
+    (hbound : ∃ C : ℝ, ∀ z : ℂ, z.re ∈ Icc (a - δ) (b + δ) → ‖p z * f z‖ ≤ C) :
+    ∃ C : ℝ, ∀ z : ℂ, z.re ∈ Icc a b → ‖f z‖ ≤ C := by
+  classical
+  let K := Complex.reProdIm (Icc a b) (Icc 0 T)
+  have hK : IsCompact K := isCompact_Icc.reProdIm isCompact_Icc
+  choose r hr hr₁ d hd hnorm using primaryFourier_periodic_sphere hp hne δ hδ
+  have hcover : K ⊆ ⋃ c : K, ball c.val (r c.val) := fun c hc ↦
+    mem_iUnion.mpr ⟨⟨c, hc⟩, mem_ball_self (hr c)⟩
+  obtain ⟨s, hs⟩ := hK.elim_finite_subcover (fun c : K ↦ ball c.val (r c.val))
+    (fun _ ↦ isOpen_ball) hcover
+  obtain ⟨C, hC⟩ := hbound
+  let M := 1 + ∑ c ∈ s, max C 0 / d c.val
+  refine ⟨M, fun z hz ↦ ?_⟩
+  let n := ⌊z.im / T⌋
+  let v := (n : ℂ) * ((T : ℂ) * I)
+  have hvre : v.re = 0 := by simp [v, Complex.mul_re, Complex.mul_im]
+  have hvim : v.im = (n : ℝ) * T := by simp [v, Complex.mul_re, Complex.mul_im]
+  have hzK : z - v ∈ K := by
+    have hfloor := (le_div_iff₀ hT).mp (Int.floor_le (z.im / T))
+    have hceil := (div_lt_iff₀ hT).mp (Int.lt_floor_add_one (z.im / T))
+    change (z - v).re ∈ Icc a b ∧ (z - v).im ∈ Icc 0 T
+    rw [Complex.sub_re, hvre, sub_zero, Complex.sub_im, hvim]
+    exact ⟨hz, ⟨by dsimp [n]; linarith, by dsimp [n]; linarith⟩⟩
+  obtain ⟨c, hc, hzc⟩ := mem_iUnion₂.mp (hs hzK)
+  have hz' : z ∈ ball (c.val + v) (r c.val) := by
+    simpa only [mem_ball, dist_eq_norm, sub_add_eq_sub_sub, add_comm c.val] using hzc
+  have hc' : c.val.re ∈ Icc a b := c.property.1
+  have hsph (w : ℂ) (hw : w ∈ sphere (c.val + v) (r c.val)) : ‖f w‖ ≤ M := by
+    have hw₀ : w - v ∈ sphere c.val (r c.val) := by
+      simpa only [mem_sphere, dist_eq_norm, sub_add_eq_sub_sub, add_comm c.val] using hw
+    have hre : |w.re - c.val.re| ≤ δ := by
+      have h := Complex.abs_re_le_norm (w - (c.val + v))
+      rw [Complex.sub_re, Complex.add_re, hvre, add_zero, ← dist_eq_norm, mem_sphere.mp hw] at h
+      exact h.trans (hr₁ c.val)
+    have hwstrip : w.re ∈ Icc (a - δ) (b + δ) := by
+      obtain ⟨hlo, hhi⟩ := abs_le.mp hre
+      exact ⟨by linarith [hc'.1], by linarith [hc'.2]⟩
+    have hper : p w = p (w - v) := by
+      simpa only [v, zsmul_eq_mul, sub_add_cancel] using (hperiod.zsmul n (w - v))
+    have hpw : d c.val ≤ ‖p w‖ := by rw [hper]; exact hnorm c.val (w - v) hw₀
+    have hmul := hC w hwstrip
+    rw [norm_mul] at hmul
+    calc
+      ‖f w‖ ≤ max C 0 / d c.val :=
+        (le_div_iff₀ (hd c.val)).2 ((mul_le_mul_of_nonneg_left hpw (norm_nonneg _)).trans
+          (by rw [mul_comm]; exact hmul.trans (le_max_left _ _)))
+      _ ≤ M := by
+        have hsum := Finset.single_le_sum
+          (f := fun d' : K ↦ max C 0 / d d'.val)
+          (fun i _ ↦ div_nonneg (le_max_right _ _) (hd i.val).le) hc
+        dsimp [M]
+        linarith
+  have hball : closedBall (c.val + v) (r c.val) ⊆ Complex.re ⁻¹' U := by
+    intro w hw
+    have hre := Complex.abs_re_le_norm (w - (c.val + v))
+    rw [Complex.sub_re, Complex.add_re, hvre, add_zero, ← dist_eq_norm] at hre
+    obtain ⟨hl, hh⟩ := abs_le.mp (hre.trans ((mem_closedBall.mp hw).trans (hr₁ c.val)))
+    exact hU ⟨by linarith [hc'.1], by linarith [hc'.2]⟩
+  refine Complex.norm_le_of_forall_mem_frontier_norm_le isBounded_ball
+    (hf.diffContOnCl_ball hball) ?_
+    (subset_closure hz')
+  exact fun w hw ↦ hsph w (frontier_ball_subset_sphere hw)
+
+
+open Complex Metric in
+/-- A holomorphic quotient by a finite product of vertical-periodic factors
+retains every Schwartz bound on the closed substrips of its domain. -/
+private theorem primaryFourier_factors_strip {ι : Type*} (S : Finset ι) (D : ι → ℂ → ℂ)
+    (hD : ∀ i ∈ S, Differentiable ℂ (D i) ∧ (∃ z, D i z ≠ 0) ∧
+      ∃ T : ℝ, 0 < T ∧ Periodic (D i) ((T : ℂ) * Complex.I))
+    {U : Set ℝ} (margin : ∀ a b, a ≤ b → Icc a b ⊆ U →
+      ∃ δ > (0 : ℝ), Icc (a - δ) (b + δ) ⊆ U)
+    (G : ℂ → ℂ) (hout : EqOn G 0 (Complex.re ⁻¹' U)ᶜ)
+    (hG : DifferentiableOn ℂ G (Complex.re ⁻¹' U))
+    (hH : (fun z ↦ (∏ i ∈ S, D i z) * G z) ∈ schwartzBergmanSubmodule U) :
+    G ∈ schwartzBergmanSubmodule U := by
+  classical
+  induction S using Finset.induction_on with
+  | empty => simpa using hH
+  | @insert i S hi ih =>
+    have hrest k (hk : k ∈ S) := hD k (Finset.mem_insert_of_mem hk)
+    refine ih hrest ?_
+    obtain ⟨hd, hn, T, hT, hper⟩ := hD i (Finset.mem_insert_self _ _)
+    let P (z : ℂ) := ∏ k ∈ S, D k z
+    have hP : Differentiable ℂ P :=
+      Differentiable.fun_finsetProd (fun k hk ↦ (hrest k hk).1)
+    refine ⟨fun z hz ↦ by simp [hout hz], hP.differentiableOn.mul hG, ?_⟩
+    intro a b hab hsub N
+    obtain ⟨δ, hδ, he⟩ := margin a b hab hsub
+    have hB := hH.2.2 (a-δ) (b+δ) (by linarith) he N
+    obtain ⟨B,hB⟩ := hB
+    let g (z : ℂ) := z^N * (P z * G z)
+    have hg : DifferentiableOn ℂ g (Complex.re ⁻¹' U) :=
+      (differentiableOn_id.pow N).mul (hP.differentiableOn.mul hG)
+    obtain ⟨C,hC⟩ := primaryFourier_periodic_strip hT hper (fun z _ ↦ hd.analyticAt z) hn U hg hδ he
+      ⟨B, fun z hz ↦ by
+        have h := hB ⟨z, hz, rfl⟩
+        simpa only [g, P, Finset.prod_insert hi, mul_assoc, mul_left_comm, mul_comm] using h⟩
+    refine ⟨C, ?_⟩
+    rintro _ ⟨z,hz,rfl⟩
+    exact hC z hz
+
+open Complex Metric in
+/-- Normalize the meromorphic quotient by an analytic divisor on an open strip.
+The upper bound on its pole orders gives holomorphy across all divisor zeros. -/
+private theorem primaryFourier_strip_division {ι : Type*} (S : Finset ι) (D : ι → ℂ → ℂ)
+    (hD : ∀ i ∈ S, Differentiable ℂ (D i) ∧ (∃ z, D i z ≠ 0) ∧
+      ∃ T : ℝ, 0 < T ∧ Periodic (D i) ((T : ℂ) * Complex.I))
+    {U : Set ℝ} (hU : IsOpen U) (margin : ∀ a b, a ≤ b → Icc a b ⊆ U →
+      ∃ δ > (0 : ℝ), Icc (a - δ) (b + δ) ⊆ U)
+    (H : SchwartzBergman U)
+    (hord : ∀ z ∈ Complex.re ⁻¹' U, meromorphicOrderAt (fun z ↦ ∏ i ∈ S, D i z) z ≤
+      meromorphicOrderAt H.val z) :
+    ∃ G : SchwartzBergman U, ∀ z, (∏ i ∈ S, D i z) * G.val z = H.val z := by
+  let stripDomain := Complex.re ⁻¹' U
+  let P (z : ℂ) := ∏ i ∈ S, D i z
+  have hV : IsOpen stripDomain := hU.preimage Complex.continuous_re
+  have hP : Differentiable ℂ P :=
+    Differentiable.fun_finsetProd (fun i hi ↦ (hD i hi).1)
+  have hevent (z : ℂ) : ∀ᶠ w in 𝓝[≠] z, P w ≠ 0 := by
+    have single i (hi : i ∈ S) : ∀ᶠ w in 𝓝[≠] z, D i w ≠ 0 := by
+      have hd : AnalyticOnNhd ℂ (D i) univ := fun u _ ↦ (hD i hi).1.analyticAt u
+      have h := hd.eqOn_zero_or_eventually_ne_zero_of_preconnected
+        isPreconnected_univ
+      obtain ⟨u,hu⟩ := (hD i hi).2.1
+      exact nhdsNE_le_codiscrete z (h.resolve_left (fun h0 ↦ hu (h0 (mem_univ u))))
+    filter_upwards [(S.eventually_all.mpr single)] with w hw
+    exact Finset.prod_ne_zero_iff.mpr hw
+  have ha (z : ℂ) (hz : z ∈ stripDomain) : AnalyticAt ℂ H.val z :=
+    H.property.2.1.analyticOnNhd hV z hz
+  have hm : MeromorphicOn (H.val / P) stripDomain :=
+    fun z hz ↦ (ha z hz).meromorphicAt.div (hP.analyticAt z).meromorphicAt
+  let G := toMeromorphicNFOn (H.val / P) stripDomain
+  have hnorm : MeromorphicNFOn G stripDomain := meromorphicNFOn_toMeromorphicNFOn _ _
+  have hG (z : ℂ) (hz : z ∈ stripDomain) : AnalyticAt ℂ G z := by
+    apply (hnorm hz).meromorphicOrderAt_nonneg_iff_analyticAt.mp
+    change 0 ≤ meromorphicOrderAt (toMeromorphicNFOn _ _) _
+    rw [meromorphicOrderAt_toMeromorphicNFOn hm hz,
+      meromorphicOrderAt_div (ha z hz).meromorphicAt (hP.analyticAt z).meromorphicAt]
+    have hfinite := (meromorphicOrderAt_ne_top_iff_eventually_ne_zero
+      (hP.analyticAt z).meromorphicAt).mpr (hevent z)
+    have hle := hord z hz
+    change meromorphicOrderAt P z ≤ _ at hle
+    cases h : meromorphicOrderAt P z using WithTop.recTopCoe with
+    | top => exact (hfinite h).elim
+    | coe a =>
+      cases hi : meromorphicOrderAt H.val z using WithTop.recTopCoe with
+      | top => simp
+      | coe b =>
+        rw [h,hi] at hle
+        exact WithTop.coe_le_coe.mpr (sub_nonneg.mpr (WithTop.coe_le_coe.mp hle))
+  have hout : EqOn G 0 stripDomainᶜ := by
+    intro z hz
+    change G z = 0
+    rw [show G z = H.val z / P z from toMeromorphicNFOn_eq_self_on_compl hm hz,
+      show H.val z = 0 from H.property.1 hz, zero_div]
+  have he (z : ℂ) : P z * G z = H.val z := by
+    by_cases hz : z ∈ stripDomain
+    · have hev : (fun w ↦ P w * G w) =ᶠ[𝓝[≠] z] H.val := by
+        filter_upwards [hm.toMeromorphicNFOn_eq_self_on_nhdsNE hz, hevent z] with w hq hw
+        change G w = H.val w / P w at hq
+        rw [hq, mul_div_cancel₀ _ hw]
+      exact tendsto_nhds_unique (((hP.continuous.continuousAt.mul (hG z hz).continuousAt).tendsto.mono_left
+        (nhdsWithin_le_nhds (s := {z}ᶜ))).congr' hev)
+        ((ha z hz).continuousAt.tendsto.mono_left nhdsWithin_le_nhds)
+    · rw [show G z = 0 from hout hz, mul_zero, show H.val z = 0 from H.property.1 hz]
+  have hmem : (fun z ↦ (∏ i ∈ S, D i z) * G z) ∈ schwartzBergmanSubmodule U := by
+    rw [show (fun z ↦ (∏ i ∈ S, D i z) * G z) = H.val from funext he]
+    exact H.property
+  refine ⟨⟨G, primaryFourier_factors_strip S D hD margin G hout
+      (fun z hz ↦ (hG z hz).differentiableAt.differentiableWithinAt) hmem⟩, he⟩
+
+/-- Every reciprocal finite Euler factor is entire, nonzero somewhere, and periodic in the imaginary direction. -/
+private theorem primaryFourier_factor_data (v : S) (c : Xₛ) :
+    let D (z : ℂ) := (finiteLocalEulerFactor v.val (sLocalFiniteRestriction v (twistₛ c z)))⁻¹
+    Differentiable ℂ D ∧ (∃ z, D z ≠ 0) ∧
+      ∃ T : ℝ, 0 < T ∧ Periodic D ((T : ℂ) * Complex.I) := by
+  have h := orbitalEuler_reciprocal_shape (F := F) v c
+  intro D
+  let L := Real.log (v.val.asIdeal.absNorm : ℝ)
+  have hL : 0 < L := h.1
+  rcases h.2 with h | ⟨a, ha, h⟩
+  · have hconst : D = fun _ ↦ 1 := h
+    rw [hconst]
+    exact ⟨differentiable_const _, ⟨0, one_ne_zero⟩, 1, zero_lt_one, fun _ ↦ rfl⟩
+  · have hform : D = fun z ↦ 1 - a * Complex.exp (-(L : ℂ) * z) := h
+    rw [hform]
+    let T := 2 * Real.pi / L
+    have hT : 0 < T := div_pos (by positivity) hL
+    have halg : -(L : ℂ) * ((T : ℂ) * Complex.I) = -(2 * (Real.pi : ℂ) * Complex.I) := by
+      dsimp [T]; push_cast; field_simp [Complex.ofReal_ne_zero.mpr hL.ne']
+    refine ⟨by fun_prop, ?_, T, hT, fun z ↦ ?_⟩
+    · by_cases h₀ : a = 1
+      · refine ⟨1, ?_⟩
+        change 1 - a * Complex.exp (-(L : ℂ) * 1) ≠ 0
+        rw [h₀, one_mul, mul_one, ← Complex.ofReal_neg, ← Complex.ofReal_exp]
+        exact sub_ne_zero.mpr (by exact_mod_cast (Real.exp_lt_one_iff.mpr (neg_lt_zero.mpr hL)).ne')
+      · exact ⟨0, by simpa using sub_ne_zero.mpr (Ne.symm h₀)⟩
+    · change 1 - a * Complex.exp (-(L : ℂ) * (z + _)) = 1 - a * Complex.exp (-(L : ℂ) * z)
+      rw [mul_add, Complex.exp_add, halg, Complex.exp_neg, Complex.exp_two_pi_mul_I, inv_one, mul_one]
+
+open Classical in
+/-- The vanishing order of the finite Euler denominator is the sum of the local simple-pole multiplicities. -/
+private theorem primaryFourier_divisor_order (T : Finset V) (χ : PontryaginDual Jₛ) (z : ℂ) :
+    let U := Finset.univ.filter (fun v : S ↦ v.val ∈ T)
+    meromorphicOrderAt (orbitalReciprocalProduct (F := F) (S := S) U ((circleToComplex).comp χ)) z =
+      (sLocalFinitePoleMultiplicity (F := F) (S := S) T (chart(χ) z) : WithTop ℤ) := by
+  classical
+  intro U
+  let b := (circleToComplex).comp χ
+  have hs : orbitalReciprocalProduct U (chart(χ) z) = orbitalReciprocalProduct U b ∘ (· + z) := by
+    funext w
+    apply Finset.prod_congr rfl
+    intro v _
+    change (finiteLocalEulerFactor v.val (sLocalFiniteRestriction v (twistₛ (chart(χ) z) w)))⁻¹ =
+      (finiteLocalEulerFactor v.val (sLocalFiniteRestriction v (twistₛ b (w + z))))⁻¹
+    rw [normTwist_normTwist]
+  have ho := (orbitalReciprocalProduct_order (F := F) (S := S) T (chart(χ) z)).2
+  change meromorphicOrderAt (orbitalReciprocalProduct U (chart(χ) z)) 0 = _ at ho
+  rw [hs, meromorphicOrderAt_comp_add_const_eq_meromorphicOrderAt, zero_add] at ho
+  exact ho
+
+/-- Finite Euler denominators have no zeros in the right half-plane of a unitary chart. -/
+private theorem primaryFourier_right_multiplicity_zero (T : Finset V) (χ : PontryaginDual Jₛ)
+    (z : ℂ) (hz : 0 < z.re) : sLocalFinitePoleMultiplicity (F := F) (S := S) T (chart(χ) z) = 0 := by
+  classical
+  let c := chart(χ) z
+  have hA : AnalyticAt ℂ (fun t ↦ sLocalRhoFactor (twistₛ c t)) 0 := by
+    have h := (sLocalRhoFactor_analyticOn χ z hz).comp_of_eq
+      (f := fun t : ℂ ↦ t + z) (x := 0) (by fun_prop) (zero_add z)
+    simpa only [c, normTwist_normTwist, Function.comp_def] using h
+  have hb : sLocalIdelicOrderBound c = 0 := min_eq_left hA.meromorphicOrderAt_nonneg
+  have hle : sLocalFinitePoleMultiplicity (F := F) (S := S) T c ≤ sLocalRhoPoleOrder c := by
+    rw [sLocalRhoPoleOrder_eq_card_polePlaces]
+    exact (Finset.card_filter_le _ _).trans (Nat.le_add_left _ _)
+  exact Nat.eq_zero_of_le_zero (by simpa [sLocalRhoPoleOrder, hb] using hle)
+/-- Vanishing Fourier jets give the orders required for division of the reflected coordinate on its half-plane. -/
+private theorem primaryFourier_left_order (T : Finset V) (χ : PontryaginDual Jₛ) (f : ℬₛ)
+    : let ω := χ.comp (⟨(mₛ).ker.subtype, continuous_subtype_val⟩ : J₁ →ₜ* Jₛ)
+    (∀ j : I(T,ω), sLocalOrbitalFourierJet (F := F) (S := S) (T := T)
+      (ω := ω) j ((Kₛ(ω)).mkQ f) = 0) →
+    ∀ (z : ℂ), z.re < 1 →
+    (sLocalFinitePoleMultiplicity (F := F) (S := S) T (chart(χ) z) : WithTop ℤ) ≤
+      meromorphicOrderAt (sLocalZetaPair (F := F) (S := S) χ (Submodule.Quotient.mk f)).2.val z := by
+  classical
+  intro ω hf z hz
+  let c := chart(χ) z
+  let k := sLocalFinitePoleMultiplicity (F := F) (S := S) T c
+  let H := (sLocalZetaPair (F := F) (S := S) χ (Submodule.Quotient.mk f)).2
+  have hH : AnalyticAt ℂ H.val z :=
+    H.property.2.1.analyticOnNhd (isOpen_Iio.preimage Complex.continuous_re) z hz
+  change (k : WithTop ℤ) ≤ meromorphicOrderAt H.val z
+  by_cases hk : k = 0
+  · exact (congrArg (fun n : ℕ ↦ (n : WithTop ℤ)) hk).trans_le hH.meromorphicOrderAt_nonneg
+  have hc : onComponent(c,ω) := by
+    apply ContinuousMonoidHom.ext
+    intro u
+    change (χ u.val : ℂ) * ((((mₛ u.val).val : ℝ) : ℂ) ^ z) = (χ u.val : ℂ)
+    rw [show mₛ u.val = 1 from u.property]
+    simp
+  let j₀ : I(T, ω) := ⟨(c,0),hc,Nat.pos_of_ne_zero hk⟩
+  let D := fourierZeta(c) f
+  have hD : AnalyticAt ℂ D 0 := sLocalOrbitalFourierZeta_analyticAt (F := F) (S := S) j₀ f
+  have hDa : (k : ℕ∞) ≤ analyticOrderAt D 0 := by
+    apply (natCast_le_analyticOrderAt_iff_iteratedDeriv_eq_zero hD).mpr
+    intro r hr
+    let j : I(T, ω) := ⟨(c,r),hc,hr⟩
+    exact (sLocalOrbitalFourierJet_mk (F := F) (S := S) j f).symm.trans (hf j)
+  have hDo : (k : WithTop ℤ) ≤ meromorphicOrderAt D 0 := by
+    rw [hD.meromorphicOrderAt_eq]
+    cases ho : analyticOrderAt D 0 using ENat.recTopCoe with
+    | top => simp
+    | coe n =>
+      rw [ENat.map_natCast]
+      rw [ho] at hDa
+      exact_mod_cast hDa
+  have hopen : IsOpen {w : ℂ | (w + z).re < 1} :=
+    isOpen_lt (Complex.continuous_re.comp (continuous_id.add continuous_const)) continuous_const
+  have hnear := hopen.mem_nhds (show (0 : ℂ) ∈ {w : ℂ | (w + z).re < 1} by simpa using hz)
+  have he : (fun w : ℂ ↦ H.val (w+z)) =ᶠ[𝓝 (0 : ℂ)] D := by
+    filter_upwards [hnear] with w hw
+    change H.val (w+z) = sLocalIdelicZFunction (sAdeleSchwartzFourier f) (dualₛ (twistₛ c w))
+    simpa only [H, c, normTwist_normTwist, sLocal_dual_normTwist] using
+      (sLocalZetaPair_mk (F := F) (S := S) χ f).2 (show (w + z).re < 1 from hw)
+  have h := meromorphicOrderAt_congr (he.symm.filter_mono nhdsWithin_le_nhds)
+  rw [meromorphicOrderAt_fun_comp_add_const_eq_meromorphicOrderAt, zero_add] at h
+  exact hDo.trans_eq h
+
+/-- The right-hand zeta datum in a single unitary chart determines the homogeneous theta class. -/
+private theorem primaryFourier_right_separates (χ : PontryaginDual Jₛ) (f g : ℬₛ)
+    (h : ∀ z : ℂ, 0 < z.re → sLocalIdelicZFunction f (chart(χ) z) =
+      sLocalIdelicZFunction g (chart(χ) z)) :
+    let ω := χ.comp (⟨(mₛ).ker.subtype, continuous_subtype_val⟩ : J₁ →ₜ* Jₛ)
+    (Kₛ(ω)).mkQ f = (Kₛ(ω)).mkQ g := by
+  intro ω
+  have hall := eq_of_agree_rightHalf (sLocalIdelicZFunction_meromorphic f χ)
+    (sLocalIdelicZFunction_meromorphic g χ) 0 h
+  apply (Submodule.Quotient.eq _).mpr
+  apply (mem_sLocalHomogeneousAdelicTheta_ker_iff (F := F) (S := S) ω _).mpr
+  intro c hc
+  obtain ⟨z,hz⟩ := orbitalNormTwist_of_same_restriction ((circleToComplex).comp χ) c.val
+    (ContinuousMonoidHom.ext fun k ↦ (hc k).symm)
+  rw [map_sub]
+  change sLocalIdelicZFunction f c.val - sLocalIdelicZFunction g c.val = 0
+  exact sub_eq_zero.mpr (hz ▸ congrFun hall z)
+
+open Classical in
+/-- Taking principal value multiplies the right zeta coordinate by the finite Euler denominator. -/
+private theorem primaryFourier_principalValue_right {T : Finset V} (hT : T ⊆ S)
+    (χ : PontryaginDual Jₛ) (f : ℬₛ) (z : ℂ) (hz : 0 < z.re) :
+    let U := Finset.univ.filter (fun v : S ↦ v.val ∈ T)
+    sLocalIdelicZFunction (sAdelePrincipalValue F hT f) (chart(χ) z) =
+      (orbitalReciprocalProduct (F := F) (S := S) U ((circleToComplex).comp χ) z) *
+        sLocalIdelicZFunction f (chart(χ) z) := by
+  classical
+  intro U
+  let Z (f : ℬₛ) := (sLocalZetaPair (F := F) (S := S) χ (Submodule.Quotient.mk f)).1
+  let P := orbitalReciprocalProduct (F := F) (S := S) U ((circleToComplex).comp χ)
+  have hP : Differentiable ℂ P := Differentiable.fun_finsetProd fun v hv ↦
+    (primaryFourier_factor_data (F := F) (S := S) v ((circleToComplex).comp χ)).1
+  have hright : IsOpen {w : ℂ | 0 < w.re} := isOpen_lt continuous_const Complex.continuous_re
+  have hZ (g : ℬₛ) : ContinuousAt (Z g).val z :=
+    (Z g).property.2.1.continuousOn.continuousAt (hright.mem_nhds hz)
+  have he : (Z (sAdelePrincipalValue F hT f)).val =ᶠ[𝓝[≠] z] fun w ↦ P w * (Z f).val w := by
+    have hnb : ∀ᶠ w : ℂ in 𝓝[≠] z, 0 < w.re :=
+      mem_of_superset (nhdsWithin_le_nhds (hright.mem_nhds hz)) (fun _ h ↦ h)
+    filter_upwards [nhdsNE_le_codiscrete z (sLocalIdelicZFunction_principalValue T hT f χ),
+      hnb] with w hw hpos
+    rw [(sLocalZetaPair_mk χ _).1 hpos, (sLocalZetaPair_mk χ f).1 hpos]
+    change sLocalIdelicZFunction _ (chart(χ) w) = P w * sLocalIdelicZFunction f (chart(χ) w)
+    rw [hw]
+    rw [div_eq_mul_inv, mul_comm, ← Finset.prod_inv_distrib]
+    congr 1
+    change _ = ∏ v ∈ (Finset.univ.filter fun v : S ↦ v.val ∈ T), (finiteLocalEulerFactor v.val (sLocalFiniteRestriction v (chart(χ) w)))⁻¹
+    rw [Finset.prod_filter]
+    apply Finset.prod_congr rfl
+    intro v _
+    split_ifs <;> simp
+  have hp : (Z (sAdelePrincipalValue F hT f)).val z = P z * (Z f).val z :=
+    tendsto_nhds_unique ((hZ _).tendsto.mono_left nhdsWithin_le_nhds)
+      (((hP.continuous.continuousAt.mul (hZ f)).tendsto.mono_left nhdsWithin_le_nhds).congr' he.symm)
+  exact ((sLocalZetaPair_mk χ _).1 hz).symm.trans
+    (hp.trans (congrArg (P z * ·) ((sLocalZetaPair_mk χ f).1 hz)))
+
+open Classical in
+/-- Divide both components by the finite Euler denominator and realize the resulting matching pair locally. -/
+private theorem primaryFourier_local_range {T : Finset V} (hT : T ⊆ S)
+    (χ : PontryaginDual Jₛ) (f : ℬₛ)
+    : let ω := χ.comp (⟨(mₛ).ker.subtype, continuous_subtype_val⟩ : J₁ →ₜ* Jₛ)
+    (∀ j : I(T,ω), sLocalOrbitalFourierJet (F := F) (S := S) (T := T)
+      (ω := ω) j ((Kₛ(ω)).mkQ f) = 0) →
+    (Kₛ(ω)).mkQ f ∈ PV(T, hT, ω) := by
+  classical
+  intro ω hf
+  let U := Finset.univ.filter (fun v : S ↦ v.val ∈ T)
+  let b := (circleToComplex).comp χ
+  let D (v : S) (z : ℂ) := (finiteLocalEulerFactor v.val (sLocalFiniteRestriction v (twistₛ b z)))⁻¹
+  let P (z : ℂ) := ∏ v ∈ U, D v z
+  have hD v (_ : v ∈ U) := primaryFourier_factor_data (F := F) (S := S) v b
+  have hP : Differentiable ℂ P := Differentiable.fun_finsetProd fun v hv ↦ (hD v hv).1
+  let H := sLocalZetaPair (F := F) (S := S) χ ((Kₛ(ω)).mkQ f)
+  have ho (z : ℂ) : meromorphicOrderAt P z =
+      (sLocalFinitePoleMultiplicity (F := F) (S := S) T (chart(χ) z) : WithTop ℤ) :=
+    primaryFourier_divisor_order (F := F) (S := S) T χ z
+  have hpos (z : ℂ) (hz : 0 < z.re) : meromorphicOrderAt P z = 0 := by
+    rw [ho, primaryFourier_right_multiplicity_zero T χ z hz, Nat.cast_zero]
+  have hright a b (hab : a ≤ b) (hs : Icc a b ⊆ Ioi 0) :
+      ∃ δ > (0 : ℝ), Icc (a - δ) (b + δ) ⊆ Ioi 0 := by
+    have ha : 0 < a := hs (left_mem_Icc.mpr hab)
+    exact ⟨a/2, half_pos ha, fun x hx ↦ by
+      change 0 < x
+      linarith [hx.1]⟩
+  have hleft a b (hab : a ≤ b) (hs : Icc a b ⊆ Iio 1) :
+      ∃ δ > (0 : ℝ), Icc (a - δ) (b + δ) ⊆ Iio 1 := by
+    have hb : b < 1 := hs (right_mem_Icc.mpr hab)
+    exact ⟨(1-b)/2, by linarith, fun x hx ↦ by
+      change x < 1
+      linarith [hx.2]⟩
+  obtain ⟨G₁, h₁⟩ := primaryFourier_strip_division U D hD isOpen_Ioi hright H.1
+    (fun z hz ↦ (hpos z hz).trans_le
+      (H.1.property.2.1.analyticOnNhd (isOpen_Ioi.preimage Complex.continuous_re) z hz).meromorphicOrderAt_nonneg)
+  obtain ⟨G₂, h₂⟩ := primaryFourier_strip_division U D hD isOpen_Iio hleft H.2
+    (fun z hz ↦ (ho z).trans_le (primaryFourier_left_order (F := F) (S := S) T χ f hf z hz))
+  have hH : H ∈ sLocalZetaMatching (F := F) (S := S) χ := by
+    rw [← sLocalZetaPair_range]
+    exact ⟨_, rfl⟩
+  have hm := (mem_sLocalZetaMatching (F := F) (S := S) χ H).mp hH
+  have hG : (G₁, G₂) ∈ (sLocalZetaPair (F := F) (S := S) χ).range := by
+    rw [sLocalZetaPair_range, mem_sLocalZetaMatching]
+    intro z hz
+    have hn : P z ≠ 0 :=
+      (hP.analyticAt z).meromorphicNFAt.meromorphicOrderAt_eq_zero_iff.mp (hpos z hz.1)
+    apply mul_left_cancel₀ hn
+    change P z * G₁.val z = P z * (sLocalRhoFactor (chart(χ) z) * G₂.val z)
+    calc
+      P z * G₁.val z = H.1.val z := h₁ z
+      _ = sLocalRhoFactor (chart(χ) z) * H.2.val z := hm hz
+      _ = _ := by rw [← h₂ z]; exact mul_left_comm _ _ _
+  obtain ⟨x,hx⟩ := hG
+  obtain ⟨g,rfl⟩ := (Kₛ(ω)).mkQ_surjective x
+  refine ⟨(Kₛ(ω)).mkQ g, (sLocalHomogeneousThetaPrincipalValue_mk hT ω g).trans ?_⟩
+  apply primaryFourier_right_separates χ
+  intro z hz
+  have hg := congrArg (fun p : SchwartzBergman (Ioi 0) × SchwartzBergman (Iio 1) ↦ p.1.val z) hx
+  calc
+    sLocalIdelicZFunction (sAdelePrincipalValue F hT g) (chart(χ) z) =
+        P z * sLocalIdelicZFunction g (chart(χ) z) :=
+      primaryFourier_principalValue_right (F := F) (S := S) hT χ g z hz
+    _ = P z * G₁.val z := congrArg (P z * ·) (((sLocalZetaPair_mk χ g).1 hz).symm.trans hg)
+    _ = H.1.val z := h₁ z
+    _ = sLocalIdelicZFunction f (chart(χ) z) := (sLocalZetaPair_mk χ f).1 hz
+
 /-- The common kernel of the selected Fourier jets is the primary principal-value image. -/
 private theorem sLocalOrbitalFourierJet_commonKer
     (p : Vℚ) (ω : PontryaginDual J₁) (hS : IsSaturatedPlaceSet S)
@@ -2321,72 +2761,13 @@ private theorem sLocalOrbitalFourierJet_commonKer
     x ∈ Rₚ(p, ω) ↔ ∀ j : Idx(p, ω), sLocalOrbitalFourierJet j x = 0 := by
   classical
   refine ⟨fun hx j ↦ (sLocalOrbitalFourierJet_range_le_ker p ω j) hx, ?_⟩
-  obtain ⟨f, rfl⟩ := (Kₛ(ω)).mkQ_surjective x
-  intro h
-  change (Kₛ(ω)).mkQ f ∈ PV(Sₚ(p), hₚ(p), ω)
-  rw [sLocalOrbitalPrincipalValue_eq_poleBound hₚ(p) hp hS hPic ω]
-  refine Submodule.subset_span ⟨f, rfl, fun c hc ↦ ?_⟩
-  obtain ⟨χ, s, hs⟩ := sLocalOrbitalPrincipalPart_range_le_ker_chart c
-  let m := sLocalRhoPoleOrder c
-  let k := sLocalFinitePoleMultiplicity Sₚ(p) c
-  let Z (z : ℂ) := sLocalIdelicZFunction f (twistₛ c z)
-  have hle : k ≤ m := by
-    rw [show m = sLocalRhoPoleOrder c from rfl, sLocalRhoPoleOrder_eq_card_polePlaces]
-    exact (Finset.card_filter_le _ _).trans (Nat.le_add_left _ _)
-  suffices hord : (-((m - k : ℕ) : ℤ) : WithTop ℤ) ≤ meromorphicOrderAt Z 0 by
-    change (-(meromorphicOrderAt Z 0).untop₀).toNat ≤ m - k
-    generalize meromorphicOrderAt Z 0 = o at hord ⊢
-    induction o using WithTop.recTopCoe with
-    | top => simp
-    | coe n =>
-      have hn : -((m - k : ℕ) : ℤ) ≤ n := WithTop.coe_le_coe.mp hord
-      simp only [WithTop.untop₀_coe]
-      omega
-  by_cases hk : k = 0
-  · rw [hk, Nat.sub_zero]
-    exact (sLocalOrbitalPrincipalPart_range_le_ker_zeta f χ s c hs).2
-  let j₀ : Idx(p, ω) := ⟨(c, 0), hc, Nat.pos_of_ne_zero hk⟩
-  let ρ (z : ℂ) := sLocalRhoFactor (twistₛ c z)
-  let D := fourierZeta(c) f
-  have hD : AnalyticAt ℂ D 0 := sLocalOrbitalFourierZeta_analyticAt j₀ f
-  have hDa : (k : ℕ∞) ≤ analyticOrderAt D 0 := by
-    apply (natCast_le_analyticOrderAt_iff_iteratedDeriv_eq_zero hD).mpr
-    intro r hr
-    let j : Idx(p, ω) := ⟨(c, r), hc, hr⟩
-    exact (sLocalOrbitalFourierJet_mk j f).symm.trans (h j)
-  have hDo : (k : WithTop ℤ) ≤ meromorphicOrderAt D 0 := by
-    rw [hD.meromorphicOrderAt_eq]
-    cases ho : analyticOrderAt D 0 using ENat.recTopCoe with
-    | top => exact le_top
-    | coe n =>
-      rw [ENat.map_natCast]
-      rw [ho] at hDa
-      exact_mod_cast hDa
-  have hρ : MeromorphicAt ρ 0 := by
-    change MeromorphicAt (fun z ↦ sLocalRhoFactor (twistₛ c z)) 0
-    simp only [hs]
-    exact (sLocalRhoFactor_meromorphic χ (s + 0)).comp_analyticAt
-      (g := fun z : ℂ ↦ s + z) (analyticAt_const.add analyticAt_id)
-  have hρo : (-(m : ℤ) : WithTop ℤ) ≤ meromorphicOrderAt ρ 0 := by
-    rw [show (-(m : ℤ) : WithTop ℤ) = sLocalIdelicOrderBound c from
-      (sLocalIdelicOrderBound_eq_neg_poleOrder c).symm]
-    exact min_le_right _ _
-  have hEq : Z =ᶠ[𝓝[≠] 0] ρ * D := by
-    have ht : Tendsto (fun z : ℂ ↦ s + z) (𝓝[≠] 0) (𝓝[≠] s) := by
-      have ht' : Tendsto (fun z : ℂ ↦ z + s) (𝓝[≠] 0) (𝓝[≠] (0 + s)) :=
-        ((Homeomorph.addRight s).map_punctured_nhds_eq 0).le
-      simpa only [zero_add, add_comm s] using ht'
-    filter_upwards [ht.eventually (nhdsNE_le_codiscrete s (sLocalOrbitalFourierJet_functionalEquation χ f))] with z hz
-    simpa only [Z, ρ, D, Pi.mul_apply, hs, sLocal_dual_normTwist] using hz
-  rw [meromorphicOrderAt_congr hEq, meromorphicOrderAt_mul hρ hD.meromorphicAt]
-  have hmk : (-((m - k : ℕ) : ℤ) : WithTop ℤ) = (-(m : ℤ) : WithTop ℤ) + (k : WithTop ℤ) := by
-    change ((-((m - k : ℕ) : ℤ) : ℤ) : WithTop ℤ) =
-      ((-(m : ℤ) : ℤ) : WithTop ℤ) + ((k : ℤ) : WithTop ℤ)
-    rw [← WithTop.coe_add, Nat.cast_sub hle]
-    congr 1
-    ring
-  rw [hmk]
-  exact add_le_add hρo hDo
+  obtain ⟨τ,hτ⟩ := sIdeleQuotientNorm_exists_section F S
+  obtain ⟨χ,hχ,-⟩ := (existsUnique_sLocalNormSectionCharacter (F := F) (S := S) τ hτ ω).exists
+  have e : χ.comp (⟨(mₛ).ker.subtype, continuous_subtype_val⟩ : J₁ →ₜ* Jₛ) = ω :=
+    hχ
+  subst ω
+  obtain ⟨f,rfl⟩ := (Kₛ(_)).mkQ_surjective x
+  exact primaryFourier_local_range (F := F) (S := S) hₚ(p) χ f
 
 /-- a unitary chart covers exactly the chosen norm-one component. -/
 private theorem sLocalOrbitalIndex_enumerable_or_empty_chart
@@ -2752,11 +3133,9 @@ theorem sLocalOrbitalIndex_enumerable_or_empty
     intro x y
     obtain ⟨x, rfl⟩ := Submodule.mkQ_surjective (Rₚ(p, ω)) x
     obtain ⟨y, rfl⟩ := Submodule.mkQ_surjective (Rₚ(p, ω)) y
-    have hx := (sLocalPrimaryOrbitalQuotient_mk_eq_zero p _hS _hp _hPic ω x).2
-      (fun j ↦ isEmptyElim j)
-    have hy := (sLocalPrimaryOrbitalQuotient_mk_eq_zero p _hS _hp _hPic ω y).2
-      (fun j ↦ isEmptyElim j)
-    exact hx.trans hy.symm
+    have hzero (z : Θₛ(ω)) : π(p, ω) z = 0 := (Submodule.Quotient.mk_eq_zero _).2
+      ((sLocalOrbitalFourierJet_commonKer p ω _hS _hp _hPic z).2 (fun j ↦ isEmptyElim j))
+    exact (hzero x).trans (hzero y).symm
 
 
 /-- A selected Euler pole lies at a unitary character. -/
@@ -3642,8 +4021,13 @@ private theorem sLocalOrbital_dual_of_absolute (p : Vℚ) (ω : PontryaginDual J
     IsSchauderBasis d ev ∧ SchauderBasis.IsUnconditional d ev ∧
       IsSchauderBasis e d ∧ SchauderBasis.IsAbsolute e d := by
   let Q := Q(p, ω)
-  have hclosed : IsClosed (Rₚ(p, ω) : Set (Θₛ(ω))) :=
-    sLocalOrbitalPrincipalValue_isClosed hₚ(p) hp hS hPic ω
+  have hclosed : IsClosed (Rₚ(p, ω) : Set (Θₛ(ω))) := by
+    have heq : (Rₚ(p, ω) : Set (Θₛ(ω))) = ⋂ j : Idx(p, ω), (sLocalOrbitalFourierJet j).ker := by
+      ext x
+      rw [Set.mem_iInter]
+      change x ∈ Rₚ(p, ω) ↔ ∀ j : Idx(p, ω), sLocalOrbitalFourierJet j x = 0
+      exact sLocalOrbitalFourierJet_commonKer p ω hS hp hPic x
+    exact heq ▸ isClosed_iInter fun j ↦ (sLocalOrbitalFourierJet j).isClosed_ker
   have hF : IsFrechetTVS Q := isFrechetTVS_quotient
     (sLocalHomogeneousThetaSpace_frechet ω) (Rₚ(p, ω)) hclosed
   have hN : IsNuclearTVS.{0} Q := isNuclearTVS_quotient
@@ -3693,37 +4077,66 @@ private theorem orbitalQuotient_kernel_of_coefficients {E U I J : Type*}
 -- TODO(paper-gap): In (7.3.1.19) use the inverse uniformizers at the unramified
 -- places above p for the generators of Chapter 4. At a ramified place Weil's
 -- unit average vanishes on the isotype, and its principal value is the identity.
-/-- Paper: Theorem 7.3.1.6(2)–(3), p. 345.
-Any enumeration of the Fourier functionals gives an unconditional basis of the strong dual.
-With the same enumeration, its biorthogonal vectors are an absolute basis of the quotient. -/
-theorem sLocalFourierOrbital_bases
-    (p : Vℚ) (ω : PontryaginDual J₁)
-    (_hS : IsSaturatedPlaceSet S) (_hp : (Sₚ(p)).Nonempty) (_hPic : PicTrivial) (σ : ℕ ≃ Idx(p, ω)) :
-    ∃ (D : Idx(p, ω) → StrongDual ℂ (Q(p, ω))) (ψ : Idx(p, ω) → Q(p, ω))
-      (ev : ℕ → StrongDual ℂ (StrongDual ℂ (Q(p, ω)))),
-      (∀ (n : ℕ) (ℓ : StrongDual ℂ (Q(p, ω))), ev n ℓ = ℓ (ψ (σ n))) ∧
-      (∀ (j : Idx(p, ω)) (x : Θₛ(ω)), D j (π(p, ω) x) =
-        sLocalOrbitalFourierJet (F := F) (S := S) (T := Sₚ(p)) (ω := ω) j x) ∧
-      let e := ψ ∘ σ
-      let d := D ∘ σ
-      IsSchauderBasis d ev ∧ SchauderBasis.IsUnconditional d ev ∧
-        IsSchauderBasis e d ∧ SchauderBasis.IsAbsolute e d := by
+/-- The primary generators have positive log-periods commensurate with the log of
+the residue cardinality of the rational prime. -/
+private theorem sLocalOrbitalDifferenceGenerator_periods (p : Vℚ) (ω : PontryaginDual J₁) :
+    (∀ k, 1 < (mGroup (sLocalOrbitalDifferenceGenerator p ω k)).val) ∧
+    ∃ a : ℝ, 0 < a ∧ ∀ i, ∃ r : ℚ,
+      Real.log ((mGroup (sLocalOrbitalDifferenceGenerator p ω i)).val : ℝ) = (r : ℝ) * a := by
   classical
   let m := mGroup
-  let hm := (sLocalOrbital_modulation (F := F) (S := S)).1
-  let hs := (sLocalOrbital_modulation (F := F) (S := S)).2
-  let γ := sLocalOrbitalDifferenceGenerator p ω
-  let Λ := List.ofFn γ
-  let J := ModelIndex(p, ω)
-  obtain ⟨ι, hι⟩ := sLocalOrbitalModelIndex_equiv p ω
-  let σ₀ := σ.trans ι.symm
+  let γ := sLocalOrbitalDifferenceGenerator (F := F) (S := S) p ω
   have hgen (k : Fin _) : 1 < (m (γ k)).val := by
-    have hN := sLocalOrbitalDifferenceGenerator_norm p ω k
+    have hN := sLocalOrbitalDifferenceGenerator_norm (F := F) (S := S) p ω k
     apply NNReal.coe_lt_coe.mp
     rw [NNReal.coe_one]
     change 1 < ((mₛ (γ k)).val : ℝ)
     rw [hN]
-    exact_mod_cast HeightOneSpectrum.one_lt_absNorm (sLocalOrbitalActiveEquiv p ω k).val.val
+    exact_mod_cast HeightOneSpectrum.one_lt_absNorm (sLocalOrbitalActiveEquiv (F := F) (S := S) p ω k).val.val
+  have hcomm :
+      ∃ a : ℝ, 0 < a ∧ ∀ i, ∃ r : ℚ, Real.log ((m (γ i)).val : ℝ) = (r : ℝ) * a := by
+    have hpN : (1 : ℝ) < p.asIdeal.absNorm := by exact_mod_cast HeightOneSpectrum.one_lt_absNorm p
+    refine ⟨_, Real.log_pos hpN, fun i ↦ ?_⟩
+    let v := sLocalOrbitalActiveEquiv (F := F) (S := S) p ω i
+    refine ⟨(v.val.val.asIdeal.inertiaDeg (𝓞 ℚ) : ℕ), ?_⟩
+    change Real.log ((mₛ (sLocalOrbitalDifferenceGenerator (F := F) (S := S) p ω i)).val : ℝ) = _
+    rw [sLocalOrbitalDifferenceGenerator_norm (F := F) (S := S) p ω i, Rat.cast_natCast]
+    exact sLocalOrbitalPrimary_log_norm (F := F) (S := S) p v.val.val (Finset.mem_filter.mp v.property).2.1
+  exact ⟨hgen, hcomm⟩
+
+open Classical in
+/-- The norm-weighted Fourier comparison identifies the primary and periodic quotients.
+The change from a logarithmic moment to a Fourier jet is the reflection sign divided
+by the total mass of the norm-one fiber. -/
+private theorem sLocalOrbital_periodicFourierComparison (p : Vℚ) (ω : PontryaginDual J₁)
+    (_hS : IsSaturatedPlaceSet S) (_hp : (Sₚ(p)).Nonempty) (_hPic : PicTrivial) (σ : ℕ ≃ Idx(p, ω))
+    (hgen : ∀ k, 1 < (mGroup (sLocalOrbitalDifferenceGenerator (F := F) (S := S) p ω k)).val)
+    (hcomm : ∃ a : ℝ, 0 < a ∧ ∀ i, ∃ r : ℚ,
+      Real.log ((mGroup (sLocalOrbitalDifferenceGenerator (F := F) (S := S) p ω i)).val : ℝ) = (r : ℝ) * a) :
+    let m := mGroup
+    let hm := (sLocalOrbital_modulation (F := F) (S := S)).1
+    let hs := (sLocalOrbital_modulation (F := F) (S := S)).2
+    let γ := sLocalOrbitalDifferenceGenerator (F := F) (S := S) p ω
+    let U := H₀(ω⁻¹) ⧸ (modulatedIsotypicDifferenceProduct m hm hs ω⁻¹ univ
+      ordConnected_univ (mem_univ (0 : ℝ)) (List.ofFn γ)).range
+    let d (j : ModelIndex(p, ω)) : StrongDual ℂ U :=
+      modulatedQuotientLogMoment m hm hs ω⁻¹ γ hgen μorb j
+    let mass : ℂ := (sLocalNormOneQuotientMeasure F S).real univ
+    mass ≠ 0 ∧ ∃ (ι : ModelIndex(p, ω) ≃ Idx(p, ω)) (T : Q(p, ω) ≃L[ℂ] U),
+      (∀ j, (ι j).val = ((circleToComplex).comp j.val.1⁻¹, j.val.2)) ∧
+      ∀ j x, sLocalOrbitalFourierJet (ι j) x =
+        (mass⁻¹ * (-1 : ℂ) ^ j.val.2) * d j (T (π(p, ω) x)) := by
+  classical
+  let m := mGroup
+  let hm := (sLocalOrbital_modulation (F := F) (S := S)).1
+  let hs := (sLocalOrbital_modulation (F := F) (S := S)).2
+  let γ := sLocalOrbitalDifferenceGenerator (F := F) (S := S) p ω
+  let Λ := List.ofFn γ
+  let J := ModelIndex(p, ω)
+  let idx := sLocalOrbitalModelIndex_equiv (F := F) (S := S) p ω
+  let ι := idx.choose
+  have hι := idx.choose_spec
+  let σ₀ := σ.trans ι.symm
   have hΛgen : ∀ g ∈ Λ, 1 < (m g).val := by
     intro g hg
     obtain ⟨k, rfl⟩ := List.mem_ofFn.mp hg
@@ -3736,28 +4149,17 @@ theorem sLocalFourierOrbital_bases
     simp [Λ, γ] at hlen
     have hk₀ := k.isLt
     simp [hlen] at hk₀
-  have hcomm :
-      ∃ a : ℝ, 0 < a ∧ ∀ i, ∃ r : ℚ, Real.log ((m (γ i)).val : ℝ) = (r : ℝ) * a := by
-    have hpN : (1 : ℝ) < p.asIdeal.absNorm := by exact_mod_cast HeightOneSpectrum.one_lt_absNorm p
-    refine ⟨_, Real.log_pos hpN, fun i ↦ ?_⟩
-    let v := sLocalOrbitalActiveEquiv p ω i
-    refine ⟨(v.val.val.asIdeal.inertiaDeg (𝓞 ℚ) : ℕ), ?_⟩
-    change Real.log ((mₛ (sLocalOrbitalDifferenceGenerator p ω i)).val : ℝ) = _
-    rw [sLocalOrbitalDifferenceGenerator_norm p ω i, Rat.cast_natCast]
-    exact sLocalOrbitalPrimary_log_norm p v.val.val (Finset.mem_filter.mp v.property).2.1
   let R₀ := (modulatedIsotypicDifferenceProduct m hm hs ω⁻¹ univ ordConnected_univ
     (mem_univ (0 : ℝ)) Λ).range
   let Rint := (modulatedIsotypicDifferenceProduct m hm hs ω⁻¹ I₋ ordConnected_Ioi hI₋ Λ).range
   let U := H₀(ω⁻¹) ⧸ R₀
   let d (j : J) : StrongDual ℂ U := modulatedQuotientLogMoment m hm hs ω⁻¹ γ hgen μorb j
   let hBasis := modulatedQuotientLogMoment_bases m hm hs ω⁻¹ γ hgen μorb hcomm σ₀
-  let ψ₀ := hBasis.choose
   have hb := hBasis.choose_spec.1
-  have ha := hBasis.choose_spec.2.1
-  let hComparison := sLocalOrbital_intervalQuotient ω⁻¹ Λ hΛ hΛgen
+  let hComparison := sLocalOrbital_intervalQuotient (F := F) (S := S) ω⁻¹ Λ hΛ hΛgen
   let E := hComparison.choose
   have hE := hComparison.choose_spec
-  let hFourier := sLocalOrbital_shiftedFourier ω
+  let hFourier := sLocalOrbital_shiftedFourier (F := F) (S := S) ω
   let A := hFourier.choose
   have hA := hFourier.choose_spec
   let C : Θₛ(ω) →L[ℂ] U := E.symm.toContinuousLinearMap.comp (Rint.mkQL.comp A)
@@ -3771,8 +4173,8 @@ theorem sLocalFourierOrbital_bases
     have hgv := (hE v).choose_spec.1
     have hEg := (hE v).choose_spec.2
     let v' : sLocalDecayIsotype univ ω⁻¹ := ⟨v.val,
-      (sLocalOrbital_isotype_eq univ (mem_univ (0 : ℝ)) ω⁻¹) ▸ v.property⟩
-    let hLift := primaryAllExponents_fourier_lift ω⁻¹ v'
+      (sLocalOrbital_isotype_eq (F := F) (S := S) univ (mem_univ (0 : ℝ)) ω⁻¹) ▸ v.property⟩
+    let hLift := primaryAllExponents_fourier_lift (F := F) (S := S) ω⁻¹ v'
     let f := hLift.choose
     have hf := hLift.choose_spec
     have hfg : A ((Kₛ(ω)).mkQ f) = g := by
@@ -3790,7 +4192,7 @@ theorem sLocalFourierOrbital_bases
     have hEg := (hE v).choose_spec.2
     have hmem : g - A x ∈ Rint :=
       (Submodule.Quotient.eq Rint).mp (hEg.symm.trans ((congrArg E hv).trans (hC x)))
-    have hz := sLocalOrbital_logMoment_difference_zero p ω j (g - A x) hmem
+    have hz := sLocalOrbital_logMoment_difference_zero (F := F) (S := S) p ω j (g - A x) hmem
     have hI : ∀ y : H₋(ω⁻¹), Integrable
         (fun u ↦ y.val.val u * (j.val.1 u : ℂ) * (logNorm u : ℂ)^j.val.2) μorb :=
       fun y ↦ primaryDecay_logMoment_integrable I₋ hI₋ (by constructor <;> norm_num)
@@ -3821,16 +4223,16 @@ theorem sLocalFourierOrbital_bases
         sLocalHomogeneousAdelicThetaLinearMap F S ω⁻¹ (sAdeleSchwartzFourier f) g :=
       (congrArg (fun u : Θₛ(ω) ↦ (A u).val.val g) hf.symm).trans (hA f g)
     exact (congrArg (fun u : Θₛ(ω) ↦ sLocalOrbitalFourierJet (ι j) u) hf.symm).trans
-      ((sLocalOrbital_shiftedFourierJet p ω j (ι j) (hι j) f (A x) hy).trans
+      ((sLocalOrbital_shiftedFourierJet (F := F) (S := S) p ω j (ι j) (hι j) f (A x) hy).trans
         (congrArg (s j * ·) (hcoord j x).symm))
-  have hF₁ := sLocalHomogeneousThetaSpace_frechet ω
+  have hF₁ := sLocalHomogeneousThetaSpace_frechet (F := F) (S := S) ω
   have hF₂ := (modulatedIsotypicDifferenceProduct_quotient.{_, 0} m hm hs ω⁻¹ Λ hΛgen).2.2
   let : TopologicalSpace.MetrizableSpace (Θₛ(ω)) := hF₁.choose_spec.2.1
   let : TopologicalSpace.MetrizableSpace U := hF₂.choose_spec.2.1
   let : IsTopologicalAddGroup U := hF₂.choose
   have hKer : C.ker = Rₚ(p, ω) :=
     orbitalQuotient_kernel_of_coefficients C (Rₚ(p, ω)) (fun i x ↦ sLocalOrbitalFourierJet i x)
-      d ι s hsne (sLocalOrbitalFourierJet_commonKer p ω _hS _hp _hPic) hjet σ₀ _ hb
+      d ι s hsne (sLocalOrbitalFourierJet_commonKer (F := F) (S := S) p ω _hS _hp _hPic) hjet σ₀ _ hb
   have hOpen : IsOpenMap C :=
     isOpenMap_of_surjective_toLF (isLFSpace_of_isFrechetTVS hF₂)
       (X := fun _ ↦ Θₛ(ω)) (fun _ ↦ hF₁) (fun _ ↦ ContinuousLinearMap.id ℂ _)
@@ -3839,20 +4241,284 @@ theorem sLocalFourierOrbital_bases
     (hOpen.isQuotientMap C.continuous hCsurj) (Rₚ(p, ω)) hKer
   let T := hQuot.choose
   have hT := hQuot.choose_spec
+  refine ⟨hmass, ι, T, hι, fun j x ↦ ?_⟩
+  exact (hjet j x).trans (congrArg (fun y : U ↦ s j * d j y) (hT x).symm)
+
+/-- Paper: Theorem 7.3.1.6(2)–(3), p. 345.
+Any enumeration of the Fourier functionals gives an unconditional basis of the strong dual.
+With the same enumeration, its biorthogonal vectors are an absolute basis of the quotient. -/
+theorem sLocalFourierOrbital_bases
+    (p : Vℚ) (ω : PontryaginDual J₁)
+    (_hS : IsSaturatedPlaceSet S) (_hp : (Sₚ(p)).Nonempty) (_hPic : PicTrivial) (σ : ℕ ≃ Idx(p, ω)) :
+    ∃ (D : Idx(p, ω) → StrongDual ℂ (Q(p, ω))) (ψ : Idx(p, ω) → Q(p, ω))
+      (ev : ℕ → StrongDual ℂ (StrongDual ℂ (Q(p, ω)))),
+      (∀ (n : ℕ) (ℓ : StrongDual ℂ (Q(p, ω))), ev n ℓ = ℓ (ψ (σ n))) ∧
+      (∀ (j : Idx(p, ω)) (x : Θₛ(ω)), D j (π(p, ω) x) =
+        sLocalOrbitalFourierJet (F := F) (S := S) (T := Sₚ(p)) (ω := ω) j x) ∧
+      let e := ψ ∘ σ
+      let d := D ∘ σ
+      IsSchauderBasis d ev ∧ SchauderBasis.IsUnconditional d ev ∧
+        IsSchauderBasis e d ∧ SchauderBasis.IsAbsolute e d := by
+  classical
+  let m := mGroup
+  let hm := (sLocalOrbital_modulation (F := F) (S := S)).1
+  let hs := (sLocalOrbital_modulation (F := F) (S := S)).2
+  let γ := sLocalOrbitalDifferenceGenerator (F := F) (S := S) p ω
+  let J := ModelIndex(p, ω)
+  have hgen := (sLocalOrbitalDifferenceGenerator_periods p ω).1
+  have hcomm := (sLocalOrbitalDifferenceGenerator_periods p ω).2
+  let cmp := sLocalOrbital_periodicFourierComparison p ω _hS _hp _hPic σ hgen hcomm
+  let ι := cmp.2.choose
+  let T := cmp.2.choose_spec.choose
+  have hjet := cmp.2.choose_spec.choose_spec.2
+  let σ₀ := σ.trans ι.symm
+  let U := H₀(ω⁻¹) ⧸ (modulatedIsotypicDifferenceProduct m hm hs ω⁻¹ univ
+    ordConnected_univ (mem_univ (0 : ℝ)) (List.ofFn γ)).range
+  let d (j : J) : StrongDual ℂ U := modulatedQuotientLogMoment m hm hs ω⁻¹ γ hgen μorb j
+  let mass : ℂ := (sLocalNormOneQuotientMeasure F S).real univ
+  let s (j : J) : ℂ := mass⁻¹ * (-1 : ℂ)^j.val.2
+  have hsne (j : J) : s j ≠ 0 := mul_ne_zero (inv_ne_zero cmp.1) (pow_ne_zero _ (by norm_num))
+  let hBasis := modulatedQuotientLogMoment_bases m hm hs ω⁻¹ γ hgen μorb hcomm σ₀
+  let ψ₀ := hBasis.choose
+  have hb := hBasis.choose_spec.1
+  have ha := hBasis.choose_spec.2.1
   let D (j : Idx(p, ω)) : StrongDual ℂ (Q(p, ω)) :=
     s (ι.symm j) • (d (ι.symm j)).comp T.toContinuousLinearMap
   let ψ (j : Idx(p, ω)) : Q(p, ω) := (s (ι.symm j))⁻¹ • T.symm (ψ₀ (ι.symm j))
   let ev (n : ℕ) : StrongDual ℂ (StrongDual ℂ (Q(p, ω))) :=
     ContinuousLinearMap.applyₗ ℂ (RingHom.id ℂ) (ψ (σ n))
   refine ⟨D, ψ, ev, fun _ _ ↦ rfl, fun j x ↦ ?_, ?_⟩
-  · calc
-      _ = s (ι.symm j) * d (ι.symm j) (T (π(p, ω) x)) := rfl
-      _ = s (ι.symm j) * d (ι.symm j) (C x) := congrArg (fun u ↦ s (ι.symm j) * d (ι.symm j) u) (hT x)
-      _ = _ := (hjet (ι.symm j) x).symm.trans
-        (congrArg (fun i ↦ sLocalOrbitalFourierJet i x) (ι.apply_symm_apply j))
+  · exact (hjet (ι.symm j) x).symm.trans
+      (congrArg (fun i ↦ sLocalOrbitalFourierJet i x) (ι.apply_symm_apply j))
   · have h := orbitalQuotient_rescale_basis T (ψ₀ ∘ σ₀) (d ∘ σ₀) hb ha
       (s ∘ σ₀) (fun n ↦ hsne (σ₀ n))
     exact sLocalOrbital_dual_of_absolute p ω _hS _hp _hPic (ψ ∘ σ) (D ∘ σ) h.1 h.2
+
+/-- Rescale and transport a prescribed biorthogonal family and its seminorm. -/
+private theorem orbitalQuotient_rescale_biorthogonal {I J E Q U : Type*}
+    [AddCommGroup Q] [Module ℂ Q] [TopologicalSpace Q]
+    [AddCommGroup U] [Module ℂ U] [TopologicalSpace U]
+    (π : E → Q) (hπ : Surjective π) (ι : J ≃ I) (T : Q ≃L[ℂ] U)
+    (s : J → ℂ) (hs : ∀ j, s j ≠ 0) (d : J → StrongDual ℂ U)
+    (jet : I → E → ℂ) (hjet : ∀ j x, jet (ι j) x = s j * d j (T (π x)))
+    (ψ : I → Q) [DecidableEq I] (hψ : ∀ i j x, π x = ψ j → jet i x = if i = j then 1 else 0)
+    (q : Seminorm ℂ Q) (hq : Continuous q) :
+    ∃ (η : J → U) (q' : Seminorm ℂ U), (∀ j, d j (η j) = 1) ∧
+      (∀ i j, i ≠ j → d i (η j) = 0) ∧ Continuous q' ∧
+      ∀ j, q' (η j) = ‖s j‖ * q (ψ (ι j)) := by
+  classical
+  let η (j : J) := s j • T (ψ (ι j))
+  have coord (i j : J) : s i * d i (T (ψ (ι j))) = if i = j then 1 else 0 := by
+    obtain ⟨x, hx⟩ := hπ (ψ (ι j))
+    calc
+      _ = s i * d i (T (π x)) := congrArg (fun y ↦ s i * d i (T y)) hx.symm
+      _ = jet (ι i) x := (hjet i x).symm
+      _ = _ := by simpa only [ι.apply_eq_iff_eq] using hψ (ι i) (ι j) x hx
+  refine ⟨η, q.comp T.symm.toLinearMap, fun j ↦ ?_, fun i j hn ↦ ?_, hq.comp T.symm.continuous, fun j ↦ ?_⟩
+  · simpa only [η, map_smul, smul_eq_mul, eq_self, ite_true] using coord j j
+  · have h := coord i j
+    simp only [hn, ↓reduceIte] at h
+    simp [η, (mul_eq_zero.mp h).resolve_left (hs i)]
+  · change q (T.symm (s j • T (ψ (ι j)))) = _
+    rw [map_smul, T.symm_apply_apply, map_smul_eq_mul]
+
+/-- Two character lattices agreeing at one point also agree after opposite integer shifts. -/
+private theorem orbitalFourierLattice_reflect_shift {a b : Circle} (P l t u : ℝ) (m₀ n₀ n : ℤ)
+    (h : a * Circle.exp (-((n₀ : ℝ) * P - t) * l) = b * Circle.exp (((m₀ : ℝ) * P - u) * l)) :
+    a * Circle.exp (-((n : ℝ) * P - t) * l) =
+      b * Circle.exp ((((m₀ + n₀ - n : ℤ) : ℝ) * P - u) * l) := by
+  have h₀ := congrArg (· * Circle.exp (((n₀ : ℝ) - n) * P*l)) h
+  simp only [mul_assoc, ← Circle.exp_add] at h₀
+  convert h₀ using 3 <;> push_cast <;> ring
+
+/-- The model index inverts the unitary character of an orbital lattice point. -/
+private theorem sLocalOrbital_lattice_inverse_character (χ : PontryaginDual Jₛ) (v : S) (t : ℝ) (n : ℤ)
+    (ξ : PontryaginDual Jₛ) (hξ : (circleToComplex).comp ξ⁻¹ = lattice(χ, v, t, n)) (x : Jₛ) :
+    ξ x = (χ x)⁻¹ * Circle.exp (-((n : ℝ) * period(v) - t) * logNorm x) := by
+  let b := (n : ℝ) * period(v) - t
+  have hpos : 0 < ((mₛ x).val : ℝ) := NNReal.coe_pos.mpr (Units.zero_lt _)
+  have h := DFunLike.congr_fun hξ x
+  change (((ξ x)⁻¹ : Circle) : ℂ) = (χ x : ℂ) * (((mₛ x).val : ℝ) : ℂ) ^ ((b : ℂ) * Complex.I) at h
+  have hb : (((mₛ x).val : ℝ) : ℂ) ^ ((b : ℂ) * Complex.I) =
+      (Circle.exp (b * logNorm x) : ℂ) := by
+    rw [Complex.cpow_def_of_ne_zero (Complex.ofReal_ne_zero.mpr hpos.ne'), ← Complex.ofReal_log hpos.le,
+      Circle.coe_exp]
+    congr 1
+    push_cast
+    ring
+  rw [hb] at h
+  have he : (ξ x)⁻¹ = χ x * Circle.exp (b * logNorm x) := Circle.ext h
+  have hi := congrArg Inv.inv he
+  simpa only [inv_inv, mul_inv, ← Circle.exp_neg, neg_mul] using hi
+
+
+open Classical in
+/-- Reflection and translation of the lattice index preserve a fixed polynomial
+degree, uniformly over all moment orders at that character. -/
+private theorem sLocalOrbital_modelFrequency_growth (p : Vℚ) (ω : PontryaginDual J₁) (χ : PontryaginDual Jₛ)
+    (v : S) (t : ℝ) (n₀ : ℤ) (j₀ : Idx(p, ω)) (hj₀ : j₀.val.1 = lattice(χ, v, t, n₀))
+    (hv₀ : v ∈ sLocalFinitePolePlaces j₀.val.1)
+    (k : Fin (Fintype.card (sLocalOrbitalActivePlaces p ω)))
+    (hk : (sLocalOrbitalActiveEquiv p ω k).val = v)
+    (ι : ModelIndex(p, ω) ≃ Idx(p, ω)) (hι : ∀ j, (ι j).val = ((circleToComplex).comp j.val.1⁻¹, j.val.2))
+    (X : PontryaginDual Jₛ) (a : ℝ) (freq : ℤ → PontryaginDual Jₛ)
+    (hf : ∀ n x, freq n x = X x * Circle.exp (((n : ℝ) * period(v) - a) * logNorm x))
+    (hfr : range freq = modulatedCyclicAnnihilatorFiber mGroup ω⁻¹ (sLocalOrbitalDifferenceGenerator p ω k))
+    (N : ModelIndex(p, ω) → ℝ) (e : ℕ) (B : ℝ) (hB : 0 < B)
+    (hbound : ∀ (n : ℤ) j, j.val.1 = freq n → N j ≤ B * (1 + |(n : ℝ)|) ^ e) :
+    ∃ C : ℝ, 0 < C ∧ ∀ (n : ℤ) (j : Idx(p, ω)), j.val.1 = lattice(χ, v, t, n) →
+      N (ι.symm j) ≤ C * (1 + |(n : ℝ)|) ^ e := by
+  classical
+  have hgen₀ := ((sLocalOrbitalFinitePole_iff ω v j₀.val.1 j₀.property.1).mp hv₀).2
+  have hjc (j : Idx(p, ω)) :
+      j.val.1 = (circleToComplex).comp (ι.symm j).val.1⁻¹ := by
+    have hh := congrArg Prod.fst (hι (ι.symm j))
+    exact (congrArg (fun z : Idx(p, ω) ↦ z.val.1) (ι.apply_symm_apply j).symm).trans hh
+  have hmem : (ι.symm j₀).val.1 ∈ modulatedCyclicAnnihilatorFiber mGroup ω⁻¹ (sLocalOrbitalDifferenceGenerator p ω k) := by
+    apply (mem_modulatedCyclicAnnihilatorFiber_iff mGroup ω⁻¹ (sLocalOrbitalDifferenceGenerator p ω k) _).mpr
+    refine ⟨?_, sLocalOrbitalModelIndex_restrict p ω (ι.symm j₀)⟩
+    change (ι.symm j₀).val.1 (sLocalOrbitalInsert (sLocalOrbitalActiveEquiv p ω k).val
+      (sLocalOrbitalUniformizer (sLocalOrbitalActiveEquiv p ω k).val))⁻¹ = 1
+    rw [hk, map_inv]
+    apply Circle.ext
+    rw [hjc j₀] at hgen₀
+    exact hgen₀
+  have hfound : ∃ m₀ : ℤ, freq m₀ = (ι.symm j₀).val.1 := Set.mem_range.mp (hfr.symm ▸ hmem)
+  let m₀ := hfound.choose
+  have hm₀ := hfound.choose_spec
+  have hmodel (n : ℤ) (j : Idx(p, ω)) (hj : j.val.1 = lattice(χ, v, t, n)) :
+      (ι.symm j).val.1 = freq (m₀ + n₀ - n) := by
+    apply ContinuousMonoidHom.ext
+    intro x
+    have h₀ := sLocalOrbital_lattice_inverse_character χ v t n₀ (ι.symm j₀).val.1 ((hjc j₀).symm.trans hj₀) x
+    have h := sLocalOrbital_lattice_inverse_character χ v t n (ι.symm j).val.1 ((hjc j).symm.trans hj) x
+    have href := (DFunLike.congr_fun hm₀ x).trans h₀
+    rw [hf] at href
+    exact (h.trans (orbitalFourierLattice_reflect_shift _ _ _ _ m₀ n₀ n href.symm)).trans (hf _ _).symm
+  let b : ℝ := |((m₀ + n₀ : ℤ) : ℝ)|
+  have hcost (n : ℤ) : 1 + |((m₀ + n₀ - n : ℤ) : ℝ)| ≤ (1 + b) * (1 + |(n : ℝ)|) := by
+    rw [Int.cast_sub]
+    have hab := abs_sub (((m₀ + n₀ : ℤ) : ℝ)) (n : ℝ)
+    change |(((m₀ + n₀ : ℤ) : ℝ)) - n| ≤ b + |(n : ℝ)| at hab
+    nlinarith [mul_nonneg (show 0 ≤ b from abs_nonneg _) (abs_nonneg (n : ℝ))]
+  have hbpos : 0 < 1 + b := by
+    dsimp [b]
+    positivity
+  refine ⟨B * (1 + b) ^ e, by positivity, fun n j hj ↦ ?_⟩
+  have h := hbound (m₀ + n₀ - n) (ι.symm j) (hmodel n j hj)
+  have hpow := pow_le_pow_left₀ (by positivity : 0 ≤ 1 + |((m₀ + n₀ - n : ℤ) : ℝ)|) (hcost n) e
+  rw [mul_pow] at hpow
+  exact (h.trans (mul_le_mul_of_nonneg_left hpow hB.le)).trans_eq (mul_assoc _ _ _).symm
+
+open Classical in
+/-- The periodic growth estimate transported across the norm-weighted Fourier comparison.
+The Fourier normalization has constant norm on each primary pole block. -/
+private theorem sLocalFourierOrbital_growth_of_periodic
+    (p : Vℚ) (χ : PontryaginDual Jₛ) (ω : PontryaginDual J₁)
+    (v : S) (t : ℝ)
+    (_hS : IsSaturatedPlaceSet S) (_hp : (Sₚ(p)).Nonempty) (_hPic : PicTrivial)
+    (_hv : v.val ∈ Sₚ(p))
+    (ψ : Idx(p, ω) → Q(p, ω))
+    (_hψ : ∀ (i j : Idx(p, ω)) (x : Θₛ(ω)), π(p, ω) x = ψ j →
+      sLocalOrbitalFourierJet (F := F) (S := S) (T := Sₚ(p)) (ω := ω) i x = if i = j then 1 else 0)
+    (q : Seminorm ℂ Q(p, ω)) (_hq : Continuous q) :
+    ∃ d : ℕ, ∃ C : ℝ, 0 < C ∧
+      ∀ (n : ℤ) (j : Idx(p, ω)), j.val.1 = lattice(χ, v, t, n) →
+        v ∈ sLocalFinitePolePlaces (F := F) (S := S) j.val.1 → q (ψ j) ≤ C * (1 + |(n : ℝ)|) ^ d := by
+  classical
+  by_cases hex : ∃ (n : ℤ) (j : Idx(p, ω)), j.val.1 = lattice(χ, v, t, n) ∧ v ∈ sLocalFinitePolePlaces j.val.1
+  swap
+  · exact ⟨0, 1, one_pos, fun n j h hj ↦ (hex ⟨n, j, h, hj⟩).elim⟩
+  obtain ⟨n₀, j₀, hj₀, hv₀⟩ := hex
+  rcases sLocalOrbitalIndex_enumerable_or_empty (F := F) (S := S) p ω _hS _hp _hPic with hσ | ⟨hE, -⟩
+  swap
+  · exact (hE.false j₀).elim
+  obtain ⟨σ⟩ := hσ
+  let m := mGroup
+  let hm := (sLocalOrbital_modulation (F := F) (S := S)).1
+  let hs := (sLocalOrbital_modulation (F := F) (S := S)).2
+  let γ := sLocalOrbitalDifferenceGenerator (F := F) (S := S) p ω
+  let J := ModelIndex(p, ω)
+  have hgen := (sLocalOrbitalDifferenceGenerator_periods p ω).1
+  have hcomm := (sLocalOrbitalDifferenceGenerator_periods p ω).2
+  let cmp := sLocalOrbital_periodicFourierComparison (F := F) (S := S) p ω _hS _hp _hPic σ hgen hcomm
+  have hmass := cmp.1
+  let ι := cmp.2.choose
+  let T := cmp.2.choose_spec.choose
+  have hι := cmp.2.choose_spec.choose_spec.1
+  have hjet := cmp.2.choose_spec.choose_spec.2
+  let mass : ℂ := (sLocalNormOneQuotientMeasure F S).real univ
+  let s (j : J) : ℂ := mass⁻¹ * (-1 : ℂ) ^ j.val.2
+  have hsne (j : J) : s j ≠ 0 := mul_ne_zero (inv_ne_zero hmass) (pow_ne_zero _ (by norm_num))
+  let U := H₀(ω⁻¹) ⧸ (modulatedIsotypicDifferenceProduct m hm hs ω⁻¹ univ
+    ordConnected_univ (mem_univ (0 : ℝ)) (List.ofFn γ)).range
+  let d (j : J) : StrongDual ℂ U := modulatedQuotientLogMoment m hm hs ω⁻¹ γ hgen μorb j
+  have hcoord (j : J) (x : Θₛ(ω)) : sLocalOrbitalFourierJet (ι j) x =
+      s j * d j (T (π(p, ω) x)) := hjet j x
+  let fam := orbitalQuotient_rescale_biorthogonal
+    (π(p, ω)) (Rₚ(p, ω)).mkQ_surjective ι T s hsne d (fun i x ↦ sLocalOrbitalFourierJet i x)
+    hcoord ψ _hψ q _hq
+  let η := fam.choose
+  let q' := fam.choose_spec.choose
+  have diag := fam.choose_spec.choose_spec.1
+  have off := fam.choose_spec.choose_spec.2.1
+  have hq' := fam.choose_spec.choose_spec.2.2.1
+  have hsemin := fam.choose_spec.choose_spec.2.2.2
+  have semin (j : J) : q' (η j) = ‖mass⁻¹‖ * q (ψ (ι j)) := by
+    have habs : ‖s j‖ = ‖mass⁻¹‖ := by
+      change ‖mass⁻¹ * (-1 : ℂ) ^ j.val.2‖ = ‖mass⁻¹‖
+      rw [norm_mul, norm_pow, norm_neg, norm_one, one_pow, mul_one]
+    exact (hsemin j).trans (congrArg (fun a ↦ a * q (ψ (ι j))) habs)
+  have hur := ((sLocalOrbitalFinitePole_iff (F := F) (S := S) ω v j₀.val.1 j₀.property.1).mp hv₀).1
+  let av : sLocalOrbitalActivePlaces (F := F) (S := S) p ω := ⟨v, Finset.mem_filter.mpr ⟨Finset.mem_univ _, _hv, hur⟩⟩
+  let k := (sLocalOrbitalActiveEquiv (F := F) (S := S) p ω).symm av
+  have hk : (sLocalOrbitalActiveEquiv (F := F) (S := S) p ω k).val = v :=
+    congrArg Subtype.val ((sLocalOrbitalActiveEquiv (F := F) (S := S) p ω).apply_symm_apply av)
+  have hL : Real.log ((m (γ k)).val : ℝ) = Real.log (v.val.asIdeal.absNorm : ℝ) := by
+    change Real.log ((mₛ (sLocalOrbitalDifferenceGenerator (F := F) (S := S) p ω k)).val : ℝ) = _
+    rw [sLocalOrbitalDifferenceGenerator_norm, hk]
+  obtain ⟨τ, hτ⟩ := sIdeleQuotientNorm_exists_section F S
+  obtain ⟨X, _, _, hX, _⟩ := exists_modulatedCyclicCharacter_lifts m (γ k) τ hτ (hgen k)
+  choose t₀ ht₀ using fun (i : Fin _) (η' : PontryaginDual m.toMonoidHom.ker) ↦
+    (existsUnique_modulatedCharacterPhase m (γ i) (hgen i) (X η')).exists
+  let bound := modulatedQuotientLogMoment_biorthogonal_growth m hm hs ω⁻¹ γ hgen X hX
+    t₀ ht₀ μorb hcomm η diag off q' hq'
+  let e := bound.choose
+  let B := (bound.choose_spec k).choose
+  have hB := (bound.choose_spec k).choose_spec.1
+  have hbound := (bound.choose_spec k).choose_spec.2
+  let freq (n : ℤ) : PontryaginDual Jₛ :=
+    ((PontryaginDual.map (⟨QuotientGroup.mk' (Subgroup.zpowers (γ k)), QuotientGroup.continuous_mk⟩ :
+      Jₛ →ₜ* (Jₛ ⧸ Subgroup.zpowers (γ k))) (modulatedCyclicCharacter m (γ k) (hgen k)
+        X (t₀ k) (ht₀ k) (ω⁻¹, n))))⁻¹
+  have hf (n : ℤ) (x : Jₛ) : freq n x = X ω⁻¹ x * Circle.exp (((n : ℝ) * period(v) - t₀ k ω⁻¹) * logNorm x) := by
+    calc
+      _ = X ω⁻¹ x * Circle.exp (-((t₀ k ω⁻¹ - 2 * Real.pi * (n : ℝ) / Real.log ((m (γ k)).val : ℝ)) *
+            Real.log ((m x).val : ℝ))) := by
+        change (modulatedCyclicCharacter m (γ k) (hgen k) X (t₀ k) (ht₀ k) (ω⁻¹, n)
+          (QuotientGroup.mk x))⁻¹ = _
+        rw [modulatedCyclicCharacter_mk, Circle.exp_neg, mul_inv, inv_inv]
+      _ = _ := by
+        rw [hL]
+        congr 2
+        change -((t₀ k ω⁻¹ - 2 * Real.pi * (n : ℝ) / Real.log (v.val.asIdeal.absNorm : ℝ)) *
+          logNorm x) = ((n : ℝ) * period(v) - t₀ k ω⁻¹) * logNorm x
+        ring
+  have hfr := (modulatedPeriodicFrequency_bijective m hm hs ω⁻¹ γ hgen X hX t₀ ht₀ k).2
+  change range freq = _ at hfr
+  let hres := sLocalOrbital_modelFrequency_growth p ω χ v t n₀ j₀ hj₀ hv₀ k hk ι hι (X ω⁻¹) (t₀ k ω⁻¹)
+    freq hf hfr (fun j ↦ q' (η j)) e B hB hbound
+  let C := hres.choose
+  have hC := hres.choose_spec.1
+  have hscale := hres.choose_spec.2
+  have hnorm : 0 < ‖mass⁻¹‖ := norm_pos_iff.mpr (inv_ne_zero hmass)
+  refine ⟨e, C / ‖mass⁻¹‖, div_pos hC hnorm, fun n j hj _ ↦ ?_⟩
+  have heq : ‖mass⁻¹‖ * q (ψ j) = q' (η (ι.symm j)) :=
+    (congrArg (fun i : Idx(p, ω) ↦ ‖mass⁻¹‖ * q (ψ i)) (ι.apply_symm_apply j).symm).trans (semin _).symm
+  have h := heq.le.trans (hscale n j hj)
+  calc
+    q (ψ j) ≤ (C * (1 + |(n : ℝ)|) ^ e) / ‖mass⁻¹‖ := (le_div_iff₀ hnorm).mpr (by simpa only [mul_comm (q (ψ j))] using h)
+    _ = _ := by ring
 
 end PrimaryBases
 
@@ -3879,7 +4545,8 @@ theorem sLocalFourierOrbital_biorthogonal_growth
     (q : Seminorm ℂ Q(p, ω)) (_hq : Continuous q) :
     ∃ d : ℕ, ∃ C : ℝ, 0 < C ∧
       ∀ (n : ℤ) (j : Idx(p, ω)), j.val.1 = lattice(χ, v, t, n) →
-        v ∈ sLocalFinitePolePlaces (F := F) (S := S) j.val.1 → q (ψ j) ≤ C * (1 + |(n : ℝ)|) ^ d := by sorry
+        v ∈ sLocalFinitePolePlaces (F := F) (S := S) j.val.1 → q (ψ j) ≤ C * (1 + |(n : ℝ)|) ^ d :=
+  sLocalFourierOrbital_growth_of_periodic p χ ω v t _hS _hp _hPic _hv ψ _hψ q _hq
 
 /-- Uniform vertical decay restricts to rapid decay on an affine lattice. -/
 private theorem sLocalOrbitalFourierJet_lattice_schwartz_rapidSamples (G : ℂ → ℂ)

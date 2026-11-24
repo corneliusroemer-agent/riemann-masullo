@@ -4,14 +4,14 @@ public import RiemannMasullo.AppD_SchwartzBruhat.Sec1b
 public import Mathlib.Analysis.Calculus.Deriv.Basic
 import all RiemannMasullo.AppC_LCTVS.Sec2a_part2
 import RiemannMasullo.AppC_LCTVS.Sec3a
-import all RiemannMasullo.AppD_SchwartzBruhat.Sec1b
-import all RiemannMasullo.AppD_SchwartzBruhat.Sec1a
+import RiemannMasullo.AppD_SchwartzBruhat.Sec1a
 import Mathlib.Topology.Algebra.MvPolynomial
 import Mathlib.Algebra.Category.Grp.Injective
 import Mathlib.Analysis.PSeries
 import Mathlib.Analysis.SpecialFunctions.JapaneseBracket
 import Mathlib.Analysis.Calculus.ContDiff.FiniteDimension
 import RiemannMasullo.ForMathlib.Analysis.SpecialFunctions.Gaussian.Schwartz
+import RiemannMasullo.ForMathlib.Topology.Algebra.Module.OpenMapping
 import Mathlib.MeasureTheory.Function.Floor
 import Mathlib.MeasureTheory.Integral.Pi
 import Mathlib.MeasureTheory.Measure.Lebesgue.Basic
@@ -5619,7 +5619,9 @@ section
 variable {G H : Type*} [CommGroup G] [CommGroup H] [TopologicalSpace G] [TopologicalSpace H]
   [IsTopologicalGroup G] [IsTopologicalGroup H] [T2Space G] [T2Space H] [LocallyCompactSpace G] [LocallyCompactSpace H]
 
-private theorem exists_good_subgroup_image_in_kernel (f : G →ₜ* H) (b : BruhatStructuralPair H) :
+/-- A continuous homomorphism sends some good subgroup into the subgroup defining
+a given target's elementary quotient. -/
+theorem exists_good_subgroup_image_in_kernel (f : G →ₜ* H) (b : BruhatStructuralPair H) :
     ∃ k : Subgroup G, IsBruhatGoodSubgroup k ∧ k.map f.toMonoidHom ≤ OrderDual.ofDual b.val.2 := by
   let : LocallyCompactSpace b.val.1 := b.property.1.isOpenEmbedding_subtypeVal.locallyCompactSpace
   let : T1Space b.quotient := QuotientGroup.t1Space_iff.mpr (b.property.2.2.1.1.preimage continuous_subtype_val)
@@ -8193,14 +8195,6 @@ theorem schwartzBruhatTranslate_apply_mul (g x : G) (f : SchwartzBruhat G) :
     schwartzBruhatTranslate g f (g * x) = f x := by
   change f.val (g⁻¹ * (g * x)) = f.val x
   rw [inv_mul_cancel_left]
-
-omit hTop hT2 hLC in
-/-- The inclusion of a structural stage is continuous for the generating seminorms. -/
-private theorem continuous_schwartzBruhatStageInclusion (a : BruhatStructuralPair G)
-    (e : ElementaryLCAPresentation a.quotient) :
-    Continuous (show SchwartzBruhatStage e →ₗ[ℂ] SchwartzBruhat G from
-      schwartzBruhatStageInclusion a e) :=
-  (withGeneratingSeminorms_spec _ _).continuous_of_continuous_comp _ fun p ↦ p.property a e
 
 /-- The quotient action gives translation by elements of the stage's own open subgroup. -/
 private theorem continuous_schwartzBruhatTranslate_on_subgroup (b : BruhatStructuralPair G)

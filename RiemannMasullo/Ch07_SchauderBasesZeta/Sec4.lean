@@ -7,13 +7,23 @@ public import RiemannMasullo.AppC_LCTVS.Sec3a
 import Mathlib.LinearAlgebra.TensorProduct.RightExactness
 import RiemannMasullo.Ch02_AdelicTheta.Sec2b
 import RiemannMasullo.AppD_SchwartzBruhat.Sec1b
+import Mathlib.MeasureTheory.Function.Holder
+import Mathlib.Analysis.Complex.LocallyUniformLimit
+import Mathlib.Analysis.Distribution.TemperedDistribution
+import RiemannMasullo.ForMathlib.Topology.Algebra.Module.OpenMapping
+import RiemannMasullo.ForMathlib.Analysis.LocallyConvex.SeparatingDual
+import RiemannMasullo.ForMathlib.Analysis.Distribution.SchwartzSpace.ChangeVariables
+import RiemannMasullo.Ch04_PeriodicSchauderBases.Sec2
+import RiemannMasullo.Ch02_AdelicTheta.Sec1
+import RiemannMasullo.Ch07_SchauderBasesZeta.Sec1b
+import Mathlib.Analysis.Normed.Group.Tannery
 import RiemannMasullo.ForMathlib.Analysis.MellinTransform.Holomorphic
 import all RiemannMasullo.AppD_SchwartzBruhat.Sec2b
 import all RiemannMasullo.AppD_SchwartzBruhat.Sec3b
 
 import all RiemannMasullo.Ch03_IdelicZeta.Sec2
 import all RiemannMasullo.Ch06_LocalGlobal.Sec3
-import all RiemannMasullo.AppA_AlgebraicNT.Sec3
+import RiemannMasullo.AppA_AlgebraicNT.Sec3
 import all RiemannMasullo.Ch03_IdelicZeta.Sec3b
 import all RiemannMasullo.Ch05_ThetaZSpaces.Sec3b
 
@@ -908,7 +918,32 @@ shifted zeros of the regularized completed generator are the corresponding coord
 the `i.2`-th derivative at `i.1 − a` is `1` for `i = j` and `0` for every other jet index. -/
 theorem exists_spectralNuclearityBiorthogonal_vectors (a : ℝ) (j : jets(χ, τ, hτ)) :
     ∃ f : B, ∀ i : jets(χ, τ, hτ),
-      iteratedDeriv i.2.val f.val (i.1.val - (a : ℂ)) = if i = j then 1 else 0 := by sorry
+      iteratedDeriv i.2.val f.val (i.1.val - (a : ℂ)) = if i = j then 1 else 0 := by
+  classical
+  have h := orbitalSchwartzBergman_biorthogonal χ τ hτ (continuedCompletedHeckeL χ)
+    (continuedCompletedHeckeL_spec χ).1 (continuedCompletedHeckeL_spec χ).2 ∅
+  rw [orbitalHeckeGenerator_empty] at h
+  obtain ⟨b,hb⟩ := h
+  let J := {p : ℂ × ℕ // (p.2 : ℕ∞) < analyticOrderAt ((Λ(χ,τ,hτ)).val : ℂ → ℂ) p.1}
+  have emb {r : ℕ} {n : ℕ∞} (hr : r < n.toNat) : (r : ℕ∞) < n := by
+    cases n using ENat.recTopCoe with
+    | top => exact ENat.natCast_lt_top r
+    | coe n => exact_mod_cast (by simpa using hr : r < n)
+  let idx (i : jets(χ,τ,hτ)) : J := ⟨(i.1.val,i.2.val),emb i.2.isLt⟩
+  have hinj : Injective idx := by
+    rintro ⟨z,k⟩ ⟨w,l⟩ h
+    have ez : z = w := Subtype.ext (congrArg (fun x : J ↦ x.val.1) h)
+    subst w
+    have ek : k = l := Fin.ext (congrArg (fun x : J ↦ x.val.2) h)
+    subst l
+    rfl
+  let g := b (idx j)
+  refine ⟨⟨fun s ↦ g.val (s - -(a:ℂ)),specDenom_shift_mem g (-a)⟩,fun i ↦ ?_⟩
+  change iteratedDeriv i.2.val (fun s ↦ g.val (s - -(a:ℂ))) (i.1.val-(a:ℂ)) = _
+  rw [iteratedDeriv_comp_sub_const]
+  change iteratedDeriv i.2.val g.val ((i.1.val-(a:ℂ))- -(a:ℂ)) = _
+  rw [sub_neg_eq_add,sub_add_cancel]
+  simpa only [hinj.eq_iff] using hb (idx i) (idx j)
 
 open Classical in
 /-- Paper: Theorem 7.4.1.1(2), p. 366, using Theorem 7.1.4.2(3).
@@ -1421,6 +1456,2598 @@ private theorem spectralNuclearity_trace_descends (a : ℝ) (N : ℕ) (φ : 𝒟
 -- the rescaled biorthogonal vectors. Discreteness does not control zero counts,
 -- enumeration order, or separation. It also does not imply N(z)! = O(|Im z|).
 
+/-- The entire Schwartz–Bergman space is nuclear through the Fourier–Mellin equivalence. -/
+private theorem spectralJet_sb_nuclear :
+    IsNuclearTVS.{0} (SchwartzBergman (univ : Set ℝ)) := by
+  let : PolynormableSpace ℂ (SchwartzBergman (univ : Set ℝ)) :=
+    (schwartzBergman_frechet univ isOpen_univ ordConnected_univ univ_nonempty).choose_spec.1
+  exact nuclear_of_equiv
+    (positiveRealFourierMellin univ isOpen_univ ordConnected_univ univ_nonempty)
+    (positiveRealExponentialDecay_nuclear univ ordConnected_univ univ_nonempty)
+
+/-- In the actual retained quotient all nuclear presentations give the same trace. -/
+private theorem spectralJet_unique_presentation_sum (a : ℝ) (N : ℕ) (d : jets(χ, τ, hτ) → StrongDual ℂ (Q(a))) :
+    let Q := Q(a)
+    let K := ⨅ i : {i : jets(χ, τ, hτ) // i.2.val < N}, (d i.val).toLinearMap.ker
+    let E := Q ⧸ K
+    letI : UniformSpace E := IsTopologicalAddGroup.rightUniformSpace E
+    ∀ T : E →L[ℂ] E, Nonempty (NuclearPresentation T) → ∃! t : ℂ, ∀ r : NuclearPresentation T,
+      Summable (fun n ↦ ‖r.coeff n * r.functional n (r.vector n).val‖) ∧
+      HasSum (fun n ↦ r.coeff n * r.functional n (r.vector n).val) t := by
+  intro Q K E T hr
+  let D := D(a)
+  let : UniformSpace E := IsTopologicalAddGroup.rightUniformSpace E
+  let : IsClosed (D : Set B) := schwartzBergmanDivisible_isClosed _
+  have hB : IsNuclearTVS.{0} B := spectralJet_sb_nuclear
+  let : T2Space B := hB.1
+  let : PolynormableSpace ℂ B := hB.2.1
+  let : T2Space Q := inferInstanceAs (T2Space (B ⧸ D))
+  have hQ : IsNuclearTVS.{0} Q := isNuclearTVS_quotient hB D
+  let : PolynormableSpace ℂ Q := hQ.2.1
+  let : IsClosed (K : Set Q) := by
+    change IsClosed (↑(⨅ i : {i : jets(χ, τ, hτ) // i.2.val < N}, (d i.val).toLinearMap.ker) : Set Q)
+    rw [Submodule.coe_iInf]
+    exact isClosed_iInter (fun i ↦ (d i.val).isClosed_ker)
+  let : T2Space E := inferInstanceAs (T2Space (Q ⧸ K))
+  have hE : IsNuclearTVS.{0} E := isNuclearTVS_quotient hQ K
+  let : PolynormableSpace ℂ E := hE.2.1
+  let : IsUniformAddGroup E := isUniformAddGroup_of_addCommGroup
+  have hAP := dense_finiteRank_of_isNuclearTVS E hE
+  exact exists_nuclearTrace_hasSum hAP T ((isNuclearOperator_iff_nonempty_presentation T).mpr hr)
+
+open Classical in
+/-- Paper: Theorem 7.4.1.1(2), pp. 366–367. Every finite set of zero sites has a
+unique continuous projector onto its retained jets. Its range is finite dimensional
+and invariant under the multiplier, whose restriction has the finite divisor trace. -/
+private theorem spectralNuclearity_trace_finite_cluster (a : ℝ) (N : ℕ) (φ : 𝒟)
+    (d : jets(χ,τ,hτ) → StrongDual ℂ (Q(a)))
+    (hd : ∀ i f, d i ((D(a)).mkQ f) = iteratedDeriv i.2.val f.val (i.1.val-(a:ℂ))) :
+    let Q := Q(a)
+    let I := {i : jets(χ,τ,hτ) // i.2.val < N}
+    let K := ⨅ i : I, (d i.val).toLinearMap.ker
+    let E := Q ⧸ K
+    ∀ (A : B →L[ℂ] B) (Aq : Q →L[ℂ] Q) (T : E →L[ℂ] E),
+      (∀ f s, (A f).val s = nuclearityTestMellin χ φ s * f.val s) →
+      (∀ f, Aq ((D(a)).mkQ f) = (D(a)).mkQ (A f)) →
+      (∀ x, T (K.mkQ x) = K.mkQ (Aq x)) →
+      ∀ (L : I → StrongDual ℂ E), (∀ i x, L i (K.mkQ x) = d i.val x) →
+      ∀ C : Finset (zeros(χ,τ,hτ)), ∃ proj : E →L[ℂ] E,
+        (∀ i x, L i (proj x) = if i.val.1 ∈ C then L i x else 0) ∧
+        (∀ x, proj (proj x) = proj x) ∧ (∀ x, T (proj x) = proj (T x)) ∧
+        FiniteDimensional ℂ proj.toLinearMap.range ∧
+        (∃ T' : proj.toLinearMap.range →ₗ[ℂ] proj.toLinearMap.range,
+          (∀ x, (T' x).val = T x.val) ∧ LinearMap.trace ℂ _ T' =
+            ∑ z ∈ C, ((min N (multiplicity(χ,τ,hτ,z)) : ℕ):ℂ) * nuclearityTestMellin χ φ (z.val-(a:ℂ))) ∧
+        ∀ R : E →L[ℂ] E, (∀ i x, L i (R x) = if i.val.1 ∈ C then L i x else 0) → R=proj := by
+  classical
+  intro Q I K E A Aq T hA hAq hT L hL C
+  let n (z : zeros(χ,τ,hτ)) := min N (multiplicity(χ,τ,hτ,z))
+  let t (i : I) : Fin (n i.val.1) := ⟨i.val.2.val,lt_min i.property i.val.2.isLt⟩
+  let idx (z : zeros(χ,τ,hτ)) (j : Fin (n z)) : I :=
+    ⟨⟨z,j.val,j.isLt.trans_le (min_le_right N _)⟩,j.isLt.trans_le (min_le_left N _)⟩
+  choose f hf using exists_spectralNuclearityBiorthogonal_vectors χ τ hτ a
+  let b (i : I) : E := K.mkQ ((D(a)).mkQ (f i.val))
+  have bio (i j : I) : L i (b j) = if i=j then 1 else 0 := by
+    change L i (K.mkQ ((D(a)).mkQ _)) = _
+    rw [hL,hd,hf]
+    simp only [Subtype.val_inj]
+  have sep : Injective (fun x : E ↦ fun i : I ↦ L i x) := by
+    intro x y h
+    apply sub_eq_zero.mp
+    obtain ⟨v,hv⟩ := K.mkQ_surjective (x-y)
+    rw [←hv,Submodule.mkQ_apply,Submodule.Quotient.mk_eq_zero,Submodule.mem_iInf]
+    intro i
+    change d i.val v = 0
+    rw [←hL,hv,map_sub,sub_eq_zero]
+    exact congrFun h i
+  let S := C.biUnion fun z ↦ Finset.univ.image (idx z)
+  have memS (i : I) : i ∈ S ↔ i.val.1 ∈ C := by
+    constructor
+    · intro h
+      obtain ⟨z,hz,hj⟩ := Finset.mem_biUnion.mp h
+      obtain ⟨j,_,rfl⟩ := Finset.mem_image.mp hj
+      exact hz
+    · intro h
+      exact Finset.mem_biUnion.mpr ⟨i.val.1,h,Finset.mem_image.mpr ⟨t i,Finset.mem_univ _,rfl⟩⟩
+  let proj : E →L[ℂ] E := ∑ j ∈ S, (L j).smulRight (b j)
+  have valP (x : E) : proj x = ∑ j ∈ S, L j x • b j := by
+    simp [proj]
+  have hp (i : I) (x : E) : L i (proj x) = if i.val.1 ∈ C then L i x else 0 := by
+    rw [valP,map_sum]
+    simp only [map_smul,bio,smul_eq_mul,mul_ite,mul_one,mul_zero]
+    simp [Finset.sum_ite_eq,memS]
+  let lower (i : I) (k : ℕ) : I :=
+    ⟨⟨i.val.1,i.val.2.val-k,(Nat.sub_le _ _).trans_lt i.val.2.isLt⟩,(Nat.sub_le _ _).trans_lt i.property⟩
+  have row (i : I) (x : E) : L i (T x) = ∑ k ∈ Finset.range (i.val.2.val+1),
+      (i.val.2.val.choose k : ℂ) * iteratedDeriv k (nuclearityTestMellin χ φ) (i.val.1.val-(a:ℂ)) * L (lower i k) x := by
+    obtain ⟨y,rfl⟩ := K.mkQ_surjective x
+    obtain ⟨f,rfl⟩ := (D(a)).mkQ_surjective y
+    rw [hT,hAq,hL,hd,show (A f).val = nuclearityTestMellin χ φ * f.val from funext (hA f)]
+    have hf : Differentiable ℂ f.val := fun z ↦
+      (f.property.2.1 z (mem_univ _)).differentiableAt (Filter.univ_mem' fun _ ↦ mem_univ _)
+    rw [iteratedDeriv_mul (archNuclearityDenominator_closed_invariant_multiplier χ φ).contDiff.contDiffAt
+      hf.contDiff.contDiffAt]
+    apply Finset.sum_congr rfl
+    intro k _
+    rw [hL,hd]
+  have idem : ∀ x, proj (proj x) = proj x := by
+    intro x
+    apply sep
+    funext i
+    change L i (proj (proj x)) = L i (proj x)
+    by_cases h : i.val.1 ∈ C <;> simp [hp,h]
+  have comm : ∀ x, T (proj x) = proj (T x) := by
+    intro x
+    apply sep
+    funext i
+    change L i (T (proj x)) = L i (proj (T x))
+    rw [row i (proj x),hp i (T x),row i x]
+    by_cases h : i.val.1 ∈ C <;> simp [hp,lower,h]
+  have finite : FiniteDimensional ℂ proj.toLinearMap.range := by
+    let rangeSpace := Submodule.span ℂ (b '' (S : Set I))
+    let : FiniteDimensional ℂ rangeSpace := FiniteDimensional.span_of_finite ℂ (S.finite_toSet.image b)
+    have hsub : proj.toLinearMap.range ≤ rangeSpace := by
+      rintro _ ⟨x,rfl⟩
+      change proj x ∈ rangeSpace
+      rw [valP]
+      exact Submodule.sum_mem rangeSpace fun i hi ↦ rangeSpace.smul_mem _ (Submodule.subset_span ⟨i,hi,rfl⟩)
+    exact FiniteDimensional.of_injective (Submodule.inclusion hsub) (Submodule.inclusion_injective hsub)
+  refine ⟨proj,hp,idem,comm,finite,?_,?_⟩
+  · let rangeSpace := proj.toLinearMap.range
+    let : FiniteDimensional ℂ rangeSpace := finite
+    let ℓ (i : I) : rangeSpace →ₗ[ℂ] ℂ := (L i).toLinearMap.comp rangeSpace.subtype
+    let y (i : I) : rangeSpace := ⟨proj (T (b i)),⟨_,rfl⟩⟩
+    let R : rangeSpace →ₗ[ℂ] rangeSpace := ∑ i ∈ S, (ℓ i).smulRight (y i)
+    have pfix (x : rangeSpace) : proj x.val = x.val := by
+      obtain ⟨u,hu⟩ := x.property
+      change proj u = x.val at hu
+      rw [←hu,idem]
+    refine ⟨R,?_,?_⟩
+    · intro x
+      calc
+        (R x).val = ∑ i ∈ S, L i x.val • proj (T (b i)) := by
+          change rangeSpace.subtype (R x) = _
+          simp only [R,LinearMap.sum_apply,map_sum,LinearMap.smulRight_apply,map_smul]
+          rfl
+        _ = proj (T (proj x.val)) := by rw [valP x.val,map_sum,map_sum]; simp only [map_smul]
+        _ = T x.val := by rw [←comm,idem,pfix]
+    · have diag (i : I) : L i (T (b i)) = nuclearityTestMellin χ φ (i.val.1.val-(a:ℂ)) := by
+        rw [row,Finset.sum_eq_single 0]
+        · have e0 : lower i 0 = i := by rfl
+          rw [e0,bio,ite_eq_left rfl]
+          simp
+        · intro j hj hj0
+          have hn : lower i j ≠ i := by
+            intro he
+            have eqv : i.val.2.val-j = i.val.2.val := congrArg (fun k : I ↦ k.val.2.val) he
+            have hle := Finset.mem_range.mp hj
+            omega
+          rw [bio,ite_eq_right hn,mul_zero]
+        · simp
+      have dis : (C : Set _).PairwiseDisjoint (fun z ↦ Finset.univ.image (idx z)) := by
+        intro z _ w _ hzw
+        apply Finset.disjoint_left.mpr
+        intro i hi hi'
+        obtain ⟨j,_,rfl⟩ := Finset.mem_image.mp hi
+        obtain ⟨k,_,h⟩ := Finset.mem_image.mp hi'
+        exact hzw (congrArg (fun x : I ↦ x.val.1) h).symm
+      calc
+        LinearMap.trace ℂ rangeSpace R = ∑ i ∈ S, ℓ i (y i) := by simp only [R,map_sum,LinearMap.trace_smulRight]
+        _ = ∑ i ∈ S, nuclearityTestMellin χ φ (i.val.1.val-(a:ℂ)) := by
+          apply Finset.sum_congr rfl
+          intro i hi
+          change L i (proj (T (b i))) = _
+          rw [hp,ite_eq_left ((memS i).mp hi),diag]
+        _ = _ := by
+          rw [show S = C.biUnion (fun z ↦ Finset.univ.image (idx z)) from rfl, Finset.sum_biUnion dis]
+          apply Finset.sum_congr rfl
+          intro z _
+          rw [Finset.sum_image (fun j _ k _ he ↦ Fin.ext (congrArg (fun u : I ↦ u.val.2.val) he))]
+          simp [idx,n,nsmul_eq_mul]
+  · intro R hR
+    ext x
+    apply sep
+    funext i
+    change L i (R x) = L i (proj x)
+    rw [hR,hp]
+
+section SpectralTraceHilbert
+
+open Filter
+open scoped InnerProductSpace
+
+/-- The inclusion of the complete gauge space of a Banach disc into the ambient space is continuous. -/
+private theorem spectralTrace_banachDisc_inclusion {E : Type*} [AddCommGroup E] [Module ℂ E]
+    [UniformSpace E] [PolynormableSpace ℂ E] {D : Set E} (hD : IsBanachDisc D) :
+    Continuous (fun z : WithLocalSeminorm (gaugeSeminorm hD.balanced hD.convex hD.absorbent) ↦
+      (show Submodule.span ℂ D from z).val) := by
+  let G := WithLocalSeminorm (gaugeSeminorm hD.balanced hD.convex hD.absorbent)
+  let i : G →ₗ[ℂ] E := (Submodule.span ℂ D).subtype
+  let hE := PolynormableSpace.withSeminorms ℂ E
+  refine hE.continuous_of_continuous_comp i fun j ↦ ?_
+  obtain ⟨R, _, hR⟩ := hE.isVonNBounded_iff_seminorm_bounded.mp hD.bounded j
+  refine Seminorm.continuous' (r := R) (mem_of_superset (Metric.ball_mem_nhds (0 : G) one_pos) ?_)
+  intro z hz
+  rw [Metric.mem_ball, dist_zero_right] at hz
+  have hzD : (show Submodule.span ℂ D from z) ∈ ((↑) ⁻¹' D : Set (Submodule.span ℂ D)) :=
+    setOfPred_gauge_lt_one_subset_self hD.convex hD.absorbent.zero_mem hD.absorbent hz
+  rw [Seminorm.mem_closedBall_zero]
+  exact (hR (i z) hzD).le
+
+/-- Synthesis of an absolutely summable, uniformly seminorm-bounded series into a Banach space. -/
+private theorem spectralTrace_boundedSeries_toBanach {E Y : Type*} [AddCommGroup E] [Module ℂ E] [TopologicalSpace E]
+    [PolynormableSpace ℂ E] [SeminormedAddCommGroup Y] [NormedSpace ℂ Y] [T2Space Y] [CompleteSpace Y]
+    (L : ℕ → StrongDual ℂ E) (b : ℕ → Y) (a : ℕ → ℂ) (ha : Summable (fun n ↦ ‖a n‖))
+    (q : Seminorm ℂ E) (hq : Continuous q) (hL : ∀ n x, ‖L n x‖ ≤ q x) (hb : ∀ n, ‖b n‖ ≤ 1) :
+    ∃ analysisMap : E →L[ℂ] Y, ∀ x, HasSum (fun n ↦ (a n * L n x) • b n) (analysisMap x) := by
+  let term (x : E) (n : ℕ) := (a n * L n x) • b n
+  have bound (x : E) (n : ℕ) : ‖term x n‖ ≤ ‖a n‖*q x := by
+    calc
+      _ = ‖a n‖*‖L n x‖*‖b n‖ := by simp only [term,norm_smul,norm_mul]
+      _ ≤ ‖a n‖*q x*1 := by gcongr <;> first | exact hL _ _ | exact hb _
+      _ = _ := mul_one _
+  have hs (x : E) : Summable (term x) := (ha.mul_right (q x)).of_norm_bounded (bound x)
+  let analysisMap : E →ₗ[ℂ] Y := {
+    toFun x := ∑' n, term x n
+    map_add' x y := ((hs (x+y)).hasSum.unique <| ((hs x).hasSum.add (hs y).hasSum).congr_fun (fun n ↦
+      by simp only [term,map_add,mul_add,add_smul]))
+    map_smul' c x := ((hs (c • x)).hasSum.unique <| ((hs x).hasSum.const_smul c).congr_fun (fun n ↦
+      by simp only [term,map_smul,smul_eq_mul,smul_smul]; ring_nf)) }
+  let M := ∑' n, ‖a n‖
+  have hM : 0 ≤ M := tsum_nonneg (fun _ ↦ norm_nonneg _)
+  have dominated (x : E) : ‖analysisMap x‖ ≤ M * q x := by
+    calc
+      _ ≤ ∑' n, ‖a n‖*q x := by
+        have hnorm := Summable.of_nonneg_of_le (fun n ↦ norm_nonneg (term x n)) (bound x) (ha.mul_right (q x))
+        exact (norm_tsum_le_tsum_norm hnorm).trans (hnorm.tsum_le_tsum (bound x) (ha.mul_right (q x)))
+      _ = M*q x := tsum_mul_right
+  let p := M.toNNReal • q
+  have hp (x : E) : p x = M*q x := by simp [p,NNReal.smul_def,hM,Real.toNNReal_of_nonneg]
+  have hpcont : Continuous p := by simpa only [show (⇑p) = (fun x ↦ M*q x) from funext hp] using hq.const_mul M
+  have hU : Continuous analysisMap := (PolynormableSpace.withSeminorms ℂ E).continuous_normedSpace_rng Y analysisMap
+    ⟨{⟨p,hpcont⟩},1,by simpa using (show (normSeminorm ℂ Y).comp analysisMap ≤ p from fun x ↦ (dominated x).trans_eq (hp x).symm)⟩
+  exact ⟨⟨analysisMap,hU⟩,fun x ↦ (hs x).hasSum⟩
+
+/-- Factor a rapid presentation through ℓ² by giving the synthesis vectors the weights `(n + 1)⁻²`.
+Project away the kernel of synthesis to obtain an injective Hilbert-to-quotient map. -/
+private theorem spectralTrace_rapidPresentation_hilbert {E : Type*} [AddCommGroup E] [Module ℂ E]
+    [UniformSpace E] [IsUniformAddGroup E] [PolynormableSpace ℂ E] [T2Space E]
+    (T : E →L[ℂ] E) (r : NuclearPresentation T)
+    (hr : ∀ k : ℕ, ∃ C : ℝ, ∀ n, ‖r.coeff n‖*((n:ℝ)+1)^k ≤ C) :
+    ∃ W : Submodule ℂ (lp (fun _ : ℕ ↦ ℂ) 2), IsClosed (W : Set (lp (fun _ : ℕ ↦ ℂ) 2)) ∧
+      ∃ (analysisMap : E →L[ℂ] W) (synthesisMap : W →L[ℂ] E) (a : ℕ → ℂ) (b : ℕ → W), Injective synthesisMap ∧
+        (∀ x, synthesisMap (analysisMap x) = T x) ∧ Summable (fun n ↦ ‖a n‖) ∧ (∀ n, ‖b n‖ ≤ 1) ∧
+        (∀ x, HasSum (fun n ↦ (a n*r.functional n x) • b n) (analysisMap x)) ∧
+        ∀ n, a n • synthesisMap (b n) = r.coeff n • (r.vector n).val := by
+  let H := (lp (fun _ : ℕ ↦ ℂ) 2)
+  let β (n : ℕ) := (((n:ℝ)+1)^2)⁻¹
+  let α (n : ℕ) : ℂ := r.coeff n * (((n:ℂ)+1)^2)
+  have hβ : Summable β := by
+    have h := (summable_nat_add_iff 1).mpr (Real.summable_one_div_nat_pow.mpr (by decide : 1 < 2))
+    simpa only [β,one_div,Nat.cast_add,Nat.cast_one] using h
+  have hβn (n : ℕ) : ‖(β n:ℂ)‖ = β n := by rw [Complex.norm_real,Real.norm_of_nonneg (by dsimp [β]; positivity)]
+  have ha : Summable (fun n ↦ ‖α n‖) := by
+    obtain ⟨C,hC⟩ := hr 4
+    apply Summable.of_nonneg_of_le (fun _ ↦ norm_nonneg _) _ (hβ.mul_left C)
+    intro n
+    have hnc : ‖(n:ℂ)+1‖ = (n:ℝ)+1 := by
+      rw [←Complex.ofReal_natCast,←Complex.ofReal_one,←Complex.ofReal_add,Complex.norm_real,Real.norm_of_nonneg (by positivity)]
+    change ‖r.coeff n * (((n:ℂ)+1)^2)‖ ≤ C / _
+    rw [norm_mul,norm_pow,hnc,le_div_iff₀ (by positivity)]
+    simpa only [mul_assoc,←pow_add] using hC n
+  have hαβ (n : ℕ) : α n*(β n:ℂ) = r.coeff n := by
+    dsimp only [α,β]; push_cast; field_simp
+  let e (n : ℕ) : H := lp.single 2 n (1:ℂ)
+  have he (n : ℕ) : ‖e n‖ ≤ 1 := by simp only [e,lp.norm_single (by norm_num : (0:ENNReal)<2),norm_one,le_refl]
+  have hqfa := ((norm_withSeminorms ℂ ℂ).equicontinuous_tfae (fun n ↦ (r.functional n).toLinearMap)).out 1 4
+  obtain ⟨q,hq,hqL⟩ := (hqfa.mp r.equicontinuous) ()
+  obtain ⟨analysisMap,hU⟩ := spectralTrace_boundedSeries_toBanach r.functional e α ha q hq hqL he
+  let G := WithLocalSeminorm (gaugeSeminorm r.isBanachDisc.balanced r.isBanachDisc.convex r.isBanachDisc.absorbent)
+  let : CompleteSpace G := r.isBanachDisc.complete
+  let : T2Space G := r.isBanachDisc.separated
+  let j : G →L[ℂ] E := ⟨(Submodule.span ℂ r.disc).subtype,spectralTrace_banachDisc_inclusion r.isBanachDisc⟩
+  let y (n : ℕ) : G := r.vector n
+  have hy (n : ℕ) : ‖y n‖ ≤ 1 := gauge_le_one_of_mem (show r.vector n ∈ ((↑) ⁻¹' r.disc : Set (Submodule.span ℂ r.disc)) from r.vector_mem n)
+  let eval (n : ℕ) : H →L[ℂ] ℂ := lp.evalCLM ℂ _ 2 n
+  obtain ⟨Vg,hVg⟩ := spectralTrace_boundedSeries_toBanach eval y (fun n ↦ (β n:ℂ)) (by simpa only [hβn] using hβ)
+    (normSeminorm ℂ H) continuous_norm (fun n x ↦ lp.norm_apply_le_norm (by norm_num) x n) hy
+  let synthesisMap := j.comp Vg
+  have hVe (n : ℕ) : synthesisMap (e n) = (β n:ℂ) • (r.vector n).val := by
+    have hg : Vg (e n) = (β n:ℂ) • y n := by
+      apply (hVg (e n)).unique
+      have heval (k : ℕ) : eval k (e n) = if k=n then 1 else 0 := by
+        change (lp.single (E := fun _ : ℕ ↦ ℂ) 2 n (1:ℂ)) k = _
+        simp [lp.single_apply,Pi.single_apply,eq_comm]
+      have hs := hasSum_single n (f := fun k ↦ ((β k:ℂ)*eval k (e n)) • y k) (fun k hkn ↦ by simp [heval,hkn])
+      exact (show (β n:ℂ) • y n = ((β n:ℂ)*eval n (e n)) • y n by rw [heval]; simp) ▸ hs
+    change j (Vg (e n)) = _
+    rw [hg,map_smul]; rfl
+  have hVU (x : E) : synthesisMap (analysisMap x) = T x := by
+    refine ((hU x).mapL synthesisMap).unique ((r.hasSum x).congr_fun (fun n ↦ ?_))
+    rw [map_smul,hVe,smul_smul,mul_right_comm,hαβ]
+  let K := synthesisMap.toLinearMap.ker
+  let : CompleteSpace K := synthesisMap.isClosed_ker.completeSpace_coe
+  let W := Kᗮ
+  let : CompleteSpace W := K.isClosed_orthogonal.completeSpace_coe
+  let π := W.orthogonalProjectionOnto
+  have hπ (x : H) : synthesisMap (π x).val = synthesisMap x := by
+    have hx : x-(π x).val ∈ K := by
+      simpa only [W,K.orthogonal_orthogonal,Submodule.starProjection_apply] using Submodule.sub_starProjection_mem_orthogonal (K := W) x
+    change synthesisMap (x-(π x).val) = 0 at hx
+    exact ((sub_eq_zero.mp <| (map_sub synthesisMap _ _) ▸ hx)).symm
+  refine ⟨W,K.isClosed_orthogonal,π.comp analysisMap,synthesisMap.comp W.subtypeL,α,fun n ↦ π (e n),?_,
+    fun x ↦ (hπ (analysisMap x)).trans (hVU x),ha,fun n ↦ (W.norm_orthogonalProjectionOnto_apply_le _).trans (he n),?_,?_⟩
+  · change Injective (synthesisMap.comp W.subtypeL).toLinearMap
+    apply LinearMap.ker_eq_bot.mp
+    apply LinearMap.ker_eq_bot'.mpr
+    intro x hx
+    exact Subtype.ext ((Submodule.disjoint_def.mp K.isCompl_orthogonal.disjoint) _ hx x.property)
+  · intro x
+    simpa only [map_smul,ContinuousLinearMap.comp_apply] using (hU x).mapL π
+  · intro n
+    change α n • synthesisMap (π (e n)).val = _
+    rw [hπ,hVe,smul_smul,hαβ]
+
+/-- The Hilbert representation of a finite spectral mask computes its algebraic trace
+without any estimate on the original (possibly very oblique) mask. -/
+private theorem spectralTrace_rectangular {E H : Type*} [AddCommGroup E] [Module ℂ E] [TopologicalSpace E] [T2Space E]
+    [NormedAddCommGroup H] [InnerProductSpace ℂ H] [CompleteSpace H] (u : E →L[ℂ] H) (v : H →L[ℂ] E)
+    (p : E →L[ℂ] E) (hid : ∀ x, p (p x) = p x) (hc : ∀ x, v (u (p x)) = p (v (u x)))
+    (hfin : FiniteDimensional ℂ p.toLinearMap.range)
+    (R : p.toLinearMap.range →ₗ[ℂ] p.toLinearMap.range) (hR : ∀ x, (R x).val = v (u x.val)) :
+    let K := (p.comp v).toLinearMap.ker
+    let W := Kᗮ
+    FiniteDimensional ℂ W ∧
+      LinearMap.trace ℂ W ((W.orthogonalProjectionOnto.comp ((u.comp v).comp W.subtypeL)).toLinearMap) =
+        LinearMap.trace ℂ _ R := by
+  classical
+  intro K W
+  let : CompleteSpace W := K.isClosed_orthogonal.completeSpace_coe
+  let : CompleteSpace K := (p.comp v).isClosed_ker.completeSpace_coe
+  let A : W →ₗ[ℂ] p.toLinearMap.range := (p.toLinearMap.rangeRestrict.comp v.toLinearMap).comp W.subtype
+  have hA (x : W) : (A x).val = p (v x.val) := rfl
+  have hinj : Injective A := by
+    apply LinearMap.ker_eq_bot.mp
+    apply LinearMap.ker_eq_bot'.mpr
+    intro x hx
+    have he : x.val ∈ K := congrArg Subtype.val hx
+    exact Subtype.ext ((Submodule.disjoint_def.mp K.isCompl_orthogonal.disjoint) _ he x.property)
+  let : FiniteDimensional ℂ W := FiniteDimensional.of_injective A hinj
+  refine ⟨inferInstance,?_⟩
+  let backward := (W.orthogonalProjectionOnto.toLinearMap.comp u.toLinearMap).comp p.toLinearMap.range.subtype
+  have hpk (y : H) : p (v (W.orthogonalProjectionOnto y).val) = p (v y) := by
+    have he := Submodule.sub_starProjection_mem_orthogonal (K := W) y
+    have hk : y - (W.orthogonalProjectionOnto y).val ∈ K := by simpa only [W,K.orthogonal_orthogonal,Submodule.starProjection_apply] using he
+    change p (v (y - (W.orthogonalProjectionOnto y).val)) = 0 at hk
+    rw [map_sub,map_sub,sub_eq_zero] at hk
+    exact hk.symm
+  have hpu (x : E) : W.orthogonalProjectionOnto (u (p x)) = W.orthogonalProjectionOnto (u x) := by
+    apply sub_eq_zero.mp
+    rw [←map_sub]
+    change u (p x) - u x ∈ W.orthogonalProjectionOnto.ker
+    rw [Submodule.ker_orthogonalProjectionOnto]
+    change u (p x)-u x ∈ Kᗮᗮ
+    rw [K.orthogonal_orthogonal]
+    change p (v (u (p x)-u x)) = 0
+    rw [map_sub,map_sub,hc,hid,sub_self]
+  have compW : backward.comp A = (W.orthogonalProjectionOnto.comp ((u.comp v).comp W.subtypeL)).toLinearMap := by
+    apply LinearMap.ext
+    intro x
+    change W.orthogonalProjectionOnto (u (p (v x.val))) = _
+    exact hpu _
+  have compE : A.comp backward = R := by
+    ext x
+    change p (v (W.orthogonalProjectionOnto (u x.val)).val) = (R x).val
+    rw [hpk,hR,←hc]
+    obtain ⟨z,hz⟩ := x.property
+    change p z = x.val at hz
+    rw [←hz,hid]
+  rw [←compW,←compE]
+  exact LinearMap.trace_comp_comm' _ _
+
+/-- Any pointwise absolutely converging rank-one expansion on a finite-dimensional Hilbert
+space gives its algebraic trace by contraction. -/
+private theorem spectralTrace_finiteDimensional_series {H : Type*} [NormedAddCommGroup H] [InnerProductSpace ℂ H]
+    [FiniteDimensional ℂ H] (T : H →ₗ[ℂ] H) (a : ℕ → ℂ) (L : ℕ → StrongDual ℂ H) (b : ℕ → H)
+    (hT : ∀ x, HasSum (fun n ↦ (a n * L n x) • b n) (T x)) :
+    HasSum (fun n ↦ a n * L n (b n)) (LinearMap.trace ℂ H T) := by
+  classical
+  let e := stdOrthonormalBasis ℂ H
+  let D := Fin (Module.finrank ℂ H)
+  let c (i : D) := innerSL ℂ (e i)
+  have hs (i : D) (_ : i ∈ (Finset.univ : Finset D)) :
+      HasSum (fun n ↦ (a n * L n (e i)) * c i (b n)) (c i (T (e i))) := by
+    simpa only [map_smul,smul_eq_mul] using (hT (e i)).mapL (c i)
+  have hsum := hasSum_sum hs
+  have he (n : ℕ) : ∑ i : D, (a n*L n (e i))*c i (b n) = a n*L n (b n) := by
+    calc
+      _ = a n * L n (∑ i, c i (b n) • e i) := by
+        simp only [map_sum,map_smul,smul_eq_mul,Finset.mul_sum]
+        apply Finset.sum_congr rfl; intro i _; ring
+      _ = _ := congrArg (fun y ↦ a n * L n y) (e.sum_repr' (b n))
+  have ht : LinearMap.trace ℂ H T = ∑ i : D, c i (T (e i)) := by
+    rw [LinearMap.trace_eq_matrix_trace ℂ e.toBasis,Matrix.trace]
+    apply Finset.sum_congr rfl
+    intro i _
+    simp only [Matrix.diag_apply,LinearMap.toMatrix_apply,OrthonormalBasis.coe_toBasis,
+      OrthonormalBasis.coe_toBasis_repr_apply,OrthonormalBasis.repr_apply_apply,c,innerSL_apply_apply]
+  simpa only [ht,he] using hsum
+
+/-- Finite supported trace approximations identify the numerical trace of an already rapid
+presentation, irrespective of whether the cutoff operators are equicontinuous. -/
+private theorem spectralTrace_of_finiteProjections {E Z : Type*} [AddCommGroup E] [Module ℂ E]
+    [UniformSpace E] [IsUniformAddGroup E] [PolynormableSpace ℂ E] [T2Space E]
+    (T : E →L[ℂ] E) (r : NuclearPresentation T)
+    (hr : ∀ k : ℕ, ∃ C : ℝ, ∀ n, ‖r.coeff n‖*((n:ℝ)+1)^k ≤ C)
+    (p : Finset Z → E →L[ℂ] E) (R : (C : Finset Z) → (p C).toLinearMap.range →ₗ[ℂ] (p C).toLinearMap.range)
+    (hid : ∀ C x, p C (p C x) = p C x) (hc : ∀ C x, T (p C x) = p C (T x))
+    (hfin : ∀ C, FiniteDimensional ℂ (p C).toLinearMap.range) (hR : ∀ C x, (R C x).val = T x.val)
+    (hanti : ∀ C D, C ⊆ D → (p D).toLinearMap.ker ≤ (p C).toLinearMap.ker)
+    (hsep : ∀ x, (∀ C, p C x = 0) → x=0) (t : ℂ)
+    (hlen : Tendsto (fun C ↦ LinearMap.trace ℂ _ (R C)) atTop (𝓝 t)) :
+    HasSum (fun n ↦ r.coeff n * r.functional n (r.vector n).val) t := by
+  classical
+  obtain ⟨H,hclosed,analysisMap,synthesisMap,a,b,hV,hvu,ha,hb,hU,hvec⟩ := spectralTrace_rapidPresentation_hilbert T r hr
+  let : CompleteSpace H := hclosed.completeSpace_coe
+  let K (C : Finset Z) := ((p C).comp synthesisMap).toLinearMap.ker
+  let W (C : Finset Z) := (K C)ᗮ
+  let (C : Finset Z) : CompleteSpace (K C) := ((p C).comp synthesisMap).isClosed_ker.completeSpace_coe
+  let (C : Finset Z) : CompleteSpace (W C) := (K C).isClosed_orthogonal.completeSpace_coe
+  have mono : Monotone W := by
+    intro c d hcd
+    apply Submodule.orthogonal_le
+    exact fun x hx ↦ hanti c d hcd hx
+  have dense : ⊤ ≤ (⨆ C, W C).topologicalClosure := by
+    apply (Submodule.topologicalClosure_eq_top_iff.mpr ?_).ge
+    rw [Submodule.eq_bot_iff]
+    intro x hx
+    apply hV
+    rw [map_zero]
+    apply hsep
+    intro C
+    have hm : x ∈ (W C)ᗮ := Submodule.orthogonal_le (le_iSup W C) hx
+    change x ∈ K C
+    simpa only [W,(K C).orthogonal_orthogonal] using hm
+  have limit (y : H) := Submodule.starProjection_tendsto_self W mono y dense
+  -- Contract in the orthogonal Hilbert cutoffs, whose operator norms are at most one.
+  have hrect (C : Finset Z) := spectralTrace_rectangular analysisMap synthesisMap (p C) (hid C)
+    (fun x ↦ by rw [hvu,hvu,hc]) (hfin C) (R C) (fun x ↦ (hR C x).trans (hvu x.val).symm)
+  let d (C : Finset Z) (n : ℕ) := a n * r.functional n (synthesisMap ((W C).starProjection (b n)))
+  have loc (C : Finset Z) : HasSum (d C) (LinearMap.trace ℂ _ (R C)) := by
+    let : FiniteDimensional ℂ (W C) := (hrect C).1
+    let π := (W C).orthogonalProjectionOnto
+    let S := (π.comp ((analysisMap.comp synthesisMap).comp (W C).subtypeL)).toLinearMap
+    let L (n : ℕ) := (r.functional n).comp (synthesisMap.comp (W C).subtypeL)
+    have row (x : W C) : HasSum (fun n ↦ (a n * L n x) • π (b n)) (S x) := by
+      simpa only [L,S,ContinuousLinearMap.comp_apply,Submodule.subtypeL_apply,ContinuousLinearMap.coe_coe,map_smul] using
+        (hU (synthesisMap x.val)).mapL π
+    have hl := spectralTrace_finiteDimensional_series S a L (fun n ↦ π (b n)) row
+    have he : LinearMap.trace ℂ _ S = LinearMap.trace ℂ _ (R C) := (hrect C).2
+    rw [←he]
+    exact hl
+  have hqfa := ((norm_withSeminorms ℂ ℂ).equicontinuous_tfae (fun n ↦ (r.functional n).toLinearMap)).out 1 4
+  obtain ⟨q,hq,hqL⟩ := (hqfa.mp r.equicontinuous) ()
+  obtain ⟨M,hM,hbound⟩ := (q.comp synthesisMap.toLinearMap).bound_of_continuous_normedSpace (hq.comp synthesisMap.continuous)
+  have unif (n : ℕ) (y : H) (hy : ‖y‖ ≤ 1) : ‖r.functional n (synthesisMap y)‖ ≤ M :=
+    (hqL n (synthesisMap y)).trans ((hbound y).trans (mul_le_of_le_one_right hM.le hy))
+  let scalar (n : ℕ) := a n * r.functional n (synthesisMap (b n))
+  have normD (C : Finset Z) (n : ℕ) : ‖d C n‖ ≤ ‖a n‖*M := by
+    change ‖a n * _‖ ≤ _
+    rw [norm_mul]
+    exact mul_le_mul_of_nonneg_left (unif n _ (((W C).norm_starProjection_apply_le _).trans (hb _))) (norm_nonneg _)
+  have hscalar (n : ℕ) : scalar n = r.coeff n * r.functional n (r.vector n).val := by
+    simpa only [scalar,map_smul,smul_eq_mul] using congrArg (r.functional n) (hvec n)
+  have limD (n : ℕ) : Tendsto (fun C ↦ d C n) atTop (𝓝 (scalar n)) :=
+    (((r.functional n).continuous.comp synthesisMap.continuous).continuousAt.tendsto.comp (limit (b n))).const_mul _
+  -- Tannery’s theorem exchanges the finite-cluster limit with the presentation series.
+  have limTotal := tendsto_tsum_of_dominated_convergence (ha.mul_right M) limD
+    (Eventually.of_forall normD)
+  have hsum : Summable scalar := (ha.mul_right M).of_norm_bounded fun n ↦
+    (norm_mul _ _).le.trans (mul_le_mul_of_nonneg_left (unif n _ (hb n)) (norm_nonneg _))
+  have val : (∑' n,scalar n) = t := tendsto_nhds_unique limTotal (hlen.congr fun C ↦ (loc C).tsum_eq.symm)
+  exact val ▸ hsum.hasSum.congr_fun (fun n ↦ (hscalar n).symm)
+
+open Classical in
+/-- Every rapid presentation of the retained jet-endomorphism has the predicted divisor trace. -/
+private theorem spectralNuclearity_trace_of_rapid_presentation (a : ℝ) (N : ℕ) (φ : 𝒟)
+    (d : jets(χ,τ,hτ) → StrongDual ℂ (Q(a)))
+    (hd : ∀ i f, d i ((D(a)).mkQ f) = iteratedDeriv i.2.val f.val (i.1.val-(a:ℂ))) :
+    let I := {i : jets(χ,τ,hτ) // i.2.val < N}
+    let K := ⨅ i : I, (d i.val).toLinearMap.ker
+    let E := Q(a) ⧸ K
+    letI : UniformSpace E := IsTopologicalAddGroup.rightUniformSpace E
+    let Z := zeros(χ,τ,hτ)
+    let term (z : Z) := ((min N (multiplicity(χ,τ,hτ,z)) : ℕ):ℂ) * nuclearityTestMellin χ φ (z.val-(a:ℂ))
+    ∀ (A : B →L[ℂ] B) (Aq : Q(a) →L[ℂ] Q(a)) (T : E →L[ℂ] E),
+      (∀ f s, (A f).val s = nuclearityTestMellin χ φ s * f.val s) →
+      (∀ f, Aq ((D(a)).mkQ f) = (D(a)).mkQ (A f)) → (∀ x, T (K.mkQ x) = K.mkQ (Aq x)) →
+      ∀ r : NuclearPresentation T, (∀ k : ℕ, ∃ C : ℝ, ∀ n, ‖r.coeff n‖*((n:ℝ)+1)^k ≤ C) →
+        HasSum (fun n ↦ r.coeff n * r.functional n (r.vector n).val) (∑' z,term z) := by
+  classical
+  intro I K E Z term A Aq T hA hAq hT r hr
+  let : UniformSpace E := IsTopologicalAddGroup.rightUniformSpace E
+  let : IsUniformAddGroup E := isUniformAddGroup_of_addCommGroup
+  let D := D(a)
+  let : IsClosed (D : Set B) := schwartzBergmanDivisible_isClosed _
+  have hB : IsNuclearTVS.{0} B := spectralJet_sb_nuclear
+  let : T2Space B := hB.1
+  let : PolynormableSpace ℂ B := hB.2.1
+  let : T2Space (Q(a)) := inferInstanceAs (T2Space (B ⧸ D))
+  have hQ : IsNuclearTVS.{0} (Q(a)) := isNuclearTVS_quotient hB D
+  let : PolynormableSpace ℂ (Q(a)) := hQ.2.1
+  let : IsClosed (K : Set (Q(a))) := by
+    change IsClosed (↑(⨅ i : I, (d i.val).toLinearMap.ker) : Set (Q(a)))
+    rw [Submodule.coe_iInf]
+    exact isClosed_iInter (fun i ↦ (d i.val).isClosed_ker)
+  let : T2Space E := inferInstanceAs (T2Space (Q(a) ⧸ K))
+  let : PolynormableSpace ℂ E := (isNuclearTVS_quotient hQ K).2.1
+  let L (i : I) : StrongDual ℂ E := ⟨K.liftQ (d i.val).toLinearMap (iInf_le _ i),
+    (Submodule.isQuotientMap_mkQ K).continuous_iff.mpr (d i.val).continuous⟩
+  have hL (i : I) (x : Q(a)) : L i (K.mkQ x) = d i.val x := rfl
+  have separates (x : E) (hx : ∀ i, L i x=0) : x=0 := by
+    obtain ⟨y,rfl⟩ := K.mkQ_surjective x
+    rw [Submodule.mkQ_apply,Submodule.Quotient.mk_eq_zero,Submodule.mem_iInf]
+    exact fun i ↦ hx i
+  choose proj hmask hid hcomm hfin Rq _ using
+    spectralNuclearity_trace_finite_cluster χ τ hτ a N φ d hd A Aq T hA hAq hT L hL
+  choose R hR htrace using Rq
+  refine spectralTrace_of_finiteProjections T r hr proj R hid hcomm hfin hR ?_ ?_ _ ?_
+  · intro c e hce x hx
+    change proj c x = 0
+    apply separates
+    intro i
+    rw [hmask]
+    by_cases hi : i.val.1 ∈ c
+    · rw [ite_eq_left hi]
+      have hm := hmask e i x
+      change proj e x = 0 at hx
+      simpa only [hx,map_zero,ite_eq_left (hce hi)] using hm.symm
+    · rw [ite_eq_right hi]
+  · intro x hx
+    apply separates
+    intro i
+    have hm := hmask {i.val.1} i x
+    simpa only [hx,map_zero,Finset.mem_singleton_self,ite_true] using hm.symm
+  · have hs : Summable term := Summable.of_norm (spectralNuclearity_trace_term_summable χ τ hτ a N φ)
+    have e : (fun C : Finset Z ↦ LinearMap.trace ℂ _ (R C)) = (fun C ↦ ∑ z ∈ C,term z) := funext htrace
+    rw [e]
+    exact hs.hasSum
+
+end SpectralTraceHilbert
+
+section SpectralBoundarySynthesis
+
+open Filter Function Set Topology Bornology MeasureTheory Asymptotics Metric
+open scoped NNReal ENNReal
+
+/-- A separating family of observations has strongly dense span in the dual of
+a space on which every continuous strong-bidual element is evaluation. -/
+private theorem spectralBoundary_dense_observations {S I : Type*}
+    [AddCommGroup S] [Module ℂ S] [TopologicalSpace S] [IsTopologicalAddGroup S]
+    [ContinuousSMul ℂ S] [PolynormableSpace ℂ S] [T2Space S]
+    (obs : I → StrongDual ℂ S) (separate : ∀ x : S, (∀ i, obs i x=0) → x=0)
+    (bidual : ∀ φ : StrongDual ℂ (StrongDual ℂ S), ∃ x : S, ∀ L, φ L = L x) :
+    Dense ((Submodule.span ℂ (range obs)) : Set (StrongDual ℂ S)) := by
+  let : UniformSpace S := IsTopologicalAddGroup.rightUniformSpace S
+  let : IsUniformAddGroup S := isUniformAddGroup_of_addCommGroup
+  let X := StrongDual ℂ S
+  let D := Submodule.span ℂ (range obs)
+  let : PolynormableSpace ℂ X :=
+    uniformConvergenceCLM_polynormable (F := ℂ)
+      {T : Set S | IsVonNBounded ℂ T} (fun _ h ↦ h)
+      (by rw [Bornology.sUnion_isVonNBounded_eq_univ,Submodule.span_univ];simp)
+  let : Module ℝ X := Module.restrictScalars ℝ ℂ X
+  let : IsScalarTower ℝ ℂ X := IsScalarTower.restrictScalars ℝ ℂ X
+  let : LocallyConvexSpace ℝ X :=
+    (PolynormableSpace.withSeminorms ℂ X).toLocallyConvexSpace
+  intro L
+  change L ∈ D.topologicalClosure
+  by_contra hn
+  obtain ⟨φ,hφ,hzero⟩ := exists_dual_eq_zero_on_submodule_of_notMem
+    D.topologicalClosure D.isClosed_topologicalClosure hn
+  obtain ⟨x,hx⟩ := bidual φ
+  have h0 : x=0 := separate x fun i ↦ (hx _).symm.trans
+    (hzero _ (D.le_topologicalClosure (Submodule.subset_span (mem_range_self i))))
+  exact hφ (by rw [hx,h0,map_zero])
+
+/-- Locally bounded Schwartz-valued kernels can be tested for weak holomorphy on a
+separating family. Strong-dual approximation is uniform on the bounded family. -/
+private theorem spectralBoundary_weak_holomorphic {S I : Type*}
+    [AddCommGroup S] [Module ℂ S] [TopologicalSpace S] [IsTopologicalAddGroup S]
+    [ContinuousSMul ℂ S] [PolynormableSpace ℂ S] [T2Space S]
+    (obs : I → StrongDual ℂ S) (hd : Dense ((Submodule.span ℂ (range obs)) : Set (StrongDual ℂ S)))
+    (region : Set ℂ) (hU : IsOpen region) (f : ℂ → S) (hb : IsVonNBounded ℂ (f '' region))
+    (ho : ∀ i, DifferentiableOn ℂ (fun z ↦ obs i (f z)) region) (L : StrongDual ℂ S) :
+    DifferentiableOn ℂ (fun z ↦ L (f z)) region := by
+  let D := Submodule.span ℂ (range obs)
+  let pairing : Submodule ℂ (StrongDual ℂ S) :=
+    { carrier := {l | DifferentiableOn ℂ (fun z ↦ l (f z)) region}
+      zero_mem' := differentiableOn_const (0:ℂ)
+      add_mem' := fun {x y} hx hy ↦ hx.add hy
+      smul_mem' := fun c x hx ↦ hx.const_mul c }
+  have hs : D ≤ pairing := Submodule.span_le.mpr (by rintro _ ⟨i,rfl⟩;exact ho i)
+  let F := 𝓝[(D : Set (StrongDual ℂ S))] L
+  let : F.NeBot := mem_closure_iff_nhdsWithin_neBot.mp (hd L)
+  have hlim : Tendsto (id : StrongDual ℂ S → StrongDual ℂ S) F (𝓝 L) := nhdsWithin_le_nhds
+  have hv := (UniformConvergenceCLM.tendsto_iff_tendstoUniformlyOn (RingHom.id ℂ) ℂ
+    {s : Set S | IsVonNBounded ℂ s}).mp hlim (f '' region) hb
+  have hv' : TendstoUniformlyOn (fun l z ↦ l (f z)) (fun z ↦ L (f z)) F region :=
+    (hv.comp f).mono (fun x hx ↦ mem_image_of_mem _ hx)
+  have hm : ∀ᶠ l in F, l ∈ D := self_mem_nhdsWithin
+  have hP : ∀ᶠ l in F, DifferentiableOn ℂ (fun z ↦ l (f z)) region :=
+    hm.mono fun l hl ↦ hs hl
+  exact hv'.tendstoLocallyUniformlyOn.differentiableOn hP hU
+
+/-- The evaluation functionals at individual real points are dense in the strong dual
+of the complex real-line Schwartz space. -/
+private theorem spectralBoundary_schwartz_eval_dense :
+    let eval (t : ℝ) := (BoundedContinuousFunction.evalCLM ℂ t).comp
+      (SchwartzMap.toBoundedContinuousFunctionCLM ℂ ℝ ℂ)
+    Dense ((Submodule.span ℂ (range eval)) : Set (StrongDual ℂ (SchwartzMap ℝ ℂ))) := by
+  intro eval
+  let S := SchwartzMap ℝ ℂ
+  let : PolynormableSpace ℂ S := (schwartz_withSeminorms ℂ ℝ ℂ).toPolynormableSpace
+  apply spectralBoundary_dense_observations eval (fun x h ↦ SchwartzMap.ext h)
+  let D := EuclideanSpace ℝ (Fin 1)
+  let E := SchwartzMap D ℂ
+  let e : S ≃L[ℂ] E := schwartzChangeVariable ℂ (PiLp.equivOfUnique 2 ℝ _ : D ≃L[ℝ] ℝ)
+  let lift : StrongDual ℂ E →L[ℂ] StrongDual ℂ S :=
+    ContinuousLinearMap.precomp (τ := RingHom.id ℂ) ℂ e.toContinuousLinearMap
+  obtain ⟨j,hj⟩ := euclideanSchwartz_reflexive 1
+  intro Φ
+  obtain ⟨u,hu⟩ := j.surjective (Φ.comp lift)
+  refine ⟨e.symm u,fun L ↦ ?_⟩
+  let l := L.comp e.symm.toContinuousLinearMap
+  have eqL : lift l = L := by ext x; change L (e.symm (e x)) = L x; rw [e.symm_apply_apply]
+  calc
+    Φ L = (Φ.comp lift) l := by change Φ L = Φ (lift l); rw [eqL]
+    _ = j u l := by rw [hu]
+    _ = l u := hj u l
+    _ = _ := rfl
+
+/-- In a locally bounded family of real-line Schwartz functions, holomorphy of
+every point value implies holomorphy after application of any tempered functional. -/
+private theorem spectralBoundary_schwartz_dual_holomorphic (region : Set ℂ) (hU : IsOpen region)
+    (f : ℂ → SchwartzMap ℝ ℂ) (hb : IsVonNBounded ℂ (f '' region))
+    (hf : ∀ t : ℝ, DifferentiableOn ℂ (fun z ↦ f z t) region) (L : StrongDual ℂ (SchwartzMap ℝ ℂ)) :
+    DifferentiableOn ℂ (fun z ↦ L (f z)) region := by
+  let : PolynormableSpace ℂ (SchwartzMap ℝ ℂ) := (schwartz_withSeminorms ℂ ℝ ℂ).toPolynormableSpace
+  exact spectralBoundary_weak_holomorphic _ spectralBoundary_schwartz_eval_dense region hU f hb hf L
+
+/-- Every tempered functional applied to a pointwise holomorphic Schwartz-valued
+kernel with bounded weighted strip families gives an entire Schwartz–Bergman function. -/
+private theorem spectralBoundary_synthesis_schwartzBergman (K : ℂ → SchwartzMap ℝ ℂ)
+    (hk : ∀ t : ℝ, Differentiable ℂ (fun z ↦ K z t))
+    (hb : ∀ (A : ℝ) (p : ℕ), IsVonNBounded ℂ
+      (range (fun z : {z : ℂ // |z.re| ≤ A} ↦ (((1+|z.val.im|)^p:ℝ):ℂ) • K z.val))) :
+    ∃ R : StrongDual ℂ (SchwartzMap ℝ ℂ) →ₗ[ℂ] SchwartzBergman (univ : Set ℝ),
+      ∀ L z, (R L).val z = L (K z) := by
+  let S := SchwartzMap ℝ ℂ
+  let sourceSpace := SchwartzBergman (univ : Set ℝ)
+  have mem (L : StrongDual ℂ S) : (fun z ↦ L (K z)) ∈ schwartzBergmanSubmodule (univ : Set ℝ) := by
+    have hdiff : Differentiable ℂ (fun z ↦ L (K z)) := by
+      intro z
+      let A := |z.re|+1
+      let region := {v : ℂ | |v.re| < A}
+      have Uop : IsOpen region := isOpen_lt Complex.continuous_re.abs continuous_const
+      have hz : z ∈ region := by dsimp [region,A]; linarith
+      have b0 : IsVonNBounded ℂ (K '' region) := (hb A 0).subset (by
+        rintro _ ⟨w,hw,rfl⟩
+        exact ⟨⟨w,le_of_lt hw⟩,by simp⟩)
+      exact (spectralBoundary_schwartz_dual_holomorphic region Uop K b0
+        (fun t ↦ (hk t).differentiableOn) L z hz).differentiableAt (Uop.mem_nhds hz)
+    refine ⟨fun z h ↦ (h (mem_univ _)).elim,hdiff.differentiableOn,?_⟩
+    intro a b _ _ n
+    let A := |a|+|b|
+    have hA : 0 ≤ A := by dsimp [A]; positivity
+    obtain ⟨C,hC⟩ := ((NormedSpace.isVonNBounded_iff ℂ).mp ((hb A n).image L)).exists_norm_le
+    refine ⟨(1+A)^n*C,?_⟩
+    rintro _ ⟨z,hz,rfl⟩
+    have hr : |z.re| ≤ A := abs_le.mpr ⟨by dsimp [A]; linarith [hz.1,neg_abs_le a,abs_nonneg b],
+      by dsimp [A]; linarith [hz.2,le_abs_self b,abs_nonneg a]⟩
+    have hzn := hC _ (mem_image_of_mem L (mem_range_self (⟨z,hr⟩ : {z : ℂ // |z.re| ≤ A})))
+    change ‖L ((((1+|z.im|)^n:ℝ):ℂ) • K z)‖ ≤ C at hzn
+    rw [map_smul, norm_smul, Complex.norm_real,Real.norm_eq_abs,abs_of_nonneg (show 0 ≤ (1+|z.im|)^n by positivity)] at hzn
+    have hn : ‖z‖ ≤ (1+A)*(1+|z.im|) := (Complex.norm_le_abs_re_add_abs_im z).trans (by nlinarith [mul_nonneg hA (abs_nonneg z.im)])
+    change ‖z^n * L (K z)‖ ≤ _
+    rw [norm_mul,norm_pow]
+    calc
+      _ ≤ ((1+A)*(1+|z.im|))^n * ‖L (K z)‖ := by gcongr
+      _ = (1+A)^n * ((1+|z.im|)^n*‖L (K z)‖) := by rw [mul_pow,mul_assoc]
+      _ ≤ _ := mul_le_mul_of_nonneg_left hzn (by positivity)
+  exact ⟨{toFun := fun L ↦ ⟨fun z ↦ L (K z),mem L⟩
+          map_add' := fun _ _ ↦ rfl
+          map_smul' := fun _ _ ↦ rfl},fun _ _ ↦ rfl⟩
+
+open scoped NNReal ENNReal
+
+private theorem spectralBoundary_rapidBound_eq (a : (Fin 1 → ℤ) → ℂ) (j : ℕ) :
+    rapidDecaySequenceBound j a =
+      ∑' n, ENNReal.ofReal (latticeWeight n ^ j * ‖a (latticeIndex n)‖) := by
+  unfold rapidDecaySequenceBound
+  rw [← latticeIndex.tsum_eq]
+  apply tsum_congr
+  intro n
+  have hw : 0 ≤ latticeWeight n := zero_le_one.trans (latticeWeight_bounds n).1
+  rw [ENNReal.ofReal_mul (pow_nonneg hw _), ENNReal.ofReal_pow hw, ofReal_norm]
+  congr 2
+  rw [latticeWeight, ENNReal.ofReal_add zero_le_one (abs_nonneg _), ENNReal.ofReal_one]
+  congr 1
+  change ‖(WithLp.toLp 2 (fun i ↦ ((latticeIndex n i : ℤ) : ℝ)) : EuclideanSpace ℝ (Fin 1))‖ₑ = _
+  rw [← ofReal_norm, EuclideanSpace.norm_eq]
+  simp [latticeIndex, Real.norm_eq_abs, Real.sqrt_sq_eq_abs]
+
+private theorem spectralBoundary_rapidSeminorm_eq (a : RapidDecaySequence 1) (j : ℕ) :
+    rapidDecaySequenceSeminorm j a = ∑' n, latticeWeight n ^ j * ‖a (latticeIndex n)‖ := by
+  change (rapidDecaySequenceBound j a.val).toReal = _
+  rw [spectralBoundary_rapidBound_eq, ENNReal.tsum_toReal_eq (fun _ ↦ ENNReal.ofReal_ne_top)]
+  apply tsum_congr
+  intro n
+  exact ENNReal.toReal_ofReal (mul_nonneg (pow_nonneg (zero_le_one.trans (latticeWeight_bounds n).1) _)
+    (norm_nonneg _))
+/-- Continuous weighted analysis on a closed Hilbert boundary. The family is linear both
+in the rapid sequence and in its ℓ² argument, with a single seminorm bound in each weight. -/
+private theorem spectralBoundary_weighted_pair (k : ℕ) :
+    let H := lp (fun _ : ℕ ↦ ℂ) 2
+    let S := RapidDecaySequence 1
+    ∃ L : H →ₗ[ℂ] StrongDual ℂ S,
+      (∀ s : S, Continuous (fun h : H ↦ L h s)) ∧
+      (∀ h s, L h s = ∑' n : ℕ, h n * ((latticeWeight n ^ k:ℝ):ℂ) * s (latticeIndex n)) ∧
+      (∀ (n : ℕ) (s : S), L (lp.single (E := fun _ : ℕ ↦ ℂ) 2 n (1:ℂ)) s =
+        ((latticeWeight n ^ k:ℝ):ℂ) * s (latticeIndex n)) := by
+  intro H S
+  let W (n : ℕ) : ℝ := latticeWeight n ^ k
+  have hW (n : ℕ) : 0 ≤ W n := pow_nonneg (zero_le_one.trans (latticeWeight_bounds n).1) _
+  let t (x : H) (s : S) (n : ℕ) := x n * (W n:ℂ) * s (latticeIndex n)
+  have major (x : H) (s : S) (n : ℕ) : ‖t x s n‖ ≤ ‖x‖ * (W n * ‖s (latticeIndex n)‖) := by
+    simp only [t,norm_mul,Complex.norm_real,Real.norm_eq_abs,abs_of_nonneg (hW n),mul_assoc]
+    exact mul_le_mul_of_nonneg_right (lp.norm_apply_le_norm (by norm_num) x n)
+      (mul_nonneg (hW n) (norm_nonneg _))
+  have hsum (s : S) : HasSum (fun n ↦ W n * ‖s (latticeIndex n)‖) (rapidDecaySequenceSeminorm k s) := by
+    rw [spectralBoundary_rapidSeminorm_eq]
+    exact ((rapidSequence_mem_iff s.val).mp s.property k).hasSum
+  have hs (x : H) (s : S) : Summable (t x s) := ((hsum s).summable.mul_left ‖x‖).of_norm_bounded (major x s)
+  have bound (x : H) (s : S) : ‖∑' n, t x s n‖ ≤ ‖x‖ * rapidDecaySequenceSeminorm k s := by
+    refine (norm_tsum_le_tsum_norm (hs x s).norm).trans ?_
+    rw [← ((hsum s).mul_left ‖x‖).tsum_eq]
+    exact (hs x s).norm.tsum_le_tsum (major x s) ((hsum s).summable.mul_left ‖x‖)
+  let ls (x : H) : S →ₗ[ℂ] ℂ :=
+    { toFun := fun s ↦ ∑' n, t x s n
+      map_add' := fun a b ↦ by
+        rw [← (hs x a).tsum_add (hs x b)]
+        exact tsum_congr fun n ↦ mul_add _ _ _
+      map_smul' := fun c a ↦ by
+        change (∑' n, t x (c • a) n) = c • (∑' n, t x a n)
+        rw [← (hs x a).tsum_const_smul c]
+        apply tsum_congr; intro n
+        change x n * (W n:ℂ) * (c*a (latticeIndex n)) = c * (x n * (W n:ℂ) * a (latticeIndex n))
+        ring }
+  let L (x : H) : StrongDual ℂ S := ⟨ls x,by
+    apply WithSeminorms.continuous_normedSpace_rng _ rapidDecaySequence_withSeminorms
+    refine ⟨{k}, ⟨‖x‖,norm_nonneg _⟩,fun s ↦ ?_⟩
+    change ‖(ls x) s‖ ≤ _
+    exact (bound x s).trans (mul_le_mul_of_nonneg_left ((Finset.le_sup (f := rapidDecaySequenceSeminorm (r := 1)) (Finset.mem_singleton_self k)) s) (norm_nonneg x))⟩
+  let l : H →ₗ[ℂ] StrongDual ℂ S :=
+    { toFun := L
+      map_add' := fun a b ↦ by
+        ext s; change (∑' n, t (a+b) s n) = (∑' n, t a s n) + ∑' n, t b s n
+        rw [← (hs a s).tsum_add (hs b s)]
+        apply tsum_congr; intro n
+        change (a n+b n)*(W n:ℂ)*s (latticeIndex n) = _
+        simp [t, add_mul]
+      map_smul' := fun c a ↦ by
+        ext s
+        change (∑' n, t (c • a) s n) = c • (∑' n, t a s n)
+        rw [← (hs a s).tsum_const_smul c]
+        apply tsum_congr; intro n
+        change c * a n * (W n:ℂ) * s (latticeIndex n) = c*(a n*(W n:ℂ)*s (latticeIndex n))
+        ring }
+  refine ⟨l,fun s ↦ ?_,fun _ _ ↦ rfl,fun n s ↦ ?_⟩
+  · let q : H →ₗ[ℂ] ℂ := (ContinuousLinearMap.applyₗ (E := S) ℂ (RingHom.id ℂ) s).toLinearMap.comp l
+    exact (q.mkContinuous (rapidDecaySequenceSeminorm k s) (fun x ↦ (bound x s).trans_eq (mul_comm _ _))).continuous
+  · change (∑' j, t (lp.single 2 n 1) s j) = _
+    rw [tsum_eq_single n]
+    · simp [t,lp.single_apply,W]
+    · intro m hm
+      simp [t,lp.single_apply,hm]
+
+private theorem spectralBoundary_continuous_of_closedGraph {E Y : Type*}
+    [AddCommGroup E] [Module ℂ E] [TopologicalSpace E] [IsTopologicalAddGroup E]
+    [ContinuousSMul ℂ E]
+    [AddCommGroup Y] [Module ℂ Y] [TopologicalSpace Y] [IsTopologicalAddGroup Y]
+    [ContinuousSMul ℂ Y]
+    (hE : IsFrechetTVS E) (hY : IsFrechetTVS Y)
+    (T : E →ₗ[ℂ] Y) (hT : IsClosed (T.graph : Set (E × Y))) : Continuous T := by
+  let : UniformSpace E := IsTopologicalAddGroup.rightUniformSpace E
+  let : UniformSpace Y := IsTopologicalAddGroup.rightUniformSpace Y
+  have : IsUniformAddGroup E := isUniformAddGroup_of_addCommGroup
+  have : IsUniformAddGroup Y := isUniformAddGroup_of_addCommGroup
+  have : CompleteSpace E := hE.2.2.2
+  have : CompleteSpace Y := hY.2.2.2
+  have : TopologicalSpace.MetrizableSpace E := hE.2.2.1
+  have : TopologicalSpace.MetrizableSpace Y := hY.2.2.1
+  let Γ := T.graph
+  have : CompleteSpace Γ := completeSpace_coe_iff_isComplete.mpr hT.isComplete
+  have : IsUniformAddGroup Γ := Γ.toAddSubgroup.isUniformAddGroup
+  have : TopologicalSpace.MetrizableSpace (E × Y) := inferInstance
+  have : TopologicalSpace.MetrizableSpace Γ :=
+    inferInstanceAs (TopologicalSpace.MetrizableSpace (Γ : Set (E × Y)))
+  have : FirstCountableTopology Γ := inferInstance
+  have : FirstCountableTopology E := inferInstance
+  have : (uniformity E).IsCountablyGenerated := IsUniformAddGroup.uniformity_countably_generated
+  have : BaireSpace E := BaireSpace.of_completelyPseudoMetrizable
+  let Pr : Γ →L[ℂ] E := (ContinuousLinearMap.fst ℂ E Y).comp Γ.subtypeL
+  have hmem (x : E) : (x, T x) ∈ Γ := (LinearMap.mem_graph_iff _ _).mpr rfl
+  have hval (p : Γ) : p.val.2 = T p.val.1 := (LinearMap.mem_graph_iff _ _).mp p.property
+  have hinj : Injective Pr := fun p q h ↦ by
+    have h1 : p.val.1 = q.val.1 := h
+    exact Subtype.ext (Prod.ext h1 (by rw [hval, hval, h1]))
+  have hsurj : Surjective Pr := fun x ↦ ⟨⟨(x, T x), hmem x⟩, rfl⟩
+  have ho : IsOpenMap Pr := by
+    apply isOpenMap_of_not_isMeagre_range Pr
+    rw [hsurj.range_eq]
+    exact not_isMeagre_of_isOpen isOpen_univ univ_nonempty
+  let h : Γ ≃ₜ E :=
+    (Equiv.ofBijective Pr ⟨hinj, hsurj⟩).toHomeomorphOfContinuousOpen Pr.continuous ho
+  refine (continuous_snd.comp (continuous_subtype_val.comp h.symm.continuous)).congr fun x ↦ ?_
+  have h1 : (h.symm x).val.1 = x := h.apply_symm_apply x
+  change (h.symm x).val.2 = T x
+  rw [hval, h1]
+
+/-- Applying the weighted rapid coordinates of the boundary kernels to arbitrary ℓ²
+coefficients gives a continuous synthesis into the full Schwartz–Bergman space.
+The pointwise continuity on the Hilbert side closes its graph. -/
+private theorem spectralBoundary_hilbert_synthesis (K : ℂ → SchwartzMap ℝ ℂ)
+    (hk : ∀ t : ℝ, Differentiable ℂ (fun z ↦ K z t))
+    (hb : ∀ (A : ℝ) (p : ℕ), IsVonNBounded ℂ
+      (range (fun z : {z : ℂ // |z.re| ≤ A} ↦ (((1+|z.val.im|)^p:ℝ):ℂ) • K z.val)))
+    (e : SchwartzMap ℝ ℂ ≃L[ℂ] RapidDecaySequence 1) (k : ℕ) :
+    let H := lp (fun _ : ℕ ↦ ℂ) 2
+    let sourceSpace := SchwartzBergman (univ : Set ℝ)
+    ∃ R : H →L[ℂ] sourceSpace,
+      (∀ h z, (R h).val z = ∑' n : ℕ, h n * ((latticeWeight n ^ k:ℝ):ℂ) * e (K z) (latticeIndex n)) ∧
+      ∀ (n : ℕ) z, (R (lp.single (E := fun _ : ℕ ↦ ℂ) 2 n (1:ℂ))).val z =
+        ((latticeWeight n ^ k:ℝ):ℂ) * e (K z) (latticeIndex n) := by
+  intro H sourceSpace
+  obtain ⟨T,hT⟩ := spectralBoundary_synthesis_schwartzBergman K hk hb
+  obtain ⟨L,hLc,hLs,hLn⟩ := spectralBoundary_weighted_pair k
+  let pairing : StrongDual ℂ (RapidDecaySequence 1) →L[ℂ] StrongDual ℂ (SchwartzMap ℝ ℂ) :=
+    ContinuousLinearMap.precomp (τ := RingHom.id ℂ) ℂ e.toContinuousLinearMap
+  let R := (T.comp pairing.toLinearMap).comp L
+  have val (x : H) (z : ℂ) : (R x).val z = L x (e (K z)) := hT _ z
+  let ev (z : ℂ) := (entireJet z 0).comp schwartzBergmanEntireInclusion
+  have he (z : ℂ) (f : sourceSpace) : ev z f = f.val z := by
+    change entireJet z 0 (schwartzBergmanEntireInclusion f) = _
+    rw [entireJet_apply,iteratedDeriv_zero,schwartzBergmanEntireInclusion_apply]
+  have hg : (R.graph : Set (H × sourceSpace)) = ⋂ z : ℂ, {x : H × sourceSpace | L x.1 (e (K z)) = ev z x.2} := by
+    ext x
+    simp only [mem_iInter,mem_ofPred_eq,SetLike.mem_coe,LinearMap.mem_graph_iff]
+    constructor
+    · intro h z
+      rw [he,h,val]
+    · intro h
+      apply Subtype.ext
+      funext z
+      exact ((h z).trans (he z _)).symm.trans (val _ _).symm
+  have gc : IsClosed (R.graph : Set (H × sourceSpace)) := hg ▸ isClosed_iInter
+    (fun z ↦ isClosed_eq ((hLc _).comp continuous_fst) ((ev z).continuous.comp continuous_snd))
+  have hR : Continuous R := spectralBoundary_continuous_of_closedGraph (isFrechetTVS_of_banach H)
+    (schwartzBergman_frechet univ isOpen_univ inferInstance univ_nonempty) R gc
+  exact ⟨⟨R,hR⟩,fun h z ↦ (val h z).trans (hLs _ _),fun n z ↦ (val _ z).trans (hLn _ _)⟩
+
+/-- A countable family of rapidly decreasing nonnegative rows admits a single positive
+rapid majorant up to one constant per row. -/
+private theorem spectralBoundary_rapidScale (p : ℕ → ℕ → ℝ)
+    (hp : ∀ j k : ℕ, ∃ C : ℝ, ∀ n : ℕ, p j n * ((n:ℝ)+1)^k ≤ C) :
+    ∃ c : ℕ → ℝ, (∀ n, 0 < c n) ∧
+      (∀ k : ℕ, ∃ C : ℝ, ∀ n : ℕ, c n * ((n:ℝ)+1)^k ≤ C) ∧
+      (∀ j : ℕ, ∃ C : ℝ, ∀ n : ℕ, p j n ≤ C*c n) := by
+  classical
+  let W (n : ℕ) : ℝ := n+1
+  have hW (n) : 1 ≤ W n := by dsimp [W]; linarith [Nat.cast_nonneg (α := ℝ) n]
+  have pos (n) : 0 < W n := zero_lt_one.trans_le (hW n)
+  have eventual (j k : ℕ) : ∀ᶠ n in atTop, p j n * (W n)^k ≤ 1 := by
+    obtain ⟨C,hC⟩ := hp j (k+1)
+    obtain ⟨N,hN⟩ := exists_nat_ge C
+    filter_upwards [eventually_ge_atTop N] with n hn
+    have h1 : C ≤ W n := hN.trans (by dsimp [W]; exact_mod_cast (show N ≤ n + 1 by omega))
+    have h2 := hC n
+    change p j n * (W n)^(k+1) ≤ C at h2
+    rw [pow_succ,←mul_assoc] at h2
+    exact (le_of_mul_le_mul_right (by simpa only [one_mul] using h2.trans h1 : (p j n * W n ^ k) * W n ≤ 1 * W n) (pos n))
+  let S (n : ℕ) := (Finset.range (n+1)).filter (fun k ↦ ∀ j ≤ k, p j n * (W n)^k ≤ 1)
+  let H (n : ℕ) := (insert 0 (S n)).max' (Finset.insert_nonempty _ _)
+  have good (k : ℕ) : ∀ᶠ n in atTop, k ∈ S n := by
+    have hall : ∀ᶠ n in atTop, ∀ j ∈ Finset.range (k+1), p j n * (W n)^k ≤ 1 :=
+      (Finset.eventually_all _).mpr fun j _ ↦ eventual j k
+    filter_upwards [eventually_ge_atTop k,hall] with n hn hn'
+    exact Finset.mem_filter.mpr ⟨Finset.mem_range.mpr (by omega),fun j hj ↦ hn' j (Finset.mem_range.mpr (by omega))⟩
+  have large (k : ℕ) : ∀ᶠ n in atTop, k ≤ H n := (good k).mono fun n hn ↦
+    Finset.le_max' _ _ (Finset.mem_insert_of_mem hn)
+  have Hgood : ∀ᶠ n in atTop, H n ∈ S n := by
+    filter_upwards [large 1] with n hn
+    have hh : H n ∈ insert 0 (S n) := Finset.max'_mem _ _
+    exact (Finset.mem_insert.mp hh).resolve_left (by omega)
+  let c (n : ℕ) := ((W n)^(H n))⁻¹
+  have cp (n) : 0 < c n := inv_pos.mpr (pow_pos (pos n) _)
+  have global {f : ℕ → ℝ} (hf : ∀ᶠ n in atTop, f n ≤ 1) : ∃ C : ℝ, ∀ n, f n ≤ C := by
+    rw [←Nat.cofinite_eq_atTop] at hf
+    obtain ⟨C,hC⟩ := (isBoundedUnder_of_eventually_le hf).bddAbove_range_of_cofinite
+    exact ⟨C,fun n ↦ hC (mem_range_self n)⟩
+  refine ⟨c,cp,fun k ↦ global ?_,fun j ↦ ?_⟩
+  · filter_upwards [large k] with n hn
+    change ((W n)^(H n))⁻¹ * (W n)^k ≤ 1
+    rw [inv_mul_eq_div, div_le_one (pow_pos (pos n) _)]
+    exact pow_le_pow_right₀ (hW n) hn
+  · obtain ⟨C,hC⟩ := global (f := fun n ↦ p j n * (W n)^(H n)) (by
+      filter_upwards [Hgood,large j] with n hn hnj
+      exact (Finset.mem_filter.mp hn).2 j hnj)
+    refine ⟨C,fun n ↦ ?_⟩
+    change p j n ≤ C * ((W n)^(H n))⁻¹
+    rw [← div_eq_mul_inv,le_div_iff₀ (pow_pos (pos n) _)]
+    exact hC n
+
+private theorem spectralBoundary_gauge_image {M N : Type*} [AddCommGroup M] [Module ℂ M]
+    [AddCommGroup N] [Module ℂ N] (φ : M ≃ₗ[ℂ] N) (s : Set M) (x : M) :
+    gauge (φ '' s) (φ x) = gauge s x := by
+  unfold gauge
+  congr 1
+  ext r
+  simp only [Set.mem_ofPred_eq]
+  refine and_congr_right fun _ ↦ ?_
+  simp only [Set.mem_smul_set, Set.exists_mem_image]
+  refine exists_congr fun y ↦ and_congr_right fun _ ↦ ?_
+  rw [show r • φ y = φ (r • y) from (LinearMap.map_smul_of_tower φ.toLinearMap r y).symm]
+  exact φ.injective.eq_iff
+
+/-- The image of a Banach disc under an injective continuous linear map is a Banach disc:
+the map restricts to a linear equivalence of the spans that preserves the gauges. -/
+private theorem spectralBoundary_disc_image {Y Z : Type*}
+    [AddCommGroup Y] [Module ℂ Y] [UniformSpace Y] [IsUniformAddGroup Y]
+    [PolynormableSpace ℂ Y] [T2Space Y]
+    [AddCommGroup Z] [Module ℂ Z] [UniformSpace Z] [IsUniformAddGroup Z]
+    [PolynormableSpace ℂ Z] [T2Space Z]
+    {sourceSpace : Set Y} (hB : IsBanachDisc sourceSpace) (T : Y →L[ℂ] Z) (hT : Injective T) :
+    IsBanachDisc (T '' sourceSpace) := by
+  let S := Submodule.span ℂ sourceSpace
+  let S' := Submodule.span ℂ (T '' sourceSpace)
+  have hSS : S.map T.toLinearMap = S' := (Submodule.span_image T.toLinearMap).symm
+  let φ : S ≃ₗ[ℂ] S' :=
+    (Submodule.equivMapOfInjective T.toLinearMap hT S).trans (LinearEquiv.ofEq _ _ hSS)
+  have himage : ((↑) ⁻¹' (T '' sourceSpace) : Set S') = φ '' ((↑) ⁻¹' sourceSpace : Set S) := by
+    ext z
+    constructor
+    · rintro ⟨b, hb, hbz⟩
+      exact ⟨⟨b, Submodule.subset_span hb⟩, hb, Subtype.ext hbz⟩
+    · rintro ⟨w, hw, rfl⟩
+      exact ⟨w, hw, rfl⟩
+  have bB : Balanced ℂ ((↑) ⁻¹' (T '' sourceSpace) : Set S') :=
+    himage ▸ hB.balanced.image φ.toLinearMap
+  have cB : Convex ℝ ((↑) ⁻¹' (T '' sourceSpace) : Set S') :=
+    himage ▸ hB.convex.linear_image (φ.toLinearMap.restrictScalars ℝ)
+  have aB : Absorbent ℝ ((↑) ⁻¹' (T '' sourceSpace) : Set S') :=
+    himage ▸ Absorbent.image_of_surjective (f := φ.toLinearMap.restrictScalars ℝ)
+      φ.surjective hB.absorbent
+  let p := gaugeSeminorm hB.balanced hB.convex hB.absorbent
+  let p' := gaugeSeminorm bB cB aB
+  have hnorm (z : S') : p' z = p (φ.symm z) := by
+    change gauge _ z = gauge _ (φ.symm z)
+    rw [himage, ← spectralBoundary_gauge_image φ, φ.apply_symm_apply]
+  let ψ : WithLocalSeminorm p' → WithLocalSeminorm p := fun z ↦ (φ.symm (show S' from z) : S)
+  have hψ : Isometry ψ := Isometry.of_dist_eq fun x y ↦ by
+    rw [dist_eq_norm, dist_eq_norm]
+    change p (φ.symm (show S' from x) - φ.symm (show S' from y)) =
+      p' ((show S' from x) - (show S' from y))
+    rw [← map_sub]
+    exact (hnorm _).symm
+  have hinj : Injective ψ := fun a b h ↦ φ.symm.injective h
+  have hsurj : Surjective ψ := fun z ↦ ⟨(φ (show S from z) : S'), φ.symm_apply_apply _⟩
+  have := hB.separated
+  exact ⟨hB.bounded.image T, bB, cB, aB,
+    T2Space.of_injective_continuous hinj hψ.continuous,
+    (hψ.isUniformInducing.completeSpace_congr hsurj).mpr hB.complete⟩
+
+/-- Every bounded sequence in a complete Hausdorff locally convex space lies in one Banach disc. The ℓ¹ synthesis construction is from the Chapter 7 biorthogonal certificate; factoring out its kernel removes the biorthogonality assumption. -/
+private theorem spectralBoundary_bounded_common_disc {I E : Type*} [DecidableEq I]
+    [AddCommGroup E] [Module ℂ E] [UniformSpace E] [IsUniformAddGroup E]
+    [PolynormableSpace ℂ E] [T2Space E] [CompleteSpace E]
+    (v : I → E) (bnd : IsVonNBounded ℂ (range v))
+    :
+    ∃ D : Set E, IsBanachDisc D ∧ ∀ i, v i ∈ D := by
+  classical
+  let X := lp (fun _ : I ↦ ℂ) 1
+  let hp := PolynormableSpace.withSeminorms ℂ E
+  have bounded_q (q : {q : Seminorm ℂ E // Continuous q}) :
+      ∃ C > (0:ℝ), ∀ i, q.val (v i) ≤ C := by
+    obtain ⟨C,hC,h⟩ := hp.isVonNBounded_iff_seminorm_bounded.mp bnd q
+    exact ⟨C,hC,fun i ↦ (h _ (mem_range_self i)).le⟩
+  have normsum (x : X) : HasSum (fun i ↦ ‖x i‖) ‖x‖ := by
+    simpa using (lp.hasSum_norm (p := (1:ℝ≥0∞)) (by simp) x)
+  have hterms (x : X) : Summable (fun i ↦ x i • v i) := by
+    apply summable_iff_cauchySeq_finset.mpr
+    apply cauchySeq_finset_iff_sum_vanishing.mpr
+    intro region hU
+    obtain ⟨p,hp0,hpU⟩ := (PolynormableSpace.hasBasis_zero_ball ℂ E).mem_iff.mp hU
+    obtain ⟨C,hC,hh⟩ := bounded_q ⟨p,hp0⟩
+    have hmajor := (normsum x).summable.mul_left C
+    obtain ⟨s,hs⟩ := cauchySeq_finset_iff_sum_vanishing.mp
+      (summable_iff_cauchySeq_finset.mp hmajor) (Iio 1) (Iio_mem_nhds zero_lt_one)
+    refine ⟨s,fun u hu ↦ hpU (p.mem_ball_zero.mpr (lt_of_le_of_lt ?_ (hs u hu)))⟩
+    calc
+      p (∑ i ∈ u, x i • v i) ≤ ∑ i ∈ u, p (x i • v i) :=
+        Finset.le_sum_of_subadditive p (map_zero p).le (map_add_le_add p) _ _
+      _ ≤ _ := Finset.sum_le_sum fun i _ ↦ by
+        rw [map_smul_eq_mul, mul_comm]
+        exact mul_le_mul_of_nonneg_right (hh i) (norm_nonneg _)
+  let A : X →ₗ[ℂ] E :=
+    { toFun := fun x ↦ ∑' i, x i • v i
+      map_add' := fun x y ↦ by
+        simpa [add_smul] using (hterms x).tsum_add (hterms y)
+      map_smul' := fun c x ↦ by
+        change (∑' i, (c * x i) • v i) = c • _
+        simpa [smul_smul] using (hterms x).tsum_const_smul c }
+  have cont : Continuous A := by
+    apply hp.continuous_of_continuous_comp A
+    intro q
+    obtain ⟨C,hC,h⟩ := bounded_q q
+    apply Seminorm.continuous' (r := C+1)
+    refine mem_of_superset (Metric.ball_mem_nhds (0:X) one_pos) fun x hx ↦ ?_
+    rw [Metric.mem_ball,dist_zero_right] at hx
+    have hlimit := q.property.continuousAt.tendsto.comp (hterms x).hasSum
+    have hmajor := ((normsum x).mul_left C)
+    have hbound : q.val (A x) ≤ C * ‖x‖ :=
+      le_of_tendsto_of_tendsto' hlimit hmajor (fun s ↦ by
+        change q.val (∑ i ∈ s, x i • v i) ≤ ∑ i ∈ s, C * ‖x i‖
+        refine (Finset.le_sum_of_subadditive q.val (map_zero q.val).le (map_add_le_add q.val) _ _).trans ?_
+        apply Finset.sum_le_sum
+        intro i _
+        rw [map_smul_eq_mul,mul_comm]
+        exact mul_le_mul_of_nonneg_right (h i) (norm_nonneg _))
+    apply (q.val.comp A).mem_closedBall_zero.mpr
+    change q.val (A x) ≤ C+1
+    nlinarith
+  let S : X →L[ℂ] E := ⟨A,cont⟩
+  let K := S.ker
+  let : IsClosed (K : Set X) := S.isClosed_ker
+  let L₀ := K.liftQ S.toLinearMap (le_refl K)
+  let L : (X ⧸ K) →L[ℂ] E := ⟨L₀, (Submodule.isQuotientMap_mkQ K).continuous_iff.mpr S.continuous⟩
+  have inj : Injective L := LinearMap.ker_eq_bot.mp (K.ker_liftQ_eq_bot S.toLinearMap le_rfl le_rfl)
+  refine ⟨L '' Metric.closedBall (0:X ⧸ K) 1, spectralBoundary_disc_image isBanachDisc_closedUnitBall L inj,?_⟩
+  intro i
+  let e : X := lp.single (E := fun _ : I ↦ ℂ) 1 i (1:ℂ)
+  refine ⟨K.mkQ e,?_,?_⟩
+  · rw [Metric.mem_closedBall,dist_zero_right]
+    apply (Submodule.Quotient.norm_mk_le K e).trans
+    dsimp only [e]
+    rw [lp.norm_single (by norm_num), norm_one]
+  · change (∑' j : I, lp.single (E := fun _ : I ↦ ℂ) 1 i (1:ℂ) j • v j) = v i
+    simpa [lp.single_apply] using
+      (tsum_eq_single i (f := fun j : I ↦ lp.single (E := fun _ : I ↦ ℂ) 1 i (1:ℂ) j • v j)
+        (fun j hj ↦ by simp [lp.single_apply,hj]))
+
+/-- A Hilbert-space boundary extension descends through a quotient by first choosing the
+representative perpendicular to the kernel of the synthesis. -/
+private theorem spectralBoundary_lift {sourceSpace H E : Type*}
+    [AddCommGroup sourceSpace] [Module ℂ sourceSpace] [TopologicalSpace sourceSpace]
+    [NormedAddCommGroup H] [InnerProductSpace ℂ H] [CompleteSpace H]
+    [AddCommGroup E] [Module ℂ E] [TopologicalSpace E] [T2Space E]
+    (q : sourceSpace →L[ℂ] E) (hq : Topology.IsQuotientMap q)
+    (boundary : sourceSpace →L[ℂ] H) (synthesis : H →L[ℂ] E) (T : E →L[ℂ] E)
+    (hT : ∀ x, synthesis (boundary x) = T (q x)) :
+    ∃ lift : E →L[ℂ] H, synthesis.comp lift = T := by
+  let K := synthesis.ker
+  let : CompleteSpace K := synthesis.isClosed_ker.completeSpace_coe
+  let region := (ContinuousLinearMap.id ℂ H - K.starProjection).comp boundary
+  have correction (x : sourceSpace) : synthesis (region x) = T (q x) := by
+    change synthesis (boundary x - K.starProjection (boundary x)) = _
+    rw [map_sub, show synthesis (K.starProjection (boundary x)) = 0 from K.starProjection_apply_mem _, sub_zero, hT]
+  have hker (x : sourceSpace) (hx : q x = 0) : region x = 0 := by
+    change boundary x - K.starProjection (boundary x) = 0
+    rw [K.starProjection_eq_self_iff.mpr (show boundary x ∈ K by
+      change synthesis (boundary x) = 0
+      rw [hT,hx,map_zero]), sub_self]
+  obtain ⟨s,hs⟩ := q.toLinearMap.exists_rightInverse_of_surjective (LinearMap.range_eq_top.2 hq.surjective)
+  have right (y : E) : q (s y) = y := DFunLike.congr_fun hs y
+  let L := region.toLinearMap.comp s
+  have heq (x : sourceSpace) : L (q x) = region x := by
+    have h := hker (s (q x) - x) (by rw [map_sub,right,sub_self])
+    simpa only [L,LinearMap.comp_apply,ContinuousLinearMap.coe_coe,map_sub,sub_eq_zero] using h
+  have hcont : Continuous L := hq.continuous_iff.mpr (by simpa only [Function.comp_def,heq] using region.continuous)
+  refine ⟨⟨L,hcont⟩,ContinuousLinearMap.ext fun y ↦ ?_⟩
+  obtain ⟨x,rfl⟩ := hq.surjective y
+  change synthesis (L (q x)) = _
+  rw [heq,correction]
+
+/-- A single rapid presentation of boundary synthesis gives a single rapid presentation
+on the quotient with exactly the same coefficients, vectors, and Banach disc. -/
+private theorem spectralBoundary_strong_of_synthesis {sourceSpace H E : Type*}
+    [AddCommGroup sourceSpace] [Module ℂ sourceSpace] [TopologicalSpace sourceSpace]
+    [NormedAddCommGroup H] [InnerProductSpace ℂ H] [CompleteSpace H]
+    [AddCommGroup E] [Module ℂ E] [UniformSpace E] [T2Space E]
+    (q : sourceSpace →L[ℂ] E) (hq : Topology.IsQuotientMap q)
+    (boundary : sourceSpace →L[ℂ] H) (synthesis : H →L[ℂ] E) (T : E →L[ℂ] E)
+    (hT : ∀ x, synthesis (boundary x) = T (q x))
+    (r : NuclearPresentation synthesis)
+    (rapid : ∀ k : ℕ, ∃ C : ℝ, ∀ n : ℕ, ‖r.coeff n‖ * ((n:ℝ)+1)^k ≤ C) :
+    IsStronglyNuclearOperator T := by
+  obtain ⟨L,rfl⟩ := spectralBoundary_lift q hq boundary synthesis T hT
+  let r' : NuclearPresentation (synthesis.comp L) :=
+    { coeff := r.coeff, functional := fun n ↦ (r.functional n).comp L
+      disc := r.disc, isBanachDisc := r.isBanachDisc, vector := r.vector,
+      vector_mem := r.vector_mem, summable_coeff := r.summable_coeff,
+      equicontinuous := fun region hU ↦ by
+        have h := (L.continuous.tendsto' 0 0 (map_zero L)).eventually (r.equicontinuous region hU)
+        simpa only [ContinuousLinearMap.comp_apply, map_zero] using h
+      hasSum := fun x ↦ r.hasSum (L x) }
+  exact ⟨r',rapid⟩
+
+/-- A smoothing synthesis operator from a separable complex Hilbert space into a
+complete countably seminormed space has a single rapid nuclear presentation if its
+orthonormal columns decrease rapidly in every generating seminorm. -/
+private theorem spectralBoundary_presentation_of_rapid_columns {H E : Type*}
+    [NormedAddCommGroup H] [InnerProductSpace ℂ H] [CompleteSpace H]
+    [AddCommGroup E] [Module ℂ E] [UniformSpace E] [IsUniformAddGroup E]
+    [PolynormableSpace ℂ E] [T2Space E] [CompleteSpace E]
+    (p : ℕ → Seminorm ℂ E) (hp : WithSeminorms p)
+    (b : HilbertBasis ℕ ℂ H) (R : H →L[ℂ] E)
+    (h : ∀ j k : ℕ, ∃ C : ℝ, ∀ n : ℕ, p j (R (b n)) * ((n:ℝ)+1)^k ≤ C) :
+    ∃ r : NuclearPresentation R, ∀ k : ℕ, ∃ C : ℝ, ∀ n : ℕ,
+      ‖r.coeff n‖ * ((n:ℝ)+1)^k ≤ C := by
+  obtain ⟨c,hc,hr,hd⟩ := spectralBoundary_rapidScale (fun j n ↦ p j (R (b n))) h
+  let v (n : ℕ) := ((c n : ℂ)⁻¹) • R (b n)
+  have bv : IsVonNBounded ℂ (range v) := by
+    apply hp.isVonNBounded_iff_seminorm_bddAbove.mpr
+    intro j
+    obtain ⟨C,hC⟩ := hd j
+    refine ⟨C,?_⟩
+    rintro _ ⟨_,⟨n,rfl⟩,rfl⟩
+    change p j ((c n : ℂ)⁻¹ • R (b n)) ≤ C
+    rw [map_smul_eq_mul,norm_inv,Complex.norm_real,Real.norm_eq_abs,abs_of_pos (hc n),inv_mul_eq_div]
+    exact (div_le_iff₀ (hc n)).mpr (hC n)
+  obtain ⟨D,hD,hv⟩ := spectralBoundary_bounded_common_disc v bv
+  let L (n : ℕ) : H →L[ℂ] ℂ := innerSL ℂ (b n)
+  have hL : EquicontinuousAt (fun n x ↦ L n x) 0 := by
+    apply Metric.equicontinuousAt_of_continuity_modulus (fun x : H ↦ ‖x‖)
+      (by simpa using (continuous_norm : Continuous (norm : H → ℝ)).tendsto 0)
+    refine Eventually.of_forall fun x n ↦ ?_
+    rw [map_zero,dist_zero_left]
+    exact (norm_inner_le_norm _ _).trans_eq (by simp [b.orthonormal.norm_eq_one n])
+  have hs : Summable c := by
+    obtain ⟨C,hC⟩ := hr 2
+    have hsum : Summable (fun n : ℕ ↦ 1 / ((n:ℝ)+1)^2) := by
+      simpa only [Real.rpow_two,sq_abs] using (Real.summable_one_div_nat_add_rpow 1 2).mpr (by norm_num)
+    refine (hsum.mul_left C).of_norm_bounded fun n ↦ ?_
+    rw [Real.norm_eq_abs,abs_of_pos (hc n),mul_one_div]
+    exact (le_div_iff₀ (by positivity)).2 (hC n)
+  let r : NuclearPresentation R :=
+    { coeff := fun n ↦ (c n:ℂ), functional := L, disc := D, isBanachDisc := hD
+      vector := fun n ↦ ⟨v n,Submodule.subset_span (hv n)⟩
+      vector_mem := hv
+      summable_coeff := by simpa only [Complex.norm_real,Real.norm_eq_abs,abs_of_pos (hc _)] using hs
+      equicontinuous := hL
+      hasSum := fun x ↦ ((b.hasSum_repr x).mapL R).congr_fun fun n ↦ by
+        change ((c n:ℂ) * L n x) • v n = (R ((b.repr x n) • b n))
+        rw [map_smul,HilbertBasis.repr_apply_apply,show L n x = inner ℂ (b n) x from rfl]
+        dsimp only [v]
+        rw [smul_smul]
+        congr 1
+        field_simp [Complex.ofReal_ne_zero.mpr (hc n).ne'] }
+  refine ⟨r,fun k ↦ ?_⟩
+  obtain ⟨C,hC⟩ := hr k
+  exact ⟨C,fun n ↦ by simpa only [r,Complex.norm_real,Real.norm_eq_abs,abs_of_pos (hc n)] using hC n⟩
+
+/-- Every polynomially reweighted fixed-line synthesis has a single rapid
+presentation after projection to any complete countably-seminormed space. -/
+private theorem spectralBoundary_contour_presentation {E : Type*} [AddCommGroup E] [Module ℂ E]
+    [UniformSpace E] [IsUniformAddGroup E] [PolynormableSpace ℂ E] [T2Space E] [CompleteSpace E]
+    (p : ℕ → Seminorm ℂ E) (hp : WithSeminorms p)
+    (K : ℂ → SchwartzMap ℝ ℂ)
+    (hk : ∀ t : ℝ, Differentiable ℂ (fun z ↦ K z t))
+    (hb : ∀ (A : ℝ) (s : ℕ), IsVonNBounded ℂ
+      (range (fun z : {z : ℂ // |z.re| ≤ A} ↦ (((1+|z.val.im|)^s:ℝ):ℂ) • K z.val)))
+    (e : SchwartzMap ℝ ℂ ≃L[ℂ] RapidDecaySequence 1) (k : ℕ)
+    (q : SchwartzBergman (univ : Set ℝ) →L[ℂ] E) :
+    let H := lp (fun _ : ℕ ↦ ℂ) 2
+    let sourceSpace := SchwartzBergman (univ : Set ℝ)
+    ∃ R : H →L[ℂ] sourceSpace,
+      (∀ h z, (R h).val z = ∑' n : ℕ, h n * ((latticeWeight n ^ k:ℝ):ℂ) * e (K z) (latticeIndex n)) ∧
+      ∃ r : NuclearPresentation (q.comp R), ∀ j : ℕ, ∃ C : ℝ, ∀ n : ℕ, ‖r.coeff n‖*((n:ℝ)+1)^j ≤ C := by
+  intro H sourceSpace
+  choose R hR hunit using spectralBoundary_hilbert_synthesis K hk hb e
+  refine ⟨R k,hR k,?_⟩
+  let basis : HilbertBasis ℕ ℂ H := ⟨LinearIsometryEquiv.refl ℂ H⟩
+  let u (n : ℕ) : H := lp.single 2 n 1
+  have bval (n : ℕ) : basis n = u n := by rw [← basis.repr_symm_single]; rfl
+  have un (n : ℕ) : u n ∈ Metric.closedBall (0:H) 1 := by
+    rw [Metric.mem_closedBall,dist_zero_right,← bval, basis.orthonormal.norm_eq_one n]
+  apply spectralBoundary_presentation_of_rapid_columns p hp basis (q.comp (R k))
+  intro i j
+  let T := q.comp (R (k+j))
+  have hbd : IsVonNBounded ℂ (T '' Metric.closedBall (0:H) 1) :=
+    (NormedSpace.isVonNBounded_closedBall ℂ H 1).image T
+  obtain ⟨C,hC⟩ := hp.isVonNBounded_iff_seminorm_bddAbove.mp hbd i
+  refine ⟨(2:ℝ)^j*C,fun n ↦ ?_⟩
+  have hw : 0 ≤ latticeWeight n := zero_le_one.trans (latticeWeight_bounds n).1
+  have hsc : R (k+j) (u n) = ((latticeWeight n ^ j : ℝ):ℂ) • R k (u n) := by
+    apply Subtype.ext
+    funext z
+    change (R (k+j) (u n)).val z = ((latticeWeight n ^ j:ℝ):ℂ) * (R k (u n)).val z
+    dsimp only [u]
+    rw [hunit,hunit,pow_add,Complex.ofReal_mul]
+    ring
+  have bound := hC (mem_image_of_mem _ (mem_image_of_mem T (un n)))
+  change p i (q ((R (k+j)) (u n))) ≤ C at bound
+  rw [hsc,map_smul,map_smul_eq_mul,Complex.norm_real,Real.norm_eq_abs,abs_of_nonneg (pow_nonneg hw j)] at bound
+  rw [bval]
+  change p i (q (R k (u n))) * ((n:ℝ)+1)^j ≤ _
+  calc
+    _ ≤ p i (q (R k (u n))) * (2*latticeWeight n)^j := by
+      gcongr; exact (latticeWeight_bounds n).2.2
+    _ = 2^j * ((latticeWeight n)^j * p i (q (R k (u n)))) := by rw [mul_pow]; ring
+    _ ≤ _ := mul_le_mul_of_nonneg_left bound (by positivity)
+
+open MeasureTheory Complex
+
+/-- Gaussian regularization of the Cauchy kernel with its moving pole removed. -/
+private def spectralBoundaryKernel (G : ℂ → ℂ) (w z : ℂ) : ℂ :=
+  Complex.exp ((z-w)^2) * dslope G w z / G w
+
+private theorem spectralBoundaryKernel_entire {G : ℂ → ℂ} (hG : Differentiable ℂ G) (w : ℂ) :
+    Differentiable ℂ (spectralBoundaryKernel G w) := by
+  apply Differentiable.div_const
+  apply Differentiable.mul
+  · fun_prop
+  · exact fun z ↦ ((hG.analyticAt z).dslope w).differentiableAt
+
+private theorem spectralBoundaryKernel_offPole {G : ℂ → ℂ} {w z : ℂ} (hz : z ≠ w) (hw : G w ≠ 0) :
+    spectralBoundaryKernel G w z =
+      Complex.exp ((z-w)^2) / (w-z) * (1 - G z / G w) := by
+  simp only [spectralBoundaryKernel, dslope_of_ne _ hz,slope,smul_eq_mul,vsub_eq_sub]
+  field_simp [sub_ne_zero.mpr hz,sub_ne_zero.mpr hz.symm,hw]
+  ring
+
+private theorem spectralBoundary_dslope_norm {G : ℂ → ℂ} (hG : Differentiable ℂ G)
+    (A C : ℝ) (n : ℕ) (hC : 0 ≤ C)
+    (hder : ∀ x : ℂ, |x.re| ≤ A → ‖deriv G x‖ ≤ C * (1+|x.im|)^n)
+    (w z : ℂ) (hw : |w.re| ≤ A) (hz : |z.re| ≤ A) :
+    ‖dslope G w z‖ ≤ C * (1+|w.im|+|z.im-w.im|)^n := by
+  let b := |w.im| + |z.im-w.im|
+  have hb : |z.im| ≤ b := by
+    calc
+      |z.im| = |(z.im-w.im)+w.im| := by congr 1; ring
+      _ ≤ |z.im-w.im| + |w.im| := abs_add_le _ _
+      _ = b := add_comm _ _
+  have hw' : |w.im| ≤ b := le_add_of_nonneg_right (abs_nonneg _)
+  let S := {x : ℂ | x.re ∈ Icc (-A) A ∧ x.im ∈ Icc (-b) b}
+  have cv : Convex ℝ S := ((convex_halfSpace_re_ge (-A)).inter (convex_halfSpace_re_le A)).inter
+    ((convex_halfSpace_im_ge (-b)).inter (convex_halfSpace_im_le b))
+  have hbd (x : ℂ) (hx : x ∈ S) : ‖deriv G x‖ ≤ C * (1+b)^n := by
+    refine (hder x (abs_le.mpr hx.1)).trans ?_
+    exact mul_le_mul_of_nonneg_left (pow_le_pow_left₀ (by positivity) (add_le_add_right (abs_le.mpr hx.2) 1) n) hC
+  have zm : z ∈ S := ⟨abs_le.mp hz,abs_le.mp hb⟩
+  have wm : w ∈ S := ⟨abs_le.mp hw,abs_le.mp hw'⟩
+  have goal : ‖dslope G w z‖ ≤ C * (1+b)^n := by
+    by_cases e : z = w
+    · subst z; simpa only [dslope_same] using hbd w wm
+    · rw [dslope_of_ne _ e,slope,smul_eq_mul,norm_mul,norm_inv,inv_mul_eq_div]
+      apply (div_le_iff₀ (norm_pos_iff.mpr (sub_ne_zero.mpr e))).mpr
+      exact cv.norm_image_sub_le_of_norm_deriv_le (fun x _ ↦ hG x) hbd wm zm
+  simpa only [b,add_assoc] using goal
+
+private theorem spectralBoundary_gaussian_abs_pow (m : ℕ) (u : ℝ) :
+    (1 + |u|)^m * Real.exp (-(u^2)) ≤ Real.exp ((m:ℝ)^2) := by
+  have h := Real.add_one_le_exp |u|
+  have hp : (1+|u|)^m ≤ Real.exp ((m:ℝ)*|u|) := by
+    rw [Real.exp_nat_mul]
+    exact pow_le_pow_left₀ (by positivity) (by linarith) _
+  calc
+    _ ≤ Real.exp ((m:ℝ)*|u|) * Real.exp (-(u^2)) := mul_le_mul_of_nonneg_right hp (Real.exp_pos _).le
+    _ = Real.exp ((m:ℝ)*|u| - u^2) := by rw [←Real.exp_add]; rfl
+    _ ≤ _ := Real.exp_le_exp.mpr (by nlinarith [sq_nonneg ((m:ℝ) - |u|),sq_abs u,sq_nonneg u])
+
+/-- The entire interpolation vector on a vertical contour grows at most polynomially
+in the contour height, for each fixed output Schwartz–Bergman seminorm. The same bound
+applies uniformly on any narrow complex tube where the reciprocal bound holds. -/
+private theorem spectralBoundaryKernel_strip {G : ℂ → ℂ} (hG : Differentiable ℂ G)
+    (A C D : ℝ) (n b p : ℕ) (hC : 0 ≤ C) (hD : 0 ≤ D)
+    (hder : ∀ x : ℂ, |x.re| ≤ A → ‖deriv G x‖ ≤ C * (1+|x.im|)^n) :
+    ∃ K : ℝ, ∀ w z : ℂ, |w.re| ≤ A → |z.re| ≤ A →
+      ‖(G w)⁻¹‖ ≤ D*(1+|w.im|)^b →
+      (1+|z.im|)^p * ‖spectralBoundaryKernel G w z‖ ≤ K * (1+|w.im|)^(p+n+b) := by
+  let m := p+n
+  refine ⟨Real.exp ((2*A)^2) * C * D * Real.exp ((m:ℝ)^2), ?_⟩
+  intro w z hw hz hi
+  let u := z.im-w.im
+  let region := 1+|u|
+  let targetSet := 1+|w.im|
+  have hU : 0 ≤ region := by dsimp [region]; positivity
+  have hV : 0 ≤ targetSet := by dsimp [targetSet]; positivity
+  have ht : 1+|w.im|+|u| ≤ targetSet*region := by
+    dsimp [targetSet,region]; nlinarith [mul_nonneg (abs_nonneg w.im) (abs_nonneg u)]
+  have hy : 1+|z.im| ≤ targetSet*region := by
+    have h := abs_add_le u w.im
+    rw [show u + w.im = z.im by dsimp [u];ring] at h
+    linarith
+  have hr : |z.re-w.re| ≤ 2*A := (abs_sub _ _).trans (by linarith)
+  have hs : (z.re-w.re)^2 ≤ (2*A)^2 := by
+    nlinarith [sq_abs (z.re-w.re),abs_nonneg (z.re-w.re),mul_nonneg (sub_nonneg.mpr hr) (add_nonneg (hr.trans' (abs_nonneg _)) (abs_nonneg (z.re-w.re)))]
+  have hg : ‖Complex.exp ((z-w)^2)‖ ≤ Real.exp ((2*A)^2) * Real.exp (-(u^2)) := by
+    rw [Complex.norm_exp,←Real.exp_add]
+    apply Real.exp_le_exp.mpr
+    simp only [pow_two,Complex.mul_re,Complex.sub_re,Complex.sub_im,u]
+    nlinarith
+  have hdiff : ‖dslope G w z‖ ≤ C*(targetSet*region)^n := by
+    refine (spectralBoundary_dslope_norm hG A C n hC hder w z hw hz).trans ?_
+    exact mul_le_mul_of_nonneg_left (pow_le_pow_left₀ (by positivity) ht _) hC
+  change _ ≤ _ * targetSet^(p+n+b)
+  rw [spectralBoundaryKernel,div_eq_mul_inv,norm_mul,norm_mul]
+  calc
+    _ ≤ (targetSet*region)^p * (Real.exp ((2*A)^2) * Real.exp (-(u^2)) * (C*(targetSet*region)^n) * (D*targetSet^b)) := by
+      gcongr
+    _ = (Real.exp ((2*A)^2)*C*D*targetSet^(p+n+b)) * (region^m * Real.exp (-(u^2))) := by
+      simp only [m,pow_add,mul_pow]; ring
+    _ ≤ (Real.exp ((2*A)^2)*C*D*targetSet^(p+n+b)) * Real.exp ((m:ℝ)^2) := by
+      apply mul_le_mul_of_nonneg_left (spectralBoundary_gaussian_abs_pow m u)
+      positivity
+    _ = _ := by ring
+
+/-- The moving, regularized Cauchy vector is holomorphic in its integration parameter
+where the generator is nonzero, including at the removable diagonal. -/
+private theorem spectralBoundaryKernel_moving {G : ℂ → ℂ} (hG : Differentiable ℂ G)
+    (z w : ℂ) (hw : G w ≠ 0) :
+    DifferentiableAt ℂ (fun t ↦ spectralBoundaryKernel G t z) w := by
+  have hswap (t : ℂ) : dslope G t z = dslope G z t := by
+    by_cases ht : t=z
+    · rw [ht]
+    · rw [dslope_of_ne _ (Ne.symm ht),dslope_of_ne _ ht,slope_comm]
+  unfold spectralBoundaryKernel
+  simp_rw [hswap]
+  have he : DifferentiableAt ℂ (fun t : ℂ ↦ Complex.exp ((z-t)^2)) w := by fun_prop
+  exact (he.mul ((hG.analyticAt w).dslope z).differentiableAt).div (hG w) hw
+
+/-- The kernel multiplied by a test Mellin transform is uniformly Schwartz in the
+boundary parameter, including all its derivatives, in each output strip seminorm. -/
+private theorem spectralBoundaryKernel_schwartz {G M : ℂ → ℂ}
+    (hG : Differentiable ℂ G) (hM : Differentiable ℂ M) (A C D σ : ℝ) (n b : ℕ)
+    (hC : 0 ≤ C) (hD : 0 ≤ D) (hσ : |σ|+1 ≤ A)
+    (hder : ∀ x : ℂ, |x.re| ≤ A → ‖deriv G x‖ ≤ C*(1+|x.im|)^n)
+    (hinv : ∀ w : ℂ, |w.re-σ| ≤ 1 → G w ≠ 0 ∧ ‖(G w)⁻¹‖ ≤ D*(1+|w.im|)^b)
+    (hrapid : ∀ k : ℕ, ∃ E > (0:ℝ), ∀ w : ℂ, |w.re-σ| ≤ 1 → (1+|w.im|)^k*‖M w‖ ≤ E)
+    (p k j : ℕ) : ∃ sourceSpace : ℝ, ∀ w z : ℂ, w.re = σ → |z.re| ≤ A →
+      (1+|z.im|)^p * (1+|w.im|)^k *
+        ‖iteratedDeriv j (fun v ↦ M v * spectralBoundaryKernel G v z) w‖ ≤ sourceSpace := by
+  obtain ⟨K,hK⟩ := spectralBoundaryKernel_strip hG A C D n b p hC hD hder
+  let K' := max 0 K
+  have Kp : 0 ≤ K' := le_max_left _ _
+  let m := p+n+b
+  obtain ⟨E,hE,hEM⟩ := hrapid (m+k)
+  refine ⟨j.factorial * (2^k * K' * E),?_⟩
+  intro w z hw hz
+  let Z := (1+|z.im|)^p
+  let W := (1+|w.im|)^k
+  let H : ℂ := ((Z*W:ℝ):ℂ)
+  have hh : ‖H‖ = Z*W := by
+    rw [Complex.norm_real,Real.norm_eq_abs,abs_of_nonneg]
+    positivity
+  have tube (v : ℂ) (hv : v ∈ Metric.closedBall w 1) :
+      |v.re - σ| ≤ 1 ∧ |v.re| ≤ A ∧ 1+|w.im| ≤ 2*(1+|v.im|) := by
+    have hdist := mem_closedBall_iff_norm.mp hv
+    have hre := (Complex.abs_re_le_norm (v-w)).trans hdist
+    have him := (Complex.abs_im_le_norm (v-w)).trans hdist
+    rw [Complex.sub_re,hw] at hre
+    rw [Complex.sub_im] at him
+    refine ⟨hre,?_,?_⟩
+    · have t := abs_add_le (v.re-σ) σ
+      rw [sub_add_cancel] at t
+      linarith
+    · have t := abs_sub v.im (v.im-w.im)
+      rw [sub_sub_cancel] at t
+      linarith [abs_nonneg v.im]
+  let F (v : ℂ) := M v * spectralBoundaryKernel G v z
+  have ha (v : ℂ) (hv : v ∈ Metric.closedBall w 1) : DifferentiableAt ℂ F v :=
+    (hM v).mul (spectralBoundaryKernel_moving hG z v (hinv v (tube v hv).1).1)
+  have hd : DiffContOnCl ℂ (fun v ↦ H * F v) (Metric.ball w 1) := by
+    apply DifferentiableOn.diffContOnCl
+    rw [closure_ball w one_ne_zero]
+    exact fun v hv ↦ ((ha v hv).const_mul H).differentiableWithinAt
+  have hbound (v : ℂ) (hv : v ∈ Metric.sphere w 1) : ‖H * F v‖ ≤ 2^k*K'*E := by
+    obtain ⟨hhv,hva,hvi⟩ := tube v (Metric.sphere_subset_closedBall hv)
+    let h := 1+|v.im|
+    have hp : 0 ≤ h := by dsimp [h]; positivity
+    have hKer : Z * ‖spectralBoundaryKernel G v z‖ ≤ K' * h^m :=
+      (hK v z hva hz (hinv v hhv).2).trans
+        (mul_le_mul_of_nonneg_right (le_max_right _ _) (pow_nonneg hp m))
+    have hW : W ≤ 2^k * h^k := by simpa only [mul_pow] using pow_le_pow_left₀ (by positivity) hvi k
+    rw [norm_mul,hh]
+    change Z*W*(‖M v * spectralBoundaryKernel G v z‖) ≤ _
+    rw [norm_mul]
+    calc
+      _ = W * (Z * ‖spectralBoundaryKernel G v z‖) * ‖M v‖ := by ring
+      _ ≤ (2^k * h^k) * (K'*h^m) * ‖M v‖ := by gcongr
+      _ = (2^k*K') * (h^(m+k)*‖M v‖) := by rw [pow_add]; ring
+      _ ≤ _ := mul_le_mul_of_nonneg_left (hEM v hhv) (by positivity)
+  have h := Complex.norm_iteratedDeriv_le_of_forall_mem_sphere_norm_le j one_pos hd hbound
+  rw [iteratedDeriv_const_mul_field,norm_mul,hh,one_pow,div_one] at h
+  exact h
+
+local notation "linePoint" => (fun (x y : ℝ) ↦ (x : ℂ) + y * Complex.I)
+private theorem spectralContour_hasDerivAt_vertical_iterate {I : Set ℝ} (hI : IsOpen I) (a : I)
+    {f : ℂ → ℂ} (hf : DifferentiableOn ℂ f (Complex.re ⁻¹' I)) (n : ℕ) (x : ℝ) :
+    HasDerivAt (fun y : ℝ ↦ Complex.I ^ n * iteratedDeriv n f (linePoint a y))
+      (Complex.I ^ (n+1) * iteratedDeriv (n+1) f (linePoint a x)) x := by
+  have hU := hI.preimage Complex.continuous_re
+  have han : ∀ m, AnalyticOnNhd ℂ (iteratedDeriv m f) (Complex.re ⁻¹' I) := by
+    intro m
+    induction m with
+    | zero => simpa using hf.analyticOnNhd hU
+    | succ m ih => rw [iteratedDeriv_succ]; exact fun z hz ↦ (ih z hz).deriv
+  have hd := (han n _ (show linePoint a x ∈ Complex.re ⁻¹' I by simp)).differentiableAt.hasDerivAt
+  have hline : HasDerivAt (fun w : ℂ ↦ (a.val : ℂ) + w * Complex.I) Complex.I (x : ℂ) := by
+    simpa using (((hasDerivAt_id (x : ℂ)).mul_const Complex.I).const_add (a.val : ℂ))
+  have h := ((hd.comp (x : ℂ) hline).comp_ofReal).const_mul (Complex.I ^ n)
+  simpa only [Function.comp_apply, iteratedDeriv_succ, pow_succ, mul_left_comm,
+    mul_assoc, mul_comm (deriv _ _)] using h
+
+private theorem spectralContour_iteratedDeriv_vertical {I : Set ℝ} (hI : IsOpen I) (a : I)
+    {f : ℂ → ℂ} (hf : DifferentiableOn ℂ f (Complex.re ⁻¹' I)) (n : ℕ) :
+    iteratedDeriv n (fun y : ℝ ↦ f (linePoint a y)) =
+      fun y ↦ Complex.I ^ n * iteratedDeriv n f (linePoint a y) := by
+  induction n with
+  | zero => simp
+  | succ n ih =>
+    rw [iteratedDeriv_succ, ih]
+    funext x
+    exact (spectralContour_hasDerivAt_vertical_iterate hI a hf n x).deriv
+
+/-- A family holomorphic on a neighborhood of a whole vertical line with uniform
+Schwartz bounds for all holomorphic derivatives on that line is a bounded family
+of real Schwartz functions after restriction. -/
+private theorem spectralBoundary_schwartz_line_family {X : Type*} (F : X → ℂ → ℂ) (σ : ℝ)
+    (hol : ∀ i, DifferentiableOn ℂ (F i) (Complex.re ⁻¹' Ioo (σ-1) (σ+1)))
+    (bounds : ∀ k j : ℕ, ∃ C : ℝ, ∀ i (t : ℝ),
+      (1+|t|)^k * ‖iteratedDeriv j (F i) (linePoint σ t)‖ ≤ C) :
+    ∃ f : X → SchwartzMap ℝ ℂ, (∀ i t, f i t = F i (linePoint σ t)) ∧
+      Bornology.IsVonNBounded ℂ (range f) := by
+  let s : Ioo (σ-1) (σ+1) := ⟨σ,by constructor <;> linarith⟩
+  have hdec (k j : ℕ) : ∃ C : ℝ, ∀ i (t : ℝ),
+      ‖t‖^k * ‖iteratedFDeriv ℝ j (fun t : ℝ ↦ F i (linePoint σ t)) t‖ ≤ C := by
+    obtain ⟨C,hC⟩ := bounds k j
+    refine ⟨C,fun i t ↦ ?_⟩
+    rw [norm_iteratedFDeriv_eq_norm_iteratedDeriv, show σ = s.val from rfl,
+      spectralContour_iteratedDeriv_vertical isOpen_Ioo s (hol i),norm_mul,norm_pow,Complex.norm_I,one_pow,one_mul]
+    apply le_trans _ (hC i t)
+    exact mul_le_mul_of_nonneg_right (pow_le_pow_left₀ (norm_nonneg _) (by rw [Real.norm_eq_abs]; linarith) _) (norm_nonneg _)
+  let f (i : X) : SchwartzMap ℝ ℂ :=
+    { toFun := fun t ↦ F i (linePoint σ t)
+      smooth' := by
+        apply contDiff_of_differentiable_iteratedDeriv
+        intro j _ t
+        rw [show σ = s.val from rfl,spectralContour_iteratedDeriv_vertical isOpen_Ioo s (hol i)]
+        exact (spectralContour_hasDerivAt_vertical_iterate isOpen_Ioo s (hol i) j t).differentiableAt
+      decay' := fun k j ↦ ⟨(hdec k j).choose,(hdec k j).choose_spec i⟩ }
+  refine ⟨f,fun i t ↦ rfl,?_⟩
+  apply (schwartz_withSeminorms ℂ ℝ ℂ).isVonNBounded_iff_seminorm_bddAbove.mpr
+  rintro ⟨k,j⟩
+  obtain ⟨C,hC⟩ := hdec k j
+  refine ⟨max 0 C,?_⟩
+  rintro _ ⟨_,⟨i,rfl⟩,rfl⟩
+  exact SchwartzMap.seminorm_le_bound ℂ k j (f i) (le_max_left _ _)
+    (fun x ↦ (hC i x).trans (le_max_right _ _))
+
+/-- The weighted boundary kernels form a bounded family in the scalar Schwartz space.
+The bound covers all their boundary derivatives simultaneously on the same contour. -/
+private theorem spectralBoundary_schwartz_vectors {G M : ℂ → ℂ}
+    (hG : Differentiable ℂ G) (hM : Differentiable ℂ M) (A C D σ : ℝ) (n b : ℕ)
+    (hC : 0 ≤ C) (hD : 0 ≤ D) (hσ : |σ|+1 ≤ A)
+    (hder : ∀ x : ℂ, |x.re| ≤ A → ‖deriv G x‖ ≤ C*(1+|x.im|)^n)
+    (hinv : ∀ w : ℂ, |w.re-σ| ≤ 1 → G w ≠ 0 ∧ ‖(G w)⁻¹‖ ≤ D*(1+|w.im|)^b)
+    (hrapid : ∀ k : ℕ, ∃ E > (0:ℝ), ∀ w : ℂ, |w.re-σ| ≤ 1 → (1+|w.im|)^k*‖M w‖ ≤ E)
+    (p : ℕ) :
+    ∃ f : {z : ℂ // |z.re| ≤ A} → SchwartzMap ℝ ℂ,
+      (∀ z t, f z t = (((1+|z.val.im|)^p:ℝ):ℂ) * (M (linePoint σ t) * spectralBoundaryKernel G (linePoint σ t) z.val)) ∧
+      Bornology.IsVonNBounded ℂ (range f) := by
+  apply spectralBoundary_schwartz_line_family
+    (fun z : {z : ℂ // |z.re| ≤ A} ↦ fun w ↦ (((1+|z.val.im|)^p:ℝ):ℂ) * (M w * spectralBoundaryKernel G w z.val)) σ
+  · intro z w hw
+    have h : |w.re-σ| ≤ 1 := abs_le.mpr ⟨by linarith [hw.1],by linarith [hw.2]⟩
+    exact (((hM w).mul (spectralBoundaryKernel_moving hG z.val w (hinv w h).1)).const_mul _).differentiableWithinAt
+  · intro k j
+    obtain ⟨sourceSpace,hB⟩ := spectralBoundaryKernel_schwartz hG hM A C D σ n b hC hD hσ hder hinv hrapid p k j
+    refine ⟨sourceSpace,fun z t ↦ ?_⟩
+    have h := hB (linePoint σ t) z.val (by simp) z.property
+    simp only [Complex.add_im,Complex.ofReal_im,Complex.mul_I_im,Complex.ofReal_re,zero_add] at h
+    rw [iteratedDeriv_const_mul_field,norm_mul,Complex.norm_real,Real.norm_eq_abs,abs_of_nonneg (show 0 ≤ (1+|z.val.im|)^p by positivity)]
+    simpa only [mul_assoc,mul_left_comm] using h
+
+/-- The entire comparison generator gives a globally defined Schwartz-valued
+kernel. Every polynomially weighted output strip is bounded in the real Schwartz space. -/
+private theorem spectralBoundary_global_kernel {G M : ℂ → ℂ}
+    (hG : Differentiable ℂ G) (hM : Differentiable ℂ M) (σ : ℝ)
+    (hd : ∀ A : ℝ, ∃ n : ℕ, ∃ C > (0:ℝ), ∀ x : ℂ, |x.re| ≤ A →
+      ‖deriv G x‖ ≤ C*(1+|x.im|)^n)
+    (hinv : ∃ b : ℕ, ∃ D > (0:ℝ), ∀ w : ℂ, |w.re-σ| ≤ 1 → G w ≠ 0 ∧ ‖(G w)⁻¹‖ ≤ D*(1+|w.im|)^b)
+    (hm : ∀ k : ℕ, ∃ E > (0:ℝ), ∀ w : ℂ, |w.re-σ| ≤ 1 → (1+|w.im|)^k*‖M w‖ ≤ E) :
+    ∃ K : ℂ → SchwartzMap ℝ ℂ,
+      (∀ z t, K z t = M (linePoint σ t) * spectralBoundaryKernel G (linePoint σ t) z) ∧
+      (∀ t : ℝ, Differentiable ℂ (fun z ↦ K z t)) ∧
+      ∀ (A : ℝ) (p : ℕ), Bornology.IsVonNBounded ℂ
+        (range (fun z : {z : ℂ // |z.re| ≤ A} ↦ (((1+|z.val.im|)^p:ℝ):ℂ) • K z.val)) := by
+  obtain ⟨b,D,hD,hI⟩ := hinv
+  have localFamily (A : ℝ) (p : ℕ) :
+      ∃ f : {z : ℂ // |z.re| ≤ A} → SchwartzMap ℝ ℂ,
+        (∀ z t, f z t = (((1+|z.val.im|)^p:ℝ):ℂ) * (M (linePoint σ t) * spectralBoundaryKernel G (linePoint σ t) z.val)) ∧
+        Bornology.IsVonNBounded ℂ (range f) := by
+    let A' := max (|σ|+1) A
+    obtain ⟨n,C,hC,h⟩ := hd A'
+    obtain ⟨f,hf,hb⟩ := spectralBoundary_schwartz_vectors hG hM A' C D σ n b hC.le hD.le (le_max_left _ _) h hI hm p
+    let inc (z : {z : ℂ // |z.re| ≤ A}) : {z : ℂ // |z.re| ≤ A'} := ⟨z.val,z.property.trans (le_max_right _ _)⟩
+    exact ⟨f ∘ inc,fun z t ↦ hf (inc z) t,hb.subset (range_comp_subset_range _ _)⟩
+  choose f hf hb using localFamily
+  let K (z : ℂ) : SchwartzMap ℝ ℂ := f |z.re| 0 ⟨z,le_rfl⟩
+  have hk (z : ℂ) (t : ℝ) : K z t = M (linePoint σ t) * spectralBoundaryKernel G (linePoint σ t) z := by
+    simpa only [K,pow_zero,Complex.ofReal_one,one_mul] using hf |z.re| 0 ⟨z,le_rfl⟩ t
+  refine ⟨K,hk,fun t ↦ ?_,fun A p ↦ ?_⟩
+  · simp_rw [hk]
+    exact (spectralBoundaryKernel_entire hG _).const_mul _
+  · apply (hb A p).subset
+    rintro _ ⟨z,rfl⟩
+    refine ⟨z, SchwartzMap.ext fun t ↦ ?_⟩
+    change f A p z t = (((1+|z.val.im|)^p:ℝ):ℂ) * K z.val t
+    rw [hf,hk]
+
+set_option backward.isDefEq.respectTransparency false
+
+private def spectralBoundary_delta (n : ℕ) : RapidDecaySequence 1 :=
+  ⟨fun a ↦ if a = latticeIndex n then 1 else 0, by
+    apply (rapidSequence_mem_iff _).2
+    intro k
+    apply summable_of_ne_finset_zero (s := {n})
+    intro m hm
+    have hmn : m ≠ n := by simpa using hm
+    rw [ite_eq_right (latticeIndex.injective.ne hmn),norm_zero,mul_zero]⟩
+
+private theorem spectralBoundary_delta_eval (n m : ℕ) :
+    spectralBoundary_delta n (latticeIndex m) = if m = n then 1 else 0 := by
+  change (if latticeIndex m = latticeIndex n then _ else _) = _
+  simp only [latticeIndex.injective.eq_iff]
+
+private theorem spectralBoundary_delta_seminorm (n k : ℕ) :
+    rapidDecaySequenceSeminorm k (spectralBoundary_delta n) = latticeWeight n ^ k := by
+  rw [spectralBoundary_rapidSeminorm_eq,tsum_eq_single n]
+  · simp only [spectralBoundary_delta_eval,ite_true,norm_one,mul_one]
+  · intro j hj
+    simp only [spectralBoundary_delta_eval,ite_eq_right hj,norm_zero,mul_zero]
+
+private theorem spectralBoundary_delta_hasSum (s : RapidDecaySequence 1) :
+    HasSum (fun n ↦ s (latticeIndex n) • spectralBoundary_delta n) s := by
+  let S := RapidDecaySequence 1
+  let hp := rapidDecaySequence_withSeminorms (r := 1)
+  obtain ⟨_, _, _, hcomplete⟩ := (rapidDecaySequence_isFrechet (r := 1))
+  let t (n : ℕ) := s (latticeIndex n) • spectralBoundary_delta n
+  have hsum : Summable t := by
+    apply summable_iff_cauchySeq_finset.mpr
+    rw [CauchySeq, cauchy_map_iff', uniformity_eq_comap_nhds_zero, Filter.tendsto_comap_iff,
+      hp.tendsto_nhds]
+    intro j ε hε
+    let p : Seminorm ℂ S := rapidDecaySequenceSeminorm (r := 1) j
+    let L : S →ₗ[ℂ] LocalBanach p := UniformSpace.Completion.toComplL.toLinearMap.comp LinearMap.id
+    have hL (x : S) : ‖L x‖ = p x := localBanach_norm_coe p x
+    have h : Summable (fun n ↦ L (t n)) := by
+      apply Summable.of_norm
+      apply ((rapidSequence_mem_iff s.val).mp s.property j).congr
+      intro n
+      rw [hL]
+      change _ = rapidDecaySequenceSeminorm j (s (latticeIndex n) • spectralBoundary_delta n)
+      rw [map_smul_eq_mul,spectralBoundary_delta_seminorm,mul_comm]
+    have hc := cauchy_map_iff'.mp (summable_iff_cauchySeq_finset.mp h)
+    rw [tendsto_uniformity_iff_dist_tendsto_zero, Metric.tendsto_nhds] at hc
+    filter_upwards [hc ε hε] with z hz
+    rw [Real.dist_eq, sub_zero, abs_of_nonneg dist_nonneg, dist_eq_norm', ← map_sum, ← map_sum,
+      ← map_sub,hL] at hz
+    simpa only [sub_zero,Function.comp_apply,p] using hz
+  change HasSum t s
+  suffices h : (∑' n,t n) = s by exact h ▸ hsum.hasSum
+  apply Subtype.ext
+  funext a
+  obtain ⟨n,rfl⟩ := latticeIndex.surjective a
+  let co : S →L[ℂ] ℂ :=
+    { toFun := fun x ↦ x (latticeIndex n), map_add' _ _ := rfl, map_smul' _ _ := rfl,
+      cont := rapidCoordinate_continuous n }
+  change co (∑' j,t j) = s (latticeIndex n)
+  rw [← (hsum.hasSum.mapL co).tsum_eq,tsum_eq_single n]
+  · change s (latticeIndex n) * spectralBoundary_delta n (latticeIndex n) = _
+    simp only [spectralBoundary_delta_eval,ite_true,mul_one]
+  · intro m hm
+    change s (latticeIndex m) * spectralBoundary_delta m (latticeIndex n) = _
+    simp only [spectralBoundary_delta_eval,ite_eq_right (Ne.symm hm),mul_zero]
+
+private theorem spectralBoundary_delta_growth {X : Type*} [NormedAddCommGroup X] [NormedSpace ℂ X]
+    (J : RapidDecaySequence 1 →L[ℂ] X) :
+    ∃ (m : ℕ) (C : ℝ), 0 ≤ C ∧ ∀ n, ‖J (spectralBoundary_delta n)‖ ≤ C*latticeWeight n ^m := by
+  let q := (normSeminorm ℂ X).comp J.toLinearMap
+  obtain ⟨S,K,_,hK⟩ := Seminorm.bound_of_continuous rapidDecaySequence_withSeminorms q
+    (show Continuous (fun x ↦ ‖J x‖) from J.continuous.norm)
+  refine ⟨S.sup id,K,K.coe_nonneg,fun n ↦ (hK _).trans ?_⟩
+  change (K:ℝ)*(S.sup rapidDecaySequenceSeminorm) (spectralBoundary_delta n) ≤ _
+  gcongr
+  apply Seminorm.finset_sup_apply_le (pow_nonneg (zero_le_one.trans (latticeWeight_bounds n).1) _)
+  intro j hj
+  rw [spectralBoundary_delta_seminorm]
+  exact pow_le_pow_right₀ (latticeWeight_bounds n).1 (Finset.le_sup (f := id) hj)
+
+private theorem spectralBoundary_weight_inv_sq : Summable (fun n ↦ (latticeWeight n ^ 2)⁻¹) := by
+  have h := (Real.summable_nat_pow_inv.mpr (by decide : 1 < 2)).comp_injective Nat.succ_injective
+  apply (h.mul_left 4).of_nonneg_of_le (fun n ↦ by positivity)
+  intro n
+  change (latticeWeight n ^ 2)⁻¹ ≤ 4 * (((n + 1 : ℕ) : ℝ) ^ 2)⁻¹
+  have hn := (latticeWeight_bounds n).2.2
+  have hw := (latticeWeight_bounds n).1
+  rw [Nat.cast_succ, ← div_eq_mul_inv, inv_eq_one_div, div_le_div_iff₀ (sq_pos_of_pos (by linarith))
+    (sq_pos_of_pos (by positivity))]
+  nlinarith [sq_nonneg (latticeWeight n), mul_self_le_mul_self (by positivity : 0 ≤ (n : ℝ) + 1) hn]
+
+/-- Polynomial damping of the analysis coordinates realizes an entire Banach family
+of tempered functionals in one Hilbert boundary space. -/
+private theorem spectralBoundary_incoming {X Y : Type*}
+    [NormedAddCommGroup X] [NormedSpace ℂ X] [NormedAddCommGroup Y] [NormedSpace ℂ Y]
+    (J : RapidDecaySequence 1 →L[ℂ] X) (pairing : Y →L[ℂ] X →L[ℂ] ℂ) :
+    ∃ (k : ℕ) (T : Y →L[ℂ] lp (fun _ : ℕ ↦ ℂ) 2),
+      ∀ y s, (∑' n : ℕ, T y n * ((latticeWeight n ^ k:ℝ):ℂ) * s (latticeIndex n)) = pairing y (J s) := by
+  let H := lp (fun _ : ℕ ↦ ℂ) 2
+  obtain ⟨m,C,hC,hJ⟩ := spectralBoundary_delta_growth J
+  let k := m+2
+  let u (n : ℕ) : H := lp.single 2 n 1
+  let L (n : ℕ) := pairing.flip (J (spectralBoundary_delta n))
+  let targetSet (n : ℕ) : Y →L[ℂ] H := (((latticeWeight n ^k : ℝ):ℂ)⁻¹) • (L n).smulRight (u n)
+  have hw (n : ℕ) : 0 < latticeWeight n := zero_lt_one.trans_le (latticeWeight_bounds n).1
+  have hu (n : ℕ) : ‖u n‖ = 1 := by simp [u,lp.norm_single (by norm_num : 0 < (2 : ℝ≥0∞))]
+  have hs : Summable targetSet := by
+    apply (spectralBoundary_weight_inv_sq.mul_left (‖pairing.flip‖*C)).of_norm_bounded
+    intro n
+    rw [show ‖targetSet n‖ = _ from norm_smul ..,ContinuousLinearMap.norm_smulRight_apply,hu,mul_one,
+      norm_inv,Complex.norm_real,Real.norm_eq_abs,abs_of_pos (pow_pos (hw n) _)]
+    calc
+      _ ≤ (latticeWeight n^k)⁻¹ * (‖pairing.flip‖ * (C*latticeWeight n^m)) :=
+        mul_le_mul_of_nonneg_left ((pairing.flip.le_opNorm _).trans
+          (mul_le_mul_of_nonneg_left (hJ n) (norm_nonneg _))) (inv_nonneg.mpr (pow_nonneg (hw n).le _))
+      _ = _ := by dsimp only [k]; rw [pow_add]; field_simp [(hw n).ne']
+  let T := ∑' n, targetSet n
+  have coord (n : ℕ) (y : Y) : T y n = ((latticeWeight n ^k:ℝ):ℂ)⁻¹ * L n y := by
+    let eval := (lp.evalCLM ℂ (fun _ : ℕ ↦ ℂ) 2 n).comp (ContinuousLinearMap.apply ℂ H y)
+    change eval (∑' j, targetSet j) = _
+    rw [← (hs.hasSum.mapL eval).tsum_eq,tsum_eq_single n]
+    · change ((latticeWeight n^k:ℝ):ℂ)⁻¹ * ((L n y) * (lp.single (E := fun _ : ℕ ↦ ℂ) 2 n (1:ℂ)) n) = _
+      simp
+    · intro j hj
+      change ((latticeWeight j^k:ℝ):ℂ)⁻¹ * ((L j y) * (lp.single (E := fun _ : ℕ ↦ ℂ) 2 j (1:ℂ)) n) = _
+      simp [lp.single_apply,hj.symm]
+  refine ⟨k,T,fun y s ↦ ?_⟩
+  have rep := ((spectralBoundary_delta_hasSum s).mapL ((pairing y).comp J)).tsum_eq
+  refine Eq.trans (tsum_congr fun n ↦ ?_) rep
+  rw [coord,map_smul]
+  change (((latticeWeight n^k:ℝ):ℂ)⁻¹ * L n y * ((latticeWeight n^k:ℝ):ℂ)) * s (latticeIndex n) =
+    s (latticeIndex n) * L n y
+  have hne : ((latticeWeight n ^ k:ℝ):ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr (pow_ne_zero _ (hw n).ne')
+  field_simp
+
+private theorem spectralBoundary_line_restriction (σ : ℝ) :
+    ∃ L : SchwartzBergman (univ : Set ℝ) →L[ℂ] SchwartzMap ℝ ℂ,
+      ∀ x t, L x t = x.val (linePoint σ t) := by
+  let a : (univ : Set ℝ) := ⟨σ, mem_univ _⟩
+  obtain ⟨T,hT,hE⟩ := schwartzBergman_schwartzLine_topology univ isOpen_univ ordConnected_univ univ_nonempty
+  have he (x : SchwartzBergman (univ : Set ℝ)) (t : ℝ) : T x a t = x.val (linePoint σ t) := by
+    simpa only [weightedVerticalTrace,pow_zero,one_mul] using hT x a t
+  let L : SchwartzBergman (univ : Set ℝ) →L[ℂ] SchwartzMap ℝ ℂ := {
+    toFun := fun x ↦ T x a
+    map_add' := fun x y ↦ SchwartzMap.ext fun t ↦ by change T (x+y) a t = T x a t + T y a t; rw [he,he,he]; rfl
+    map_smul' := fun c x ↦ SchwartzMap.ext fun t ↦ by change T (c • x) a t = c * T x a t; rw [he,he]; rfl
+    cont := (continuous_apply a).comp hE.continuous }
+  exact ⟨L,he⟩
+
+/-- Restricting to a fixed vertical line gives Hilbert analysis coordinates which
+reproduce integration against every Schwartz test function. -/
+private theorem spectralBoundary_line_incoming (σ : ℝ) (e : SchwartzMap ℝ ℂ ≃L[ℂ] RapidDecaySequence 1) :
+    ∃ (k : ℕ) (b : SchwartzBergman (univ : Set ℝ) →L[ℂ] lp (fun _ : ℕ ↦ ℂ) 2),
+      ∀ x (g : SchwartzMap ℝ ℂ),
+        (∑' n : ℕ, b x n * ((latticeWeight n ^ k:ℝ):ℂ) * e g (latticeIndex n)) =
+          ∫ t : ℝ, x.val (linePoint σ t) * g t := by
+  let μ := (volume : Measure ℝ)
+  let J := (SchwartzMap.toLpCLM ℂ ℂ 2 μ).comp e.symm.toContinuousLinearMap
+  let pairing := (ContinuousLinearMap.mul ℂ ℂ).lpPairing μ 2 2
+  obtain ⟨line,hline⟩ := spectralBoundary_line_restriction σ
+  let b := (SchwartzMap.toLpCLM ℂ ℂ 2 μ).comp line
+  obtain ⟨k,T,hT⟩ := spectralBoundary_incoming J pairing
+  refine ⟨k,T.comp b,fun x g ↦ (hT (b x) (e g)).trans ?_⟩
+  change (ContinuousLinearMap.mul ℂ ℂ).lpPairing μ 2 2 ((line x).toLp 2 μ)
+    ((e.symm (e g)).toLp 2 μ) = _
+  rw [e.symm_apply_apply,ContinuousLinearMap.lpPairing_eq_integral]
+  apply integral_congr_ae
+  filter_upwards [(line x).coeFn_toLp 2 μ, g.coeFn_toLp 2 μ] with t ht hu
+  rw [ht,hu]
+  change line x t * g t = _
+  rw [hline]
+
+/-- The fixed-line Gaussian integral factors through a Hilbert space. Its output
+map has rapid nuclear coefficients after composition with the quotient projection. -/
+private theorem spectralBoundary_line_factorization {E : Type*} [AddCommGroup E] [Module ℂ E]
+    [UniformSpace E] [IsUniformAddGroup E] [PolynormableSpace ℂ E] [T2Space E] [CompleteSpace E]
+    (p : ℕ → Seminorm ℂ E) (hp : WithSeminorms p) (q : SchwartzBergman (univ : Set ℝ) →L[ℂ] E)
+    {G M : ℂ → ℂ} (hG : Differentiable ℂ G) (hM : Differentiable ℂ M) (σ : ℝ)
+    (hd : ∀ A : ℝ, ∃ n : ℕ, ∃ C > (0:ℝ), ∀ x : ℂ, |x.re| ≤ A →
+      ‖deriv G x‖ ≤ C*(1+|x.im|)^n)
+    (hinv : ∃ D ≥ (1:ℝ), ∀ w : ℂ, |w.re-σ| ≤ 1 → G w ≠ 0 ∧ ‖(G w)⁻¹‖ ≤ D)
+    (hm : ∀ k : ℕ, ∃ D > (0:ℝ), ∀ w : ℂ, |w.re-σ| ≤ 1 → (1+|w.im|)^k*‖M w‖ ≤ D) :
+    let H := lp (fun _ : ℕ ↦ ℂ) 2
+    let sourceSpace := SchwartzBergman (univ : Set ℝ)
+    ∃ (b : sourceSpace →L[ℂ] H) (R : H →L[ℂ] sourceSpace),
+      (∀ x z, (R (b x)).val z = ∫ t : ℝ,
+        (M (linePoint σ t) * x.val (linePoint σ t)) * spectralBoundaryKernel G (linePoint σ t) z) ∧
+      ∃ r : NuclearPresentation (q.comp R), ∀ j : ℕ, ∃ D : ℝ, ∀ n : ℕ, ‖r.coeff n‖*((n:ℝ)+1)^j ≤ D := by
+  obtain ⟨D,hD,hI⟩ := hinv
+  obtain ⟨K,he,hk,hb⟩ := spectralBoundary_global_kernel hG hM σ hd
+    ⟨0,D,zero_lt_one.trans_le hD, by simpa only [pow_zero,mul_one] using hI⟩ hm
+  obtain ⟨e⟩ := realSchwartz_equiv_rapidDecay
+  obtain ⟨k,b,hin⟩ := spectralBoundary_line_incoming σ e
+  obtain ⟨R,hout,r,hr⟩ := spectralBoundary_contour_presentation p hp K hk hb e k q
+  refine ⟨b,R,fun x z ↦ ?_, r, hr⟩
+  rw [hout,hin]
+  apply integral_congr_ae
+  exact ae_of_all _ fun t ↦ by
+    change x.val (linePoint σ t) * K z t = _
+    rw [he]; ring
+
+private theorem spectralBoundary_order_of_bound {ρ : ℂ} {F : ℂ → ℂ} (hf : AnalyticAt ℂ F ρ)
+    (m : ℕ) (h : F =O[𝓝 ρ] (fun z ↦ (z-ρ)^m)) :
+    m ≤ analyticOrderAt F ρ := by
+  by_contra! hl
+  have hn : analyticOrderAt F ρ ≠ ⊤ := hl.ne_top
+  have hlt : analyticOrderNatAt F ρ < m := by
+    exact_mod_cast (show (analyticOrderNatAt F ρ : ℕ∞) < (m:ℕ∞) by
+      rwa [show (analyticOrderNatAt F ρ : ℕ∞) = analyticOrderAt F ρ from ENat.natCast_toNat hn])
+  have hsmall : (fun z : ℂ ↦ (z-ρ)^m) =o[𝓝 ρ] (fun z ↦ (z-ρ)^analyticOrderNatAt F ρ) :=
+    (isLittleO_pow_pow (𝕜 := ℂ) hlt).comp_tendsto (by simpa using (continuousAt_id (x := ρ)).sub_const ρ)
+  have hnon : ∀ᶠ z : ℂ in 𝓝[≠] ρ, (z-ρ)^analyticOrderNatAt F ρ ≠ 0 :=
+    by filter_upwards [self_mem_nhdsWithin] with z hz using pow_ne_zero _ (sub_ne_zero.mpr hz)
+  exact isLittleO_irrefl hnon.frequently
+    (((hf.isTheta_pow_sub hn).2.trans h).trans_isLittleO hsmall |>.mono nhdsWithin_le_nhds)
+
+private theorem spectralBoundary_bound_of_order {ρ : ℂ} {G : ℂ → ℂ} (hg : AnalyticAt ℂ G ρ)
+    (m : ℕ) (hm : m ≤ analyticOrderAt G ρ) :
+    G =O[𝓝 ρ] (fun z ↦ (z-ρ)^m) := by
+  obtain ⟨g,hg',he⟩ := (natCast_le_analyticOrderAt hg).mp hm
+  apply (show G =ᶠ[𝓝 ρ] (fun z ↦ (z-ρ)^m • g z) from he).isBigO.trans
+  simpa only [smul_eq_mul,mul_one] using
+    (isBigO_refl (fun z : ℂ ↦ (z-ρ)^m) (𝓝 ρ)).mul (hg'.continuousAt.isBigO_one ℂ)
+
+/-- On a neighborhood disjoint from a boundary line, the difference between the
+regularized and bare Gaussian integrals is bounded by a constant times the generator. -/
+private theorem spectralBoundary_line_error {G : ℂ → ℂ} (hG : Continuous G) (σ : ℝ)
+    (C : ℝ) (_hC : 0 ≤ C) (hc : ∀ t : ℝ, G (linePoint σ t) ≠ 0 ∧ ‖(G (linePoint σ t))⁻¹‖ ≤ C)
+    (f : ℝ → ℂ) (hf : Continuous f) (hi : Integrable f) (ρ : ℂ) (hρ : ρ.re ≠ σ) :
+    (fun z : ℂ ↦ (∫ t : ℝ, f t * spectralBoundaryKernel G (linePoint σ t) z)
+        - (∫ t : ℝ, Complex.exp ((z-linePoint σ t)^2) * f t / (linePoint σ t-z))) =O[𝓝 ρ] G := by
+  let δ := |ρ.re-σ|/2
+  let T := |ρ.re-σ|+1
+  let sourceSpace := Real.exp (T^2)/δ
+  have hd : 0 < δ := half_pos (abs_pos.mpr (sub_ne_zero.mpr hρ))
+  have hT : 0 < T := by dsimp [T]; positivity
+  have hB : 0 ≤ sourceSpace := div_nonneg (Real.exp_pos _).le hd.le
+  have hnear : ∀ᶠ z : ℂ in 𝓝 ρ, |z.re-σ| ∈ Ioo δ T := by
+    apply (show ContinuousAt (fun z : ℂ ↦ |z.re-σ|) ρ by fun_prop).eventually_mem
+    exact Ioo_mem_nhds (half_lt_self (abs_pos.mpr (sub_ne_zero.mpr hρ))) (by dsimp [T]; linarith)
+  apply IsBigO.of_bound ((sourceSpace*C) * ∫ t : ℝ, ‖f t‖)
+  filter_upwards [hnear] with z hz
+  let w (t : ℝ) := linePoint σ t
+  let a (t : ℝ) := Complex.exp ((z-w t)^2) * f t / (w t-z)
+  let b (t : ℝ) := a t / G (w t) * G z
+  have hwre (t : ℝ) : (w t).re = σ := by simp [w]
+  have hw (t : ℝ) : δ ≤ ‖w t-z‖ := by
+    calc δ ≤ |z.re - σ| := hz.1.le
+         _ = |(w t-z).re| := by rw [Complex.sub_re,hwre,abs_sub_comm]
+         _ ≤ _ := Complex.abs_re_le_norm _
+  have hw' (t : ℝ) : w t - z ≠ 0 := norm_pos_iff.mp (hd.trans_le (hw t))
+  have ha (t : ℝ) : ‖a t‖ ≤ sourceSpace * ‖f t‖ := by
+    have he : ‖Complex.exp ((z-w t)^2)‖ ≤ Real.exp (T^2) := by
+      rw [Complex.norm_exp]
+      apply Real.exp_le_exp.mpr
+      simp only [pow_two,Complex.mul_re,Complex.sub_re,Complex.sub_im,hwre]
+      nlinarith [sq_abs (z.re-σ), mul_self_le_mul_self (abs_nonneg _) hz.2.le,sq_nonneg (z.im-(w t).im)]
+    change ‖Complex.exp ((z-w t)^2)*f t/(w t-z)‖ ≤ _
+    rw [norm_div,norm_mul,div_le_iff₀ (hd.trans_le (hw t))]
+    calc
+      _ ≤ Real.exp (T^2)*‖f t‖ := mul_le_mul_of_nonneg_right he (norm_nonneg _)
+      _ = (sourceSpace*‖f t‖)*δ := by dsimp [sourceSpace]; field_simp
+      _ ≤ _ := mul_le_mul_of_nonneg_left (hw t) (mul_nonneg hB (norm_nonneg _))
+  have hb (t : ℝ) : ‖b t‖ ≤ ((sourceSpace*C)*‖G z‖)*‖f t‖ := by
+    change ‖a t / G (w t) * G z‖ ≤ _
+    rw [div_eq_mul_inv,norm_mul,norm_mul]
+    calc
+      _ ≤ (sourceSpace*‖f t‖*C)*‖G z‖ := by gcongr; exacts [ha t,(hc t).2]
+      _ = _ := by ring
+  have hcw : Continuous w := by fun_prop
+  have hca : Continuous a := by dsimp [a]; fun_prop (disch := exact hw' _)
+  have hcb : Continuous b := (hca.div (hG.comp hcw) (fun t ↦ (hc t).1)).mul continuous_const
+  have hai := (hi.norm.const_mul sourceSpace).mono' hca.aestronglyMeasurable (ae_of_all _ ha)
+  have hbi := (hi.norm.const_mul ((sourceSpace*C)*‖G z‖)).mono' hcb.aestronglyMeasurable (ae_of_all _ hb)
+  have heq (t : ℝ) : f t * spectralBoundaryKernel G (w t) z = a t - b t := by
+    rw [spectralBoundaryKernel_offPole (Ne.symm (sub_ne_zero.mp (hw' t))) (hc t).1]
+    dsimp only [a,b]
+    ring
+  change ‖(∫ t : ℝ, f t * spectralBoundaryKernel G (w t) z) - ∫ t : ℝ, a t‖ ≤ _
+  simp_rw [heq]
+  rw [integral_sub hai hbi,sub_sub_cancel_left,norm_neg]
+  calc
+    _ ≤ ∫ t : ℝ, ((sourceSpace*C)*‖G z‖)*‖f t‖ :=
+      norm_integral_le_of_norm_le (hi.norm.const_mul _) (ae_of_all _ hb)
+    _ = _ := by rw [integral_const_mul]; ring
+
+private theorem spectralGaussian_strip {z : ℂ} {a b : ℝ} (f : SchwartzBergman (univ : Set ℝ)) (hab : a<b) :
+    UniformlySchwartzOnStrip (fun w ↦ Complex.exp ((z-w)^2) * f.val w) a b := by
+  have hf : Differentiable ℂ f.val := fun w ↦
+    (f.property.2.1 w (mem_univ _)).differentiableAt (univ_mem' fun _ ↦ mem_univ _)
+  have hdiff : Differentiable ℂ (fun w ↦ Complex.exp ((z-w)^2) * f.val w) := by fun_prop
+  refine ⟨hab,hdiff.differentiableOn,?_⟩
+  intro δ hδ hwidth N _
+  obtain ⟨C,hC⟩ := f.property.2.2 a b hab.le (subset_univ _) N
+  let T := |z.re|+|a|+|b|
+  have hT : 0 ≤ T := by dsimp [T]; positivity
+  refine ⟨Real.exp (T^2) * (|C|+1), by positivity, ?_⟩
+  have ht : ∀ᶠ y : ℝ in comap abs atTop, 0 < |y| := tendsto_comap.eventually (eventually_gt_atTop 0)
+  filter_upwards [ht] with y hy
+  intro σ hσ
+  let w := (σ:ℂ) + (y:ℂ)*Complex.I
+  have re : w.re = σ := by simp [w]
+  have im : w.im = y := by simp [w]
+  have hσ' : σ ∈ Icc a b := ⟨by linarith [hσ.1],by linarith [hσ.2]⟩
+  have haσ : |σ| ≤ |a|+|b| := abs_le.mpr
+    ⟨by linarith [hσ'.1,neg_abs_le a,abs_nonneg b],by linarith [hσ'.2,le_abs_self b,abs_nonneg a]⟩
+  have hr : |z.re-w.re| ≤ T := (abs_sub _ _).trans (by dsimp [T];rw [re];linarith)
+  have hg : ‖Complex.exp ((z-w)^2)‖ ≤ Real.exp (T^2) := by
+    rw [Complex.norm_exp]
+    apply Real.exp_le_exp.mpr
+    simp only [pow_two,Complex.mul_re,Complex.sub_re,Complex.sub_im]
+    nlinarith [sq_abs (z.re-w.re),mul_nonneg (sub_nonneg.mpr hr) (add_nonneg hT (abs_nonneg (z.re-w.re))),sq_nonneg (z.im-w.im)]
+  have hfc : ‖w‖^N * ‖f.val w‖ ≤ C := by
+    simpa only [norm_mul,norm_pow] using hC ⟨w,show w.re ∈ Icc a b from re ▸ hσ',rfl⟩
+  have hi : |y| ≤ ‖w‖ := im ▸ Complex.abs_im_le_norm w
+  change ‖Complex.exp ((z-w)^2) * f.val w‖ ≤ _
+  rw [norm_mul,le_div_iff₀ (pow_pos hy _)]
+  calc
+    _ = ‖Complex.exp ((z-w)^2)‖ * (|y|^N * ‖f.val w‖) := by ring
+    _ ≤ Real.exp (T^2) * (‖w‖^N * ‖f.val w‖) := by gcongr
+    _ ≤ Real.exp (T^2) * (|C|+1) := by gcongr; linarith [le_abs_self C]
+
+/-- On two fixed lines a Gaussian-localized Cauchy integral recovers the original
+Schwartz–Bergman function at every point strictly between the lines. -/
+private theorem spectralBoundary_cauchy (f : SchwartzBergman (univ : Set ℝ))
+    (c d : ℝ) (z : ℂ) (hz : z.re ∈ Ioo c d) :
+    let Φ := fun w ↦ Complex.exp ((z-w)^2) * f.val w
+    (∫ t : ℝ, Φ ((d:ℂ)+t*Complex.I) / ((d:ℂ)+t*Complex.I-z)) -
+    (∫ t : ℝ, Φ ((c:ℂ)+t*Complex.I) / ((c:ℂ)+t*Complex.I-z)) =
+      2*(Real.pi:ℂ)*f.val z := by
+  dsimp only
+  let Φ := fun w ↦ Complex.exp ((z-w)^2) * f.val w
+  have hΦ : UniformlySchwartzOnStrip Φ (c-1) (d+1) := spectralGaussian_strip f (by linarith [hz.1,hz.2])
+  have hc : c-1+1 = c := by ring
+  have hd : d+1-1 = d := by ring
+  have h := asymptoticCauchy_eq_iteratedDeriv hΦ 1 one_pos (by rw [hc,hd];exact hz.1.trans hz.2) 0 z (by rwa [hc,hd])
+  simp only [hc,hd,Nat.factorial_zero,Nat.cast_one,zero_add,pow_one,iteratedDeriv_zero,verticalLineIntegral] at h
+  have hΦz : Φ z = f.val z := by simp [Φ]
+  rw [hΦz] at h
+  change (∫ t : ℝ, Φ ((d:ℂ)+t*Complex.I) / ((d:ℂ)+t*Complex.I-z)) -
+    (∫ t : ℝ, Φ ((c:ℂ)+t*Complex.I) / ((c:ℂ)+t*Complex.I-z)) = _
+  field_simp [Real.pi_ne_zero, Complex.I_ne_zero] at h
+  simpa only [mul_comm Complex.I] using h
+
+/-- The signed pair of regularized Gaussian lines has the same finite jet as the
+original test at each common zero of the indicated order. -/
+private theorem spectralBoundary_signed_jets (c d : ℝ) (G₀ G₁ : ℂ → ℂ) (F region targetSet : SchwartzBergman (univ : Set ℝ))
+    (ρ : ℂ) (hρ : ρ.re ∈ Ioo c d) (m : ℕ)
+    (hG₀ : Differentiable ℂ G₀) (hG₁ : Differentiable ℂ G₁)
+    (hv₀ : ∃ D ≥ (1:ℝ), ∀ t, G₀ (linePoint d t) ≠ 0 ∧ ‖(G₀ (linePoint d t))⁻¹‖ ≤ D)
+    (hv₁ : ∃ D ≥ (1:ℝ), ∀ t, G₁ (linePoint c t) ≠ 0 ∧ ‖(G₁ (linePoint c t))⁻¹‖ ≤ D)
+    (ho₀ : m ≤ analyticOrderAt G₀ ρ) (ho₁ : m ≤ analyticOrderAt G₁ ρ)
+    (hU : ∀ z, region.val z = ∫ t : ℝ, F.val (linePoint d t) * spectralBoundaryKernel G₀ (linePoint d t) z)
+    (hV : ∀ z, targetSet.val z = ∫ t : ℝ, F.val (linePoint c t) * spectralBoundaryKernel G₁ (linePoint c t) z)
+    (j : ℕ) (hj : j < m) :
+    iteratedDeriv j ((2*(Real.pi:ℂ))⁻¹ • region + (-(2*(Real.pi:ℂ))⁻¹) • targetSet - F).val ρ = 0 := by
+  let bare (s : ℝ) (z : ℂ) := ∫ t : ℝ, Complex.exp ((z-linePoint s t)^2) * F.val (linePoint s t)/(linePoint s t-z)
+  let p := fun z : ℂ ↦ (z-ρ)^m
+  have err (G : ℂ → ℂ) (s : ℝ) (region' : SchwartzBergman (univ : Set ℝ)) (hs : ρ.re ≠ s)
+      (hg : Differentiable ℂ G) (ho : m ≤ analyticOrderAt G ρ)
+      (hv : ∃ D ≥ (1:ℝ), ∀ t, G (linePoint s t) ≠ 0 ∧ ‖(G (linePoint s t))⁻¹‖ ≤ D)
+      (hu : ∀ z, region'.val z = ∫ t : ℝ, F.val (linePoint s t) * spectralBoundaryKernel G (linePoint s t) z) :
+      (fun z ↦ region'.val z - bare s z) =O[𝓝 ρ] p := by
+    obtain ⟨D,hD,hv⟩ := hv
+    obtain ⟨line,hl⟩ := spectralBoundary_line_restriction s
+    have hb := spectralBoundary_line_error hg.continuous s D (zero_le_one.trans hD) hv
+      (line F) (line F).continuous (line F).integrable ρ hs
+    have he : (fun z ↦ region'.val z - bare s z) = (fun z : ℂ ↦ (∫ t : ℝ, line F t * spectralBoundaryKernel G (linePoint s t) z)
+        - (∫ t : ℝ, Complex.exp ((z-linePoint s t)^2) * line F t / (linePoint s t-z))) := by
+      funext z
+      simp only [hu,hl,bare]
+    rw [he]
+    exact hb.trans (spectralBoundary_bound_of_order (hg.analyticAt ρ) m ho)
+  have h₀ := err G₀ d region hρ.2.ne hG₀ ho₀ hv₀ hU
+  have h₁ := err G₁ c targetSet hρ.1.ne' hG₁ ho₁ hv₁ hV
+  let α : ℂ := (2*(Real.pi:ℂ))⁻¹
+  let S := α • region + (-α) • targetSet - F
+  have he : S.val =ᶠ[𝓝 ρ] fun z ↦ α * ((region.val z-bare d z) - (targetSet.val z-bare c z)) := by
+    filter_upwards [Complex.continuous_re.continuousAt.eventually_mem (Ioo_mem_nhds hρ.1 hρ.2)] with z hz
+    have hc : bare d z - bare c z = 2*(Real.pi:ℂ)*F.val z := spectralBoundary_cauchy F c d z hz
+    change α * region.val z + (-α) * targetSet.val z - F.val z = _
+    have ha : α * (2*(Real.pi:ℂ)) = 1 := inv_mul_cancel₀ (by exact_mod_cast mul_ne_zero (by norm_num : (2:ℝ) ≠ 0) Real.pi_ne_zero)
+    linear_combination α * hc + F.val z * ha
+  have han : AnalyticAt ℂ S.val ρ :=
+    ((show Differentiable ℂ S.val from fun z ↦
+      (S.property.2.1 z (mem_univ _)).differentiableAt (univ_mem' fun _ ↦ mem_univ _))).analyticAt ρ
+  apply (natCast_le_analyticOrderAt_iff_iteratedDeriv_eq_zero han).mp
+    (spectralBoundary_order_of_bound han m (he.isBigO.trans ((h₀.sub h₁).const_mul_left α))) j hj
+
+private theorem spectralBoundary_countable_seminorms (E : Type*) [AddCommGroup E] [Module ℂ E]
+    [TopologicalSpace E] [IsTopologicalAddGroup E] [PolynormableSpace ℂ E] [FirstCountableTopology E] :
+    ∃ p : ℕ → Seminorm ℂ E, WithSeminorms p := by
+  classical
+  obtain ⟨region,hU⟩ := (𝓝 (0:E)).exists_antitone_basis
+  choose p hp hsub using fun n ↦ (PolynormableSpace.hasBasis_zero_ball ℂ E).mem_iff.mp (hU.mem n)
+  refine ⟨p,SeminormFamily.withSeminorms_of_hasBasis p ((hU.1).to_hasBasis ?_ ?_)⟩
+  · intro n _
+    exact ⟨(p n).ball 0 1,SeminormFamily.basisSets_singleton_mem p n one_pos,hsub n⟩
+  · intro targetSet hV
+    obtain ⟨s,r,hr,rfl⟩ := (SeminormFamily.basisSets_iff p).mp hV
+    exact hU.1.mem_iff.mp ((s.sup p).ball_mem_nhds (Seminorm.continuous_finsetSup (fun i _ ↦ hp i)) hr)
+private theorem spectralBoundary_interleaved_decay (c₀ c₁ : ℕ → ℂ)
+    (hr₀ : ∀ k : ℕ, ∃ C : ℝ, ∀ n : ℕ, ‖c₀ n‖ * ((n:ℝ)+1)^k ≤ C)
+    (hr₁ : ∀ k : ℕ, ∃ C : ℝ, ∀ n : ℕ, ‖c₁ n‖ * ((n:ℝ)+1)^k ≤ C)
+    (k : ℕ) : ∃ C : ℝ, ∀ n : ℕ,
+      ‖Sum.elim c₀ c₁ (Equiv.natSumNatEquivNat.symm n)‖ * ((n:ℝ)+1)^k ≤ C := by
+  let e := Equiv.natSumNatEquivNat
+  let c := Sum.elim c₀ c₁
+  obtain ⟨A,hA⟩ := hr₀ k
+  obtain ⟨sourceSpace,hB⟩ := hr₁ k
+  refine ⟨2^k*max A sourceSpace,fun n ↦ ?_⟩
+  obtain ⟨i,rfl⟩ := e.surjective n
+  change ‖c (e.symm (e i))‖ * ((e i:ℕ)+1:ℝ)^k ≤ _
+  rw [e.symm_apply_apply]
+  have heval : ∀ j : ℕ, (e (Sum.inl j) : ℕ) = 2*j ∧ e (Sum.inr j) = 2*j+1 :=
+    fun j ↦ ⟨congrFun Equiv.natSumNatEquivNat_apply (Sum.inl j),congrFun Equiv.natSumNatEquivNat_apply (Sum.inr j)⟩
+  cases i with
+  | inl j =>
+    rw [(heval j).1]
+    change ‖c₀ j‖ * _ ≤ _
+    push_cast
+    have hpow := pow_le_pow_left₀ (by positivity : (0:ℝ)≤2*j+1) (by linarith : (2:ℝ)*j+1 ≤ 2*(j+1)) k
+    rw [mul_pow] at hpow
+    calc
+      _ ≤ ‖c₀ j‖*(2^k*((j:ℝ)+1)^k) := mul_le_mul_of_nonneg_left hpow (norm_nonneg _)
+      _ = 2^k*(‖c₀ j‖*((j:ℝ)+1)^k) := by ring
+      _ ≤ _ := mul_le_mul_of_nonneg_left ((hA j).trans (le_max_left ..)) (by positivity)
+  | inr j =>
+    rw [(heval j).2]
+    change ‖c₁ j‖ * _ ≤ _
+    push_cast
+    rw [show (2:ℝ)*j+1+1=2*((j:ℝ)+1) by ring,mul_pow,mul_left_comm]
+    exact mul_le_mul_of_nonneg_left ((hB j).trans (le_max_right ..)) (by positivity)
+
+private theorem spectralBoundary_interleaved_equicontinuous {X H₀ H₁ : Type*}
+    [NormedAddCommGroup X] [NormedSpace ℂ X]
+    [NormedAddCommGroup H₀] [NormedSpace ℂ H₀] [NormedAddCommGroup H₁] [NormedSpace ℂ H₁]
+    (l₀ : ℕ → H₀ →L[ℂ] ℂ) (l₁ : ℕ → H₁ →L[ℂ] ℂ)
+    (h₀ : EquicontinuousAt (fun n t ↦ l₀ n t) 0)
+    (h₁ : EquicontinuousAt (fun n t ↦ l₁ n t) 0)
+    (P₀ : X →L[ℂ] H₀) (P₁ : X →L[ℂ] H₁) :
+    let d := Sum.elim (fun n ↦ (l₀ n).comp P₀) (fun n ↦ (l₁ n).comp P₁)
+    EquicontinuousAt (fun n t ↦ d (Equiv.natSumNatEquivNat.symm n) t) 0 := by
+  intro d targetSet hV
+  have hu := (P₀.continuous.tendsto' 0 0 (map_zero P₀)).eventually (h₀ targetSet hV)
+  have hv := (P₁.continuous.tendsto' 0 0 (map_zero P₁)).eventually (h₁ targetSet hV)
+  filter_upwards [hu,hv] with x hx hy n
+  cases e : Equiv.natSumNatEquivNat.symm n with
+  | inl j => simpa only [d,Sum.elim_inl,ContinuousLinearMap.comp_apply,map_zero] using hx j
+  | inr j => simpa only [d,Sum.elim_inr,ContinuousLinearMap.comp_apply,map_zero] using hy j
+
+set_option backward.isDefEq.respectTransparency false in
+/-- Finite interleaving of two rapid presentations over a common source, after
+precomposition with arbitrary bounded maps. A jointly bounded family of target vectors
+gives one Banach disc, even when the original presentations used different discs. -/
+private theorem spectralBoundary_interleave {X H₀ H₁ E : Type*}
+    [NormedAddCommGroup X] [NormedSpace ℂ X]
+    [NormedAddCommGroup H₀] [NormedSpace ℂ H₀]
+    [NormedAddCommGroup H₁] [NormedSpace ℂ H₁]
+    [AddCommGroup E] [Module ℂ E] [UniformSpace E] [IsUniformAddGroup E]
+    [PolynormableSpace ℂ E] [T2Space E] [CompleteSpace E]
+    {S₀ : H₀ →L[ℂ] E} {S₁ : H₁ →L[ℂ] E}
+    (r₀ : NuclearPresentation S₀) (r₁ : NuclearPresentation S₁)
+    (hr₀ : ∀ k : ℕ, ∃ C : ℝ, ∀ n : ℕ, ‖r₀.coeff n‖ * ((n:ℝ)+1)^k ≤ C)
+    (hr₁ : ∀ k : ℕ, ∃ C : ℝ, ∀ n : ℕ, ‖r₁.coeff n‖ * ((n:ℝ)+1)^k ≤ C)
+    (P₀ : X →L[ℂ] H₀) (P₁ : X →L[ℂ] H₁) :
+    ∃ r : NuclearPresentation (S₀.comp P₀ + S₁.comp P₁),
+      ∀ k : ℕ, ∃ C : ℝ, ∀ n : ℕ, ‖r.coeff n‖ * ((n:ℝ)+1)^k ≤ C := by
+  classical
+  let e := Equiv.natSumNatEquivNat
+  let c : ℕ⊕ℕ → ℂ := Sum.elim r₀.coeff r₁.coeff
+  let d : ℕ⊕ℕ → X →L[ℂ] ℂ := Sum.elim (fun n ↦ (r₀.functional n).comp P₀) (fun n ↦ (r₁.functional n).comp P₁)
+  let v : ℕ⊕ℕ → E := Sum.elim (fun n ↦ (r₀.vector n:E)) (fun n ↦ (r₁.vector n:E))
+  have hb : IsVonNBounded ℂ (range v) := by
+    apply (r₀.isBanachDisc.bounded.union r₁.isBanachDisc.bounded).subset
+    rintro _ ⟨i,rfl⟩
+    cases i with
+    | inl n => exact Or.inl (r₀.vector_mem n)
+    | inr n => exact Or.inr (r₁.vector_mem n)
+  obtain ⟨D,hD,hmem⟩ := spectralBoundary_bounded_common_disc v hb
+  let w (n : ℕ) : Submodule.span ℂ D := ⟨v (e.symm n),Submodule.subset_span (hmem (e.symm n))⟩
+  let r : NuclearPresentation (S₀.comp P₀ + S₁.comp P₁) := {
+    coeff := c ∘ e.symm
+    functional := d ∘ e.symm
+    vector := w
+    disc := D
+    isBanachDisc := hD
+    vector_mem := fun n ↦ hmem (e.symm n)
+    summable_coeff := by
+      have h : Summable (fun i ↦ ‖c i‖) := Summable.sum _ r₀.summable_coeff r₁.summable_coeff
+      exact (e.symm.summable_iff (f := fun i ↦ ‖c i‖)).mpr h
+    equicontinuous := spectralBoundary_interleaved_equicontinuous r₀.functional r₁.functional r₀.equicontinuous r₁.equicontinuous P₀ P₁
+    hasSum := by
+      intro x
+      let f (i : ℕ⊕ℕ) := (c i * d i x) • v i
+      have h : HasSum f (S₀ (P₀ x) + S₁ (P₁ x)) := HasSum.sum (f := f) (r₀.hasSum (P₀ x)) (r₁.hasSum (P₁ x))
+      exact (e.symm.hasSum_iff (f := f) (a := S₀ (P₀ x) + S₁ (P₁ x))).mpr h }
+  refine ⟨r,?_⟩
+  change ∀ k : ℕ, ∃ C : ℝ, ∀ n : ℕ, ‖c (e.symm n)‖ * ((n:ℝ)+1)^k ≤ C
+  exact spectralBoundary_interleaved_decay r₀.coeff r₁.coeff hr₀ hr₁
+
+/-- The two boundary actions descend jointly through the spectral quotient. Coefficients
+may encode either orientation or the Cauchy normalization. The Hilbert product permits
+orthogonal elimination of the full synthesis kernel after taking their signed sum. -/
+private theorem spectralBoundary_two_sided_descent {sourceSpace H₀ H₁ E : Type*}
+    [AddCommGroup sourceSpace] [Module ℂ sourceSpace] [TopologicalSpace sourceSpace]
+    [NormedAddCommGroup H₀] [InnerProductSpace ℂ H₀] [CompleteSpace H₀]
+    [NormedAddCommGroup H₁] [InnerProductSpace ℂ H₁] [CompleteSpace H₁]
+    [AddCommGroup E] [Module ℂ E] [UniformSpace E] [IsUniformAddGroup E]
+    [PolynormableSpace ℂ E] [T2Space E] [CompleteSpace E]
+    (q : sourceSpace →L[ℂ] E) (hq : Topology.IsQuotientMap q) (T : E →L[ℂ] E)
+    (b₀ : sourceSpace →L[ℂ] H₀) (b₁ : sourceSpace →L[ℂ] H₁)
+    (S₀ : H₀ →L[ℂ] E) (S₁ : H₁ →L[ℂ] E) (c₀ c₁ : ℂ)
+    (r₀ : NuclearPresentation S₀) (r₁ : NuclearPresentation S₁)
+    (hr₀ : ∀ k : ℕ, ∃ C : ℝ, ∀ n : ℕ, ‖r₀.coeff n‖ * ((n:ℝ)+1)^k ≤ C)
+    (hr₁ : ∀ k : ℕ, ∃ C : ℝ, ∀ n : ℕ, ‖r₁.coeff n‖ * ((n:ℝ)+1)^k ≤ C)
+    (hT : ∀ x, c₀ • S₀ (b₀ x) + c₁ • S₁ (b₁ x) = T (q x)) :
+    IsStronglyNuclearOperator T := by
+  let H := WithLp 2 (H₀ × H₁)
+  let e := WithLp.prodContinuousLinearEquiv 2 ℂ H₀ H₁
+  let P₀ : H →L[ℂ] H₀ := (ContinuousLinearMap.fst ℂ H₀ H₁).comp e.toContinuousLinearMap
+  let P₁ : H →L[ℂ] H₁ := (ContinuousLinearMap.snd ℂ H₀ H₁).comp e.toContinuousLinearMap
+  let S : H →L[ℂ] E := S₀.comp P₀ + S₁.comp P₁
+  let b : sourceSpace →L[ℂ] H := e.symm.toContinuousLinearMap.comp ((c₀ • b₀).prod (c₁ • b₁))
+  obtain ⟨r,hr⟩ := spectralBoundary_interleave r₀ r₁ hr₀ hr₁ P₀ P₁
+  apply spectralBoundary_strong_of_synthesis q hq b S T _ r hr
+  intro x
+  change S₀ (e (e.symm ((c₀ • b₀) x,(c₁ • b₁) x))).1 + S₁ (e (e.symm ((c₀ • b₀) x,(c₁ • b₁) x))).2 = _
+  simpa using hT x
+
+private theorem spectralBoundary_globalStrip {f : ℂ → ℂ} (hc : Continuous f) {a b : ℝ}
+    (decay : ∀ k : ℕ, 1 ≤ k → ∃ C > (0:ℝ), ∀ᶠ y : ℝ in comap abs atTop, ∀ t ∈ Icc a b,
+      ‖f ((t : ℂ) + y * Complex.I)‖ ≤ C / |y|^k) (k : ℕ) :
+    ∃ C > (0:ℝ), ∀ z : ℂ, z.re ∈ Icc a b → ‖f z‖ * (1 + |z.im|)^k ≤ C := by
+  obtain ⟨C,hC,h⟩ := decay (k+1) (by omega)
+  obtain ⟨R,hR⟩ := eventually_atTop.1 (eventually_comap.mp h)
+  let M := |a| + |b| + |R| + 2
+  let w (z : ℂ) : ℝ := ‖f z‖ * (1 + |z.im|)^k
+  have hw : Continuous w := hc.norm.mul ((continuous_const.add Complex.continuous_im.abs).pow k)
+  obtain ⟨D,hD⟩ := (isCompact_closedBall (0 : ℂ) M).bddAbove_image hw.continuousOn
+  refine ⟨max D (C*2^k),lt_of_lt_of_le (by positivity : 0 < C*2^k) (le_max_right _ _),?_⟩
+  intro z hz
+  by_cases hy : max R 1 ≤ |z.im|
+  · have hy1 : 1 ≤ |z.im| := (le_max_right _ _).trans hy
+    have h0 : 0 < |z.im| := zero_lt_one.trans_le hy1
+    have hg := hR |z.im| ((le_max_left _ _).trans hy) z.im rfl z.re hz
+    rw [Complex.re_add_im] at hg
+    have hh := (le_div_iff₀ (pow_pos h0 _)).mp hg
+    have hpow : (1 + |z.im|)^k ≤ 2^k * |z.im|^k := by
+      rw [← mul_pow]
+      exact pow_le_pow_left₀ (by positivity) (by linarith) k
+    have hpow' : |z.im|^k ≤ |z.im|^(k+1) := by
+      rw [pow_succ]; exact le_mul_of_one_le_right (by positivity) hy1
+    apply le_trans _ (le_max_right _ _)
+    calc
+      _ ≤ ‖f z‖ * (2^k * |z.im|^k) := by gcongr
+      _ ≤ ‖f z‖ * (2^k * |z.im|^(k+1)) := by gcongr
+      _ = (‖f z‖ * |z.im|^(k+1)) * 2^k := by ring
+      _ ≤ _ := by gcongr
+  · apply le_trans _ (le_max_left _ _)
+    apply hD ⟨z,?_,rfl⟩
+    rw [Metric.mem_closedBall, dist_zero_right]
+    have hre : |z.re| ≤ |a| + |b| := abs_le.mpr ⟨by linarith [hz.1, neg_abs_le a, abs_nonneg b],
+      by linarith [hz.2,le_abs_self b,abs_nonneg a]⟩
+    have hi : |z.im| < max R 1 := lt_of_not_ge hy
+    have hh : max R 1 ≤ |R|+1 := max_le (by linarith [le_abs_self R]) (by linarith [abs_nonneg R])
+    dsimp [M]
+    linarith [Complex.norm_le_abs_re_add_abs_im z]
+
+end SpectralBoundarySynthesis
+
+section SpectralBoundaryArithmetic
+
+open Filter Metric Asymptotics
+
+private theorem spectralBoundary_strip_estimate {L : ℂ → ℂ} (σ : ℝ) (hL : MeromorphicNFOn L univ)
+    (hGrowth : ∀ a b : ℝ, a < b → ∃ M : ℝ, 0 < M ∧ (L : ℂ → ℂ) =O[comap (abs ∘ Complex.im) atTop ⊓ 𝓟 (Complex.re ⁻¹' Icc a b)] fun z : ℂ ↦ |Complex.im z| ^ M) (R : ℝ) (hR : 0 < R) :
+    ∃ C M T : ℝ, 0 < C ∧ 0 < M ∧ ∀ z : ℂ, |z.re - σ| ≤ R → T < |z.im| →
+      AnalyticAt ℂ L z ∧ ‖L z‖ ≤ C * |z.im| ^ M := by
+  let a := σ - R - 1
+  let b := σ + R + 1
+  obtain ⟨M, hM, hg⟩ := hGrowth a b (by dsimp [a, b]; linarith)
+  obtain ⟨C, hC, hg⟩ := Asymptotics.isBigO_iff'.mp hg
+  rw [eventually_inf_principal, eventually_comap, eventually_atTop] at hg
+  obtain ⟨T, hT⟩ := hg
+  have hB (z : ℂ) (hz : z.re ∈ Icc a b) (ht : T ≤ |z.im|) :
+      ‖L z‖ ≤ C * |z.im| ^ M := by
+    simpa only [Real.norm_of_nonneg (Real.rpow_nonneg (abs_nonneg _) _)] using hT _ ht z rfl hz
+  refine ⟨C, M, T, hC, hM, fun z hz ht ↦ ⟨?_, hB _ ⟨?_, ?_⟩ ht.le⟩⟩ <;>
+    try first | (dsimp [a, b]; linarith [(abs_le.mp hz).1, (abs_le.mp hz).2])
+  apply (hL (mem_univ z)).meromorphicOrderAt_nonneg_iff_analyticAt.mp
+  by_contra! hp
+  have hr : z.re ∈ Ioo a b := by
+    constructor <;> dsimp [a, b] <;> linarith [(abs_le.mp hz).1, (abs_le.mp hz).2]
+  have him : Continuous (fun u : ℂ ↦ |u.im|) := Complex.continuous_im.abs
+  have hn₁ := (isOpen_Ioo.preimage Complex.continuous_re).mem_nhds hr
+  have hn₂ : ∀ᶠ u : ℂ in 𝓝 z, |u.im| ∈ Ioo T (|z.im| + 1) :=
+    (isOpen_Ioo.preimage him).mem_nhds ⟨ht, by linarith⟩
+  have hbnd : ∀ᶠ u : ℂ in 𝓝 z, ‖L u‖ ≤ C * (|z.im| + 1) ^ M := by
+    filter_upwards [hn₁, hn₂] with u hu hv
+    exact (hB u ⟨hu.1.le, hu.2.le⟩ hv.1.le).trans
+      (mul_le_mul_of_nonneg_left (Real.rpow_le_rpow (abs_nonneg _) hv.2.le hM.le) hC.le)
+  have hinf := (tendsto_norm_cobounded_atTop.comp
+    (tendsto_cobounded_of_meromorphicOrderAt_neg hp)).eventually_gt_atTop (C * (|z.im| + 1) ^ M)
+  obtain ⟨u, hu, hv⟩ := ((hbnd.filter_mono nhdsWithin_le_nhds).and hinf).exists
+  exact (not_lt_of_ge hu) hv
+
+local notation "Λr" => Λ(χ, τ, hτ)
+
+/-- The gamma-stripped, pole-cleared entire spectral generator of the early spectral section. -/
+private def spectralFiniteG (z : ℂ) := (heckeGammaFactor χ z)⁻¹ * (Λr).val z
+
+private theorem spectralFiniteG_diff : Differentiable ℂ (spectralFiniteG χ τ hτ) :=
+  (differentiable_inv_heckeGammaFactor χ).mul (Λr).property
+
+private def spectralFiniteP (z : ℂ) : ℂ := open Classical in
+  let b := ((existsUnique_ideleNormSection_character_phase χ τ hτ).exists.choose : ℂ)*Complex.I
+  let δ : ℕ := if χ.toMonoidHom.comp (ideleClassNorm F).ker.subtype = 1 then 1 else 0
+  (z+b)^δ * (1-z-b)^δ
+
+private theorem spectralFiniteP_diff : Differentiable ℂ (spectralFiniteP χ τ hτ) := by
+  unfold spectralFiniteP; fun_prop
+
+private theorem spectralFiniteP_ne {z : ℂ} (hz : 1 < z.re) : spectralFiniteP χ τ hτ z ≠ 0 := by
+  dsimp only [spectralFiniteP]
+  apply mul_ne_zero <;> apply pow_ne_zero <;> intro he <;> have h := congrArg Complex.re he <;> simp [Complex.mul_re] at h <;> linarith
+
+private theorem spectralFiniteG_right {z : ℂ} (hz : 1 < z.re) :
+    spectralFiniteG χ τ hτ z = spectralFiniteP χ τ hτ z * finiteHeckeL χ ⟨z,hz⟩ := by
+  let polarPoly := spectralFiniteP χ τ hτ
+  let L := continuedCompletedHeckeL χ
+  obtain ⟨hL,hse⟩ := continuedCompletedHeckeL_spec χ
+  have hP := spectralFiniteP_diff χ τ hτ
+  have hm : MeromorphicOn (polarPoly*L) univ := fun s _ ↦ (hP.analyticAt s).meromorphicAt.mul (hL (mem_univ s)).meromorphicAt
+  have hNF := (meromorphicNFAt_mul_iff_right (hP.analyticAt z) (spectralFiniteP_ne χ τ hτ hz)).2 (hL (mem_univ z))
+  change (heckeGammaFactor χ z)⁻¹ * toMeromorphicNFOn (polarPoly*L) univ z = _
+  rw [toMeromorphicNFOn_eq_toMeromorphicNFAt hm (mem_univ z),toMeromorphicNFAt_eq_self.mpr hNF]
+  change (heckeGammaFactor χ z)⁻¹ * (polarPoly z*L z) = polarPoly z*_
+  have hγ := heckeGammaFactor_ne_zero_of_re_pos χ (zero_lt_one.trans hz)
+  rw [show L z = heckeGammaFactor χ z * finiteHeckeL χ ⟨z,hz⟩ from hse ⟨z,hz⟩]
+  field_simp
+
+private theorem spectralFiniteG_eq_finite (L : ℂ → ℂ) (hL : MeromorphicNFOn L univ)
+    (hseries : ∀ s : {s : ℂ // 1<s.re}, L s = finiteHeckeL χ s) :
+    spectralFiniteG χ τ hτ = toMeromorphicNFOn (spectralFiniteP χ τ hτ * L) univ := by
+  have hn : MeromorphicNFOn (spectralFiniteG χ τ hτ) univ := fun s _ ↦ ((spectralFiniteG_diff χ τ hτ).analyticAt s).meromorphicNFAt
+  have hm : MeromorphicOn (spectralFiniteP χ τ hτ * L) univ := fun s _ ↦
+    ((spectralFiniteP_diff χ τ hτ).analyticAt s).meromorphicAt.mul (hL (mem_univ s)).meromorphicAt
+  rw [←toMeromorphicNFOn_eq_self.mpr hn]
+  apply heckeEulerProductOutside_eq_finite_nf_eq _ _ hn.meromorphicOn hm
+  intro x hx
+  rw [spectralFiniteG_right χ τ hτ hx]
+  change _ = _ * L x
+  rw [hseries ⟨x,hx⟩]
+
+private theorem spectralFiniteG_order (z : ℂ) :
+    meromorphicOrderAt (continuedCompletedHeckeL χ) z ≤ meromorphicOrderAt (spectralFiniteG χ τ hτ) z := by
+  obtain ⟨L,hL,hseries,hord⟩ := spectralNuclearity_trace_finite_companion χ
+  have hP := (spectralFiniteP_diff χ τ hτ).analyticAt
+  have hm : MeromorphicOn (spectralFiniteP χ τ hτ * L) univ := fun s _ ↦
+    (hP s).meromorphicAt.mul (hL (mem_univ s)).meromorphicAt
+  rw [spectralFiniteG_eq_finite χ τ hτ L hL hseries,meromorphicOrderAt_toMeromorphicNFOn hm (mem_univ _),
+    meromorphicOrderAt_mul (hP z).meromorphicAt (hL (mem_univ z)).meromorphicAt]
+  exact (hord z).trans (le_add_of_nonneg_left (hP z).meromorphicOrderAt_nonneg)
+
+/-- Each retained multiplicity is dominated by the analytic order of the entire
+finite generator at the shifted site used by the actual spectral quotient. -/
+private theorem spectralBoundaryFinite_shifted_retained_order (a : ℝ) (z : ℂ)
+    (hz : 0 < analyticOrderAt ((Λr).val : ℂ → ℂ) z) :
+    ((analyticOrderAt ((Λr).val : ℂ → ℂ) z).toNat : ℕ∞) ≤
+      analyticOrderAt (fun s ↦ (spectralFiniteG χ τ hτ) (s + (a:ℂ))) (z - (a:ℂ)) := by
+  obtain ⟨k, hk, hreg, hord⟩ := spectralNuclearity_trace_zero_order χ τ hτ ⟨z,hz⟩
+  change analyticOrderAt ((Λr).val : ℂ → ℂ) z = (k:ℕ∞) at hreg
+  have hZ := (continuedCompletedHeckeL_spec χ).1
+  rw [MeromorphicOn.divisor_apply hZ.meromorphicOn (mem_univ _)] at hord
+  have hzord : meromorphicOrderAt (continuedCompletedHeckeL χ) z = (k:ℤ) := by
+    cases h : meromorphicOrderAt (continuedCompletedHeckeL χ) z with
+    | top => rw [h] at hord; simp at hord; omega
+    | coe i => rw [h] at hord; simpa using congrArg (fun n : ℤ ↦ (n:WithTop ℤ)) hord
+  have hfin := spectralFiniteG_order χ τ hτ z
+  rw [hzord,((spectralFiniteG_diff χ τ hτ).analyticAt z).meromorphicOrderAt_eq] at hfin
+  have hshift : analyticOrderAt (fun s ↦ (spectralFiniteG χ τ hτ) (s+(a:ℂ))) (z-(a:ℂ)) =
+      analyticOrderAt ((spectralFiniteG χ τ hτ):ℂ → ℂ) z := by
+    rw [show (fun s ↦ (spectralFiniteG χ τ hτ) (s+(a:ℂ))) =
+      ((spectralFiniteG χ τ hτ) : ℂ → ℂ) ∘ (fun s : ℂ ↦ s+(a:ℂ)) by rfl,
+      analyticOrderAt_comp_of_deriv_ne_zero (by fun_prop) (by simp),sub_add_cancel]
+  rw [hshift,hreg,ENat.toNat_natCast]
+  cases hh : analyticOrderAt ((spectralFiniteG χ τ hτ):ℂ → ℂ) z with
+  | top => exact le_top
+  | coe n => rw [hh,ENat.map_natCast] at hfin; exact_mod_cast hfin
+
+/-- The entire pole-cleared finite generator has a polynomial bound uniformly up
+and down each fixed strip, including its continued values in the finite-height region. -/
+private theorem spectralBoundaryFinite_strip_growth (W : ℝ) :
+    ∃ n : ℕ, ∃ C > (0:ℝ), ∀ z : ℂ, |z.re| ≤ W →
+      ‖(spectralFiniteG χ τ hτ) z‖ ≤ C*(1+|z.im|)^n := by
+  classical
+  let L := (finiteHeckeL_exists_continuation χ).choose
+  obtain ⟨hL,hs⟩ := (finiteHeckeL_exists_continuation χ).choose_spec
+  let t := (existsUnique_ideleNormSection_character_phase χ τ hτ).exists.choose
+  let p := spectralFiniteP χ τ hτ
+  let G := spectralFiniteG χ τ hτ
+  have hp := spectralFiniteP_diff χ τ hτ
+  have hm : MeromorphicOn (p*L) univ := fun z _ ↦ (hp.analyticAt z).meromorphicAt.mul (hL (mem_univ z)).meromorphicAt
+  have he (z : ℂ) (hz : AnalyticAt ℂ L z) : G z = p z * L z := by
+    change spectralFiniteG χ τ hτ z = _
+    rw [spectralFiniteG_eq_finite χ τ hτ L hL hs,toMeromorphicNFOn_eq_toMeromorphicNFAt hm (mem_univ _),
+      toMeromorphicNFAt_eq_self.mpr ((hp.analyticAt z).mul hz).meromorphicNFAt]
+    rfl
+  let polarPoly := |W|+|t|+3
+  have hP : 1 ≤ polarPoly := by dsimp [polarPoly]; linarith [abs_nonneg W,abs_nonneg t]
+  have hpb (z : ℂ) (hz : |z.re|≤W) : ‖p z‖ ≤ polarPoly^2*(1+|z.im|)^2 := by
+    let b := (t:ℂ)*Complex.I
+    have hbn : ‖b‖=|t| := by simp [b]
+    have hu : polarPoly + |z.im| ≤ polarPoly*(1+|z.im|) := by nlinarith [mul_le_mul_of_nonneg_right hP (abs_nonneg z.im)]
+    have hz1 := Complex.norm_le_abs_re_add_abs_im z
+    have h1 : ‖z+b‖ ≤ polarPoly*(1+|z.im|) := (norm_add_le _ _).trans (by rw [hbn]; apply le_trans _ hu; dsimp [polarPoly]; linarith [le_abs_self W])
+    have h2 : ‖1-z-b‖ ≤ polarPoly*(1+|z.im|) := calc
+      _ ≤ ‖1-z‖+‖b‖ := norm_sub_le _ _
+      _ ≤ (‖(1:ℂ)‖+‖z‖)+|t| := by rw [hbn]; exact add_le_add_left (norm_sub_le _ _) _
+      _ ≤ _ := by rw [norm_one]; apply le_trans _ hu; dsimp [polarPoly]; linarith [le_abs_self W]
+    by_cases hd : χ.toMonoidHom.comp (ideleClassNorm F).ker.subtype=1
+    · change ‖(z+b)^(if _ then (1:ℕ) else 0)*(1-z-b)^(if _ then (1:ℕ) else 0)‖ ≤ _
+      simp only [hd,ite_true,pow_one,norm_mul]
+      rw [←mul_pow,pow_two]
+      exact mul_le_mul h1 h2 (norm_nonneg _) (by positivity)
+    · change ‖(z+b)^(if _ then (1:ℕ) else 0)*(1-z-b)^(if _ then (1:ℕ) else 0)‖ ≤ _
+      simp only [ite_eq_right hd,pow_zero,mul_one,norm_one]
+      apply one_le_mul_of_one_le_of_one_le <;> apply one_le_pow₀
+      · exact hP
+      · linarith [abs_nonneg z.im]
+  obtain ⟨D,M,T,hD,hM,hgrowth⟩ := spectralBoundary_strip_estimate 0 hL
+    (finiteHeckeL_continuation_isBigO_rpow χ L hL hs) (|W|+1) (by positivity)
+  have hG : Continuous G := (spectralFiniteG_diff χ τ hτ).continuous
+  obtain ⟨A,hA⟩ := (isCompact_closedBall (0:ℂ) (|W|+|T|+1)).exists_bound_of_continuousOn hG.continuousOn
+  let n := ⌈M⌉₊
+  let C := max 1 (max A (polarPoly^2*D))
+  have hC : 1 ≤ C := le_max_left _ _
+  refine ⟨n+2,C,zero_lt_one.trans_le hC,?_⟩
+  intro z hz
+  let H := 1+|z.im|
+  have hH : 1 ≤ H := by dsimp [H]; linarith [abs_nonneg z.im]
+  by_cases ht : T < |z.im|
+  · obtain ⟨ha,hgrow⟩ := hgrowth z (by rw [sub_zero]; linarith [le_abs_self W]) ht
+    have hpow : |z.im|^M ≤ H^n := calc
+      _ ≤ H^M := Real.rpow_le_rpow (abs_nonneg _) (by dsimp [H]; linarith) hM.le
+      _ ≤ H^(n:ℝ) := Real.rpow_le_rpow_of_exponent_le hH (Nat.le_ceil M)
+      _ = _ := Real.rpow_natCast ..
+    change ‖G z‖ ≤ C*H^(n+2)
+    rw [he z ha,norm_mul]
+    calc
+      _ ≤ (polarPoly^2*H^2)*(D*H^n) := mul_le_mul (hpb z hz) (hgrow.trans (mul_le_mul_of_nonneg_left hpow hD.le)) (norm_nonneg _) (by positivity)
+      _ = (polarPoly^2*D)*H^(n+2) := by rw [pow_add]; ring
+      _ ≤ _ := mul_le_mul_of_nonneg_right ((le_max_right _ _).trans (le_max_right _ _)) (by positivity)
+  · have hmem : z ∈ closedBall (0:ℂ) (|W|+|T|+1) := by
+      rw [mem_closedBall,dist_zero_right]
+      linarith [Complex.norm_le_abs_re_add_abs_im z,le_abs_self W,le_abs_self T]
+    have hb : ‖G z‖ ≤ C := (hA z hmem).trans ((le_max_left _ _).trans (le_max_right _ _))
+    exact hb.trans (le_mul_of_one_le_right (zero_le_one.trans hC) (one_le_pow₀ hH))
+
+/-- In every fixed vertical strip and after any real shift, the derivative of the
+actual finite generator has at most polynomial growth in absolute height. -/
+private theorem spectralBoundaryFinite_shifted_deriv (a W : ℝ) :
+    ∃ n : ℕ, ∃ C > (0:ℝ), ∀ z : ℂ, |z.re| ≤ W →
+      ‖deriv (fun s ↦ (spectralFiniteG χ τ hτ) (s+(a:ℂ))) z‖ ≤
+        C*(1+|z.im|)^n := by
+  let G : ℂ → ℂ := (spectralFiniteG χ τ hτ)
+  have hd : Differentiable ℂ G := (spectralFiniteG_diff χ τ hτ)
+  let g (s : ℂ) := G (s+(a:ℂ))
+  have hgd : Differentiable ℂ g := hd.comp (differentiable_id.add_const _)
+  obtain ⟨n,C,hC,hb⟩ := spectralBoundaryFinite_strip_growth χ τ hτ (W+|a|+1)
+  refine ⟨n,C*2^n,by positivity,?_⟩
+  intro z hz
+  have hloc (u : ℂ) (hu : u ∈ sphere z 1) : ‖g u‖ ≤ (C*2^n)*(1+|z.im|)^n := by
+    have hdist : ‖u-z‖ = 1 := mem_sphere_iff_norm.mp hu
+    have hr : |(u+(a:ℂ)).re| ≤ W+|a|+1 := by
+      simp only [Complex.add_re,Complex.ofReal_re]
+      have hr := (Complex.abs_re_le_norm (u-z)).trans hdist.le
+      change |u.re-z.re| ≤ 1 at hr
+      have hx := (abs_le.mp ((abs_abs_sub_abs_le_abs_sub u.re z.re).trans hr)).2
+      linarith [abs_add_le u.re a]
+    have hi : 1+|(u+(a:ℂ)).im| ≤ 2*(1+|z.im|) := by
+      simp only [Complex.add_im,Complex.ofReal_im,add_zero]
+      have hr := (Complex.abs_im_le_norm (u-z)).trans hdist.le
+      change |u.im-z.im| ≤ 1 at hr
+      have hx := (abs_le.mp ((abs_abs_sub_abs_le_abs_sub u.im z.im).trans hr)).2
+      linarith [abs_nonneg z.im]
+    refine (hb _ hr).trans ?_
+    rw [mul_assoc,mul_comm (2^n),←mul_pow]
+    exact mul_le_mul_of_nonneg_left (pow_le_pow_left₀ (by positivity) (by simpa [mul_comm] using hi) _) hC.le
+  simpa using Complex.norm_deriv_le_of_forall_mem_sphere_norm_le one_pos hgd.diffContOnCl hloc
+
+/-- Functional reflection transfers each retained jet to the entire finite generator
+of the contragredient. The multiplication here is by a nowhere-zero entire epsilon factor. -/
+private theorem spectralBoundaryFinite_reflected_retained_order (a : ℝ) (z : ℂ)
+    (hz : 0 < analyticOrderAt ((Λr).val : ℂ → ℂ) z) :
+    ((analyticOrderAt ((Λr).val : ℂ → ℂ) z).toNat : ℕ∞) ≤
+      analyticOrderAt (fun s ↦ (spectralFiniteG χ⁻¹ τ hτ) (1-(s+(a:ℂ)))) (z - (a:ℂ)) := by
+  let L := continuedCompletedHeckeL χ
+  let Ld := continuedCompletedHeckeL χ⁻¹
+  obtain ⟨hL,heL⟩ := continuedCompletedHeckeL_spec χ
+  obtain ⟨hLd,heLd⟩ := continuedCompletedHeckeL_spec χ⁻¹
+  obtain ⟨ε,hε,hnε,hfe⟩ := completedHeckeL_continuation_functionalEquation χ _ _ hL heL hLd heLd
+  have hcomp : meromorphicOrderAt (fun s ↦ Ld (1-s)) z = meromorphicOrderAt Ld (1-z) := by
+    simpa [Function.comp_def] using meromorphicOrderAt_comp_of_deriv_ne_zero (f := Ld)
+      (show AnalyticAt ℂ (fun s : ℂ ↦ 1-s) z by fun_prop)
+      (show deriv (fun s : ℂ ↦ 1-s) z ≠ 0 by simp)
+  rw [show (fun s ↦ Ld (1-s)) = ε*L from funext hfe,meromorphicOrderAt_mul_of_ne_zero (hε.analyticAt _) (hnε _)] at hcomp
+  obtain ⟨k, hk, hreg, hord⟩ := spectralNuclearity_trace_zero_order χ τ hτ ⟨z,hz⟩
+  change analyticOrderAt ((Λr).val : ℂ → ℂ) z = (k:ℕ∞) at hreg
+  rw [MeromorphicOn.divisor_apply hL.meromorphicOn (mem_univ _)] at hord
+  have hzord : meromorphicOrderAt L z = (k:ℤ) := by
+    change (meromorphicOrderAt L z).untop₀ = (k:ℤ) at hord
+    cases h : meromorphicOrderAt L z with
+    | top => rw [h] at hord; simp at hord; omega
+    | coe i => rw [h] at hord; simpa using congrArg (fun n : ℤ ↦ (n:WithTop ℤ)) hord
+  have hfin := spectralFiniteG_order χ⁻¹ τ hτ (1-z)
+  change meromorphicOrderAt Ld (1-z) ≤ _ at hfin
+  rw [←hcomp,hzord,((spectralFiniteG_diff χ⁻¹ τ hτ).analyticAt _).meromorphicOrderAt_eq] at hfin
+  have hshift : analyticOrderAt (fun s ↦ (spectralFiniteG χ⁻¹ τ hτ) (1-(s+(a:ℂ)))) (z-(a:ℂ)) =
+      analyticOrderAt ((spectralFiniteG χ⁻¹ τ hτ):ℂ→ℂ) (1-z) := by
+    rw [show (fun s ↦ (spectralFiniteG χ⁻¹ τ hτ) (1-(s+(a:ℂ)))) =
+      ((spectralFiniteG χ⁻¹ τ hτ) : ℂ → ℂ) ∘ (fun s : ℂ ↦ 1-(s+(a:ℂ))) by rfl,
+      analyticOrderAt_comp_of_deriv_ne_zero (by fun_prop) (by simp),sub_add_cancel]
+  rw [hshift,hreg,ENat.toNat_natCast]
+  cases hh : analyticOrderAt ((spectralFiniteG χ⁻¹ τ hτ):ℂ → ℂ) (1-z) with
+  | top => exact le_top
+  | coe n => rw [hh,ENat.map_natCast] at hfin; exact_mod_cast hfin
+
+private theorem spectralBoundaryFinite_reflected_deriv (a W : ℝ) :
+    ∃ n : ℕ, ∃ C > (0:ℝ), ∀ z : ℂ, |z.re| ≤ W →
+      ‖deriv (fun s ↦ (spectralFiniteG χ⁻¹ τ hτ) (1-(s+(a:ℂ)))) z‖ ≤ C*(1+|z.im|)^n := by
+  let g (s : ℂ) := (spectralFiniteG χ⁻¹ τ hτ) (s+((1-a:ℝ):ℂ))
+  have hg : Differentiable ℂ g := (spectralFiniteG_diff χ⁻¹ τ hτ).comp (differentiable_id.add_const _)
+  obtain ⟨n,C,hC,hb⟩ := spectralBoundaryFinite_shifted_deriv χ⁻¹ τ hτ (1-a) W
+  refine ⟨n,C,hC,fun z hz ↦ ?_⟩
+  have hn : ∀ s : ℂ, 1-(s+(a:ℂ)) = -s+((1-a:ℝ):ℂ) := by intro s; push_cast; ring
+  simp only [hn]
+  change ‖deriv (g ∘ fun s : ℂ ↦ -s) z‖ ≤ _
+  have hdn : HasDerivAt (fun s : ℂ ↦ -s) (-1) z := (hasDerivAt_id z).neg
+  have hdcomp := ((hg (-z)).hasDerivAt).comp z hdn
+  rw [hdcomp.deriv]
+  have he := hb (-z) (by simpa using hz)
+  simpa [g] using he
+local notation "domainSet" => PontryaginDual (IdeleClassGroup (𝓞 F) F)
+local notation "fp(" χ ")" => (ideleClassNormTwist χ 0)
+
+/-- Absolute convergence at two gives a single upper bound on the entire closed
+right half-plane. -/
+private theorem spectralBoundaryFinite_euler_lower
+    (χ : PontryaginDual (IdeleClassGroup (𝓞 F) F)) :
+    ∃ C : ℝ, 1 ≤ C ∧ ∀ z : ℂ, 2 ≤ z.re →
+      (ideleClassNormTwist χ 0).LSeries z ≠ 0 ∧ ‖((ideleClassNormTwist χ 0).LSeries z)⁻¹‖ ≤ C := by
+  let r (v : HeightOneSpectrum (𝓞 F)) : ℝ := (v.asIdeal.absNorm : ℝ)^(-(2:ℝ))
+  have hr : Summable r := (summable_absNorm_rpow F (by norm_num : (1:ℝ)<2)).comp_injective
+    (fun _ _ he ↦ HeightOneSpectrum.ext he)
+  have hr₀ (v) : 0 ≤ r v := Real.rpow_nonneg (Nat.cast_nonneg _) _
+  let C := Real.exp (∑' v,r v)
+  have hC : 1 ≤ C := Real.one_le_exp (tsum_nonneg hr₀)
+  refine ⟨C,hC,fun z hz ↦ ?_⟩
+  have hf (v : HeightOneSpectrum (𝓞 F)) : 1 ≤ Real.exp (r v) * ‖finiteHeckeEulerFactor χ v z‖ := by
+    rw [finiteHeckeEulerFactor]
+    split_ifs with hu
+    · let q := (v.asIdeal.absNorm : ℝ)
+      let b := (ideleClassNormTwist χ 0).localValue v * (q : ℂ)^(-z)
+      have hq : 1 < q := by dsimp only [q]; exact_mod_cast HeightOneSpectrum.one_lt_absNorm v
+      have hw : ‖b‖ ≤ r v := by
+        rw [show ‖b‖ = _ from norm_mul ..,norm_ideleClassNormTwist_zero_localValue χ v,
+          one_mul,Complex.norm_cpow_eq_rpow_re_of_pos (zero_lt_one.trans hq),Complex.neg_re]
+        exact Real.rpow_le_rpow_of_exponent_le hq.le (neg_le_neg hz)
+      have hlt : r v < 1 := Real.rpow_lt_one_of_one_lt_of_neg hq (by norm_num)
+      have hne : 1-b ≠ 0 := sub_ne_zero.mpr (fun e ↦ by rw [←e,norm_one] at hw; linarith)
+      change 1 ≤ Real.exp (r v) * ‖(1-b)⁻¹‖
+      rw [norm_inv,←div_eq_mul_inv,one_le_div (norm_pos_iff.mpr hne)]
+      exact (norm_sub_le _ _).trans ((by rw [norm_one]; linarith : ‖(1:ℂ)‖+‖b‖ ≤ 1+r v).trans
+        (by simpa only [add_comm] using Real.add_one_le_exp (r v)))
+    · simpa only [norm_one,mul_one] using Real.one_le_exp (hr₀ v)
+  have raw : Tendsto (fun S : Finset (HeightOneSpectrum (𝓞 F)) ↦ ∏ v ∈ S, finiteHeckeEulerFactor χ v z)
+      atTop (𝓝 ((ideleClassNormTwist χ 0).LSeries z)) := finiteHeckeL_hasProd χ ⟨z,show 1 < z.re by linarith⟩
+  have hs : Tendsto (fun S : Finset (HeightOneSpectrum (𝓞 F)) ↦ ∏ v ∈ S, ‖finiteHeckeEulerFactor χ v z‖)
+      atTop (𝓝 ‖(ideleClassNormTwist χ 0).LSeries z‖) := by simpa only [norm_prod] using raw.norm
+  have hbound : 1 ≤ C * ‖(ideleClassNormTwist χ 0).LSeries z‖ := by
+    apply ge_of_tendsto' (hs.const_mul C)
+    intro S
+    have hprod := Finset.one_le_prod₀ (s := S) (fun v _ ↦ hf v)
+    rw [Finset.prod_mul_distrib,← Real.exp_sum] at hprod
+    change 1 ≤ C * ∏ v ∈ S, ‖finiteHeckeEulerFactor χ v z‖
+    exact hprod.trans (mul_le_mul_of_nonneg_right
+      (Real.exp_le_exp.mpr (hr.sum_le_tsum S (fun v _ ↦ hr₀ v)))
+      (Finset.prod_nonneg fun _ _ ↦ norm_nonneg _))
+  have hne : (ideleClassNormTwist χ 0).LSeries z ≠ 0 := by intro e; norm_num [e] at hbound
+  exact ⟨hne,by rw [norm_inv,inv_le_iff_one_le_mul₀ (norm_pos_iff.mpr hne)]; simpa only [mul_comm] using hbound⟩
+
+/-- On the absolute-convergence half-plane the pole-clearing polynomial has modulus at least
+one. The actual entire finite generator therefore has a uniformly bounded reciprocal there. -/
+private theorem spectralBoundaryFinite_right_reciprocal (χ : domainSet) (τ : ℝ≥0ˣ →ₜ* IdeleGroup (𝓞 F) F)
+    (hτ : RightInverse τ (ideleNorm F)) :
+    ∃ C : ℝ, 1 ≤ C ∧ ∀ z : ℂ, 2 ≤ z.re →
+      (spectralFiniteG χ τ hτ) z ≠ 0 ∧
+        ‖((spectralFiniteG χ τ hτ) z)⁻¹‖ ≤ C := by
+  classical
+  obtain ⟨C,hC,he⟩ := spectralBoundaryFinite_euler_lower χ
+  refine ⟨C,hC,fun z hz ↦ ?_⟩
+  let t := (existsUnique_ideleNormSection_character_phase χ τ hτ).exists.choose
+  let b := (t:ℂ)*Complex.I
+  let p := spectralFiniteP χ τ hτ z
+  have h1 : 1≤‖z+b‖ := calc
+    _ ≤ z.re := by linarith
+    _ = (z+b).re := by simp [b,Complex.mul_re]
+    _ ≤ _ := Complex.re_le_norm _
+  have h2 : 1≤‖1-z-b‖ := calc
+    _ ≤ -(1-z-b).re := by simp [b,Complex.mul_re]; linarith
+    _ ≤ |(1-z-b).re| := neg_le_abs _
+    _ ≤ _ := Complex.abs_re_le_norm _
+  have hp : 1≤‖p‖ := by
+    change 1≤‖(z+b)^(if _ then (1:ℕ) else 0)*(1-z-b)^(if _ then (1:ℕ) else 0)‖
+    rw [norm_mul,norm_pow,norm_pow]
+    exact one_le_mul_of_one_le_of_one_le (one_le_pow₀ h1) (one_le_pow₀ h2)
+  have hval := spectralFiniteG_right χ τ hτ (show 1<z.re by linarith)
+  change spectralFiniteG χ τ hτ z = p*(fp(χ)).LSeries z at hval
+  rw [hval]
+  obtain ⟨hn,hinv⟩ := he z hz
+  refine ⟨mul_ne_zero (norm_pos_iff.mp (zero_lt_one.trans_le hp)) hn,?_⟩
+  rw [mul_inv, norm_mul]
+  exact (mul_le_of_le_one_left (by positivity) (by simpa using inv_le_one_of_one_le₀ hp)).trans hinv
+/-- Both boundary kernels for the genuine quotient admit entire numerators, uniform
+reciprocal bounds in unit neighborhoods of their respective integration lines, full
+retained orders and polynomial derivative growth on every finite vertical strip. -/
+private theorem spectralBoundaryFinite_boundary_arithmetic (a : ℝ) :
+    let conditions (G : ℂ → ℂ) (σ : ℝ) :=
+      Differentiable ℂ G ∧
+      (∀ z : ℂ, 0 < analyticOrderAt ((Λr).val:ℂ → ℂ) z →
+        ((analyticOrderAt ((Λr).val:ℂ → ℂ) z).toNat:ℕ∞) ≤ analyticOrderAt G (z-(a:ℂ))) ∧
+      (∀ W : ℝ, ∃ n : ℕ, ∃ C > (0:ℝ), ∀ z : ℂ, |z.re| ≤ W → ‖deriv G z‖ ≤ C*(1+|z.im|)^n) ∧
+      (∃ C ≥ (1:ℝ), ∀ z : ℂ, |z.re-σ| ≤ 1 → G z ≠ 0 ∧ ‖(G z)⁻¹‖ ≤ C)
+    conditions (fun s ↦ (spectralFiniteG χ τ hτ) (s+(a:ℂ))) (3-a) ∧
+    conditions (fun s ↦ (spectralFiniteG χ⁻¹ τ hτ) (1-(s+(a:ℂ)))) (-2-a) := by
+  intro conditions
+  constructor
+  · refine ⟨(spectralFiniteG_diff χ τ hτ).comp (differentiable_id.add_const _),
+      spectralBoundaryFinite_shifted_retained_order χ τ hτ a,spectralBoundaryFinite_shifted_deriv χ τ hτ a,?_⟩
+    obtain ⟨C,hC,hb⟩ := spectralBoundaryFinite_right_reciprocal χ τ hτ
+    refine ⟨C,hC,fun z hz ↦ hb _ ?_⟩
+    simp only [Complex.add_re,Complex.ofReal_re]
+    linarith [(abs_le.mp hz).1]
+  · refine ⟨(spectralFiniteG_diff χ⁻¹ τ hτ).comp (show Differentiable ℂ (fun s : ℂ ↦ 1-(s+(a:ℂ))) by fun_prop),
+      spectralBoundaryFinite_reflected_retained_order χ τ hτ a,spectralBoundaryFinite_reflected_deriv χ τ hτ a,?_⟩
+    obtain ⟨C,hC,hb⟩ := spectralBoundaryFinite_right_reciprocal χ⁻¹ τ hτ
+    refine ⟨C,hC,fun z hz ↦ hb _ ?_⟩
+    simp only [Complex.sub_re,Complex.one_re,Complex.add_re,Complex.ofReal_re]
+    linarith [(abs_le.mp hz).2]
+
+end SpectralBoundaryArithmetic
+
+open Classical in
+/-- Paper: Theorem 7.4.1.1(2), p. 367. The remaining operator input is the
+existence of a rapidly decreasing nuclear presentation of the retained-jet action. -/
+private theorem spectralNuclearity_strong_of_jet_action (a : ℝ) (N : ℕ) (hN : 0 < N) (φ : 𝒟)
+    (d : jets(χ, τ, hτ) → StrongDual ℂ (Q(a)))
+    (hd : ∀ i f, d i ((D(a)).mkQ f) = iteratedDeriv i.2.val f.val (i.1.val - (a : ℂ))) :
+    let K := ⨅ i : {i : jets(χ, τ, hτ) // i.2.val < N}, (d i.val).toLinearMap.ker
+    let E := Q(a) ⧸ K
+    letI : UniformSpace E := IsTopologicalAddGroup.rightUniformSpace E
+    ∀ (A : B →L[ℂ] B) (Aq : Q(a) →L[ℂ] Q(a)) (T : E →L[ℂ] E),
+      (∀ f s, (A f).val s = nuclearityTestMellin χ φ s * f.val s) →
+      (∀ f, Aq ((D(a)).mkQ f) = (D(a)).mkQ (A f)) →
+      (∀ x, T (K.mkQ x) = K.mkQ (Aq x)) →
+      IsStronglyNuclearOperator T := by
+  classical
+  intro K E A Aq T hA hAq hT
+  clear hN
+  let : UniformSpace E := IsTopologicalAddGroup.rightUniformSpace E
+  let : IsUniformAddGroup E := isUniformAddGroup_of_addCommGroup
+  let D := D(a)
+  let I := {i : jets(χ, τ, hτ) // i.2.val < N}
+  have hD : IsClosed (D : Set B) := schwartzBergmanDivisible_isClosed _
+  have hK : IsClosed (K : Set (Q(a))) := by
+    change IsClosed (↑(⨅ i : I, (d i.val).toLinearMap.ker) : Set (Q(a)))
+    rw [Submodule.coe_iInf]
+    exact isClosed_iInter (fun i ↦ (d i.val).isClosed_ker)
+  have hB := schwartzBergman_frechet univ isOpen_univ ordConnected_univ univ_nonempty
+  have hQ := isFrechetTVS_quotient hB D hD
+  obtain ⟨_, hp, hmet, hcomplete⟩ := isFrechetTVS_quotient hQ K hK
+  let : PolynormableSpace ℂ E := hp
+  let : TopologicalSpace.MetrizableSpace E := hmet
+  let : CompleteSpace E := hcomplete
+  let q : B →L[ℂ] E := K.mkQL.comp D.mkQL
+  have hq : Topology.IsQuotientMap q := (Submodule.isQuotientMap_mkQ K).comp (Submodule.isQuotientMap_mkQ D)
+  obtain ⟨p,hp'⟩ := spectralBoundary_countable_seminorms E
+  let M := nuclearityTestMellin χ φ
+  have hM : Differentiable ℂ M := archNuclearityDenominator_closed_invariant_multiplier χ φ
+  have decay (σ : ℝ) (k : ℕ) : ∃ C > (0:ℝ), ∀ w : ℂ, |w.re-σ| ≤ 1 → (1+|w.im|)^k*‖M w‖ ≤ C := by
+    obtain ⟨C,hC,h⟩ := spectralBoundary_globalStrip hM.continuous
+      (spectralNuclearity_trace_vertical_decay χ φ (σ-1) (σ+1) (by linarith)) k
+    exact ⟨C,hC,fun w hw ↦ by rw [mul_comm]; exact h w ⟨by linarith [(abs_le.mp hw).1], by linarith [(abs_le.mp hw).2]⟩⟩
+  let G₀ := fun s : ℂ ↦ (spectralFiniteG χ τ hτ) (s+(a:ℂ))
+  let G₁ := fun s : ℂ ↦ (spectralFiniteG χ⁻¹ τ hτ) (1-(s+(a:ℂ)))
+  obtain ⟨⟨hg₀,ho₀,hd₀,hi₀⟩,hg₁,ho₁,hd₁,hi₁⟩ := spectralBoundaryFinite_boundary_arithmetic χ τ hτ a
+  obtain ⟨b₀,R₀,h₀,r₀,hr₀⟩ := spectralBoundary_line_factorization p hp' q (G := G₀) hg₀ hM (3-a) hd₀ hi₀ (decay _)
+  obtain ⟨b₁,R₁,h₁,r₁,hr₁⟩ := spectralBoundary_line_factorization p hp' q (G := G₁) hg₁ hM (-2-a) hd₁ hi₁ (decay _)
+  let α : ℂ := (2*(Real.pi:ℂ))⁻¹
+  apply spectralBoundary_two_sided_descent q hq T b₀ b₁ (q.comp R₀) (q.comp R₁) α (-α) r₀ r₁ hr₀ hr₁
+  intro x
+  change α • q (R₀ (b₀ x)) + (-α) • q (R₁ (b₁ x)) = T (K.mkQ (D.mkQ x))
+  rw [hT,hAq]
+  change α • q (R₀ (b₀ x)) + (-α) • q (R₁ (b₁ x)) = q (A x)
+  let X := α • R₀ (b₀ x) + (-α) • R₁ (b₁ x) - A x
+  suffices hx : q X = 0 by simpa only [X,map_sub,map_add,map_smul,sub_eq_zero] using hx
+  change K.mkQ (D.mkQ X) = 0
+  rw [Submodule.mkQ_apply,Submodule.Quotient.mk_eq_zero,Submodule.mem_iInf]
+  intro i
+  change d i.val (D.mkQ X) = 0
+  rw [hd]
+  let z := i.val.1
+  obtain ⟨k,hk,_,hdiv⟩ := spectralNuclearity_trace_zero_order χ τ hτ z
+  have strip := spectralNuclearity_trace_zero_strip χ (z := z.val) (by rw [hdiv]; exact_mod_cast hk)
+  have hs : (z.val-(a:ℂ)).re ∈ Ioo (-2-a) (3-a) := by
+    simp only [Complex.sub_re,Complex.ofReal_re,mem_Ioo]
+    exact ⟨by linarith [strip.1],by linarith [strip.2]⟩
+  have hi (G : ℂ → ℂ) (s : ℝ) (h : ∃ C ≥ (1:ℝ), ∀ w : ℂ, |w.re-s| ≤ 1 → G w ≠ 0 ∧ ‖(G w)⁻¹‖ ≤ C) :
+      ∃ C ≥ (1:ℝ), ∀ t : ℝ, G ((s:ℂ)+t*Complex.I) ≠ 0 ∧ ‖(G ((s:ℂ)+t*Complex.I))⁻¹‖ ≤ C := by
+    obtain ⟨C,hC,h⟩ := h
+    exact ⟨C,hC,fun t ↦ h _ (by simp)⟩
+  apply spectralBoundary_signed_jets (-2-a) (3-a) G₀ G₁ (A x) (R₀ (b₀ x)) (R₁ (b₁ x))
+    (z.val-(a:ℂ)) hs (multiplicity(χ,τ,hτ,z)) hg₀ hg₁ (hi _ _ hi₀) (hi _ _ hi₁)
+    (ho₀ z.val z.property) (ho₁ z.val z.property) _ _ i.val.2.val i.val.2.isLt
+  · intro w
+    simpa only [hA,M] using h₀ x w
+  · intro w
+    simpa only [hA,M] using h₁ x w
+
+open Classical in
+/-- Paper: Theorem 7.4.1.1(2), pp. 366–367. One rapidly decreasing presentation
+of the descended operator whose scalar series sums to the explicit zero formula. -/
+private theorem spectralNuclearity_trace_presentation (a : ℝ) (N : ℕ) (hN : 0 < N) (φ : 𝒟)
+    (d : jets(χ, τ, hτ) → StrongDual ℂ (Q(a)))
+    (hd : ∀ i f, d i ((D(a)).mkQ f) = iteratedDeriv i.2.val f.val (i.1.val - (a : ℂ))) :
+    let K := ⨅ i : {i : jets(χ, τ, hτ) // i.2.val < N}, (d i.val).toLinearMap.ker
+    let E := Q(a) ⧸ K
+    letI : UniformSpace E := IsTopologicalAddGroup.rightUniformSpace E
+    let term := fun z : zeros(χ, τ, hτ) ↦
+      ((min N (multiplicity(χ, τ, hτ, z)) : ℕ) : ℂ) * nuclearityTestMellin χ φ (z.val - (a : ℂ))
+    ∀ (A : B →L[ℂ] B) (Aq : Q(a) →L[ℂ] Q(a)) (T : E →L[ℂ] E),
+      (∀ f s, (A f).val s = nuclearityTestMellin χ φ s * f.val s) →
+      (∀ f, Aq ((D(a)).mkQ f) = (D(a)).mkQ (A f)) →
+      (∀ x, T (K.mkQ x) = K.mkQ (Aq x)) →
+      ∃ r : NuclearPresentation T, (∀ k : ℕ, ∃ C : ℝ, ∀ n : ℕ,
+        ‖r.coeff n‖ * ((n : ℝ) + 1)^k ≤ C) ∧
+        HasSum (fun n ↦ r.coeff n * r.functional n (r.vector n).val) (∑' z, term z) := by
+  intro K E term A Aq T hA hAq hT
+  obtain ⟨r, hr⟩ := spectralNuclearity_strong_of_jet_action χ τ hτ a N hN φ d hd A Aq T hA hAq hT
+  exact ⟨r, hr, spectralNuclearity_trace_of_rapid_presentation χ τ hτ a N φ d hd A Aq T hA hAq hT r hr⟩
+
 open Classical in
 /-- Paper: Theorem 7.4.1.1(2), pp. 366–367. The Mellin action on the quotient
 by the first `N` jets is strongly nuclear, and every nuclear presentation has the
@@ -1438,7 +4065,15 @@ theorem spectralNuclearity_trace_of_jet_action (a : ℝ) (N : ℕ) (hN : 0 < N) 
       (∀ f, Aq ((D(a)).mkQ f) = (D(a)).mkQ (A f)) →
       (∀ x, T (K.mkQ x) = K.mkQ (Aq x)) →
       IsStronglyNuclearOperator T ∧ ∀ r : NuclearPresentation T,
-        HasSum (fun n ↦ r.coeff n * r.functional n (r.vector n).val) (∑' z, term z) := by sorry
+        HasSum (fun n ↦ r.coeff n * r.functional n (r.vector n).val) (∑' z, term z) := by
+  intro K E term A Aq T hA hAq hT
+  obtain ⟨r, hfast, htrace⟩ :=
+    spectralNuclearity_trace_presentation χ τ hτ a N hN φ d hd A Aq T hA hAq hT
+  refine ⟨⟨r, hfast⟩, ?_⟩
+  obtain ⟨v, hv, _⟩ := spectralJet_unique_presentation_sum χ τ hτ a N d T ⟨r⟩
+  have he := (hv r).2.unique htrace
+  intro t
+  exact he ▸ (hv t).2
 
 open Classical in
 /-- Paper: Theorem 7.4.1.1(2), pp. 366–367.
@@ -2238,9 +4873,1157 @@ theorem finiteNuclearityDenominator_closed_invariant (p : HeightOneSpectrum (�
     · rw [(exists_polarThetaNuclearityAction χ τ hτ φ).choose_spec.1 x s, hv s]
       ring
 
+/-- Vanishing orders characterize entire divisibility, as in §7.1,
+`schwartzBergmanDivisible_isClosed_dvd`. -/
+private theorem finiteNuclearity_trace_dvd (g f : Entire) :
+    g ∣ f ↔ ∀ z, analyticOrderAt (g.val : ℂ → ℂ) z ≤ analyticOrderAt (f.val : ℂ → ℂ) z := by
+  have ha (a : Entire) (z : ℂ) : AnalyticAt ℂ (a.val : ℂ → ℂ) z :=
+    (show Differentiable ℂ a.val from a.property).analyticAt z
+  constructor
+  · rintro ⟨k, rfl⟩ z
+    change _ ≤ analyticOrderAt ((g.val : ℂ → ℂ) * (k.val : ℂ → ℂ)) z
+    rw [analyticOrderAt_mul (ha g z) (ha k z)]
+    exact self_le_add_right _ _
+  · intro hord
+    let q := (f.val : ℂ → ℂ) / (g.val : ℂ → ℂ)
+    have hq : MeromorphicOn q univ := fun z _ ↦ (ha f z).meromorphicAt.div (ha g z).meromorphicAt
+    have hdiff : Differentiable ℂ (toMeromorphicNFOn q univ) := by
+      intro z
+      apply AnalyticAt.differentiableAt
+      have hnf := meromorphicNFOn_toMeromorphicNFOn q univ (mem_univ z)
+      apply hnf.meromorphicOrderAt_nonneg_iff_analyticAt.mp
+      rw [meromorphicOrderAt_toMeromorphicNFOn hq (mem_univ z),
+        meromorphicOrderAt_div (ha f z).meromorphicAt (ha g z).meromorphicAt,
+        (ha f z).meromorphicOrderAt_eq, (ha g z).meromorphicOrderAt_eq]
+      have hle := hord z
+      generalize analyticOrderAt (f.val : ℂ → ℂ) z = m at hle ⊢
+      generalize analyticOrderAt (g.val : ℂ → ℂ) z = n at hle ⊢
+      cases m using ENat.recTopCoe with
+      | top => simp
+      | coe m =>
+        cases n using ENat.recTopCoe with
+        | top => simp at hle
+        | coe n =>
+          exact WithTop.coe_le_coe.mpr (sub_nonneg.mpr (by exact_mod_cast hle : (n : ℤ) ≤ m))
+    refine ⟨⟨⟨_, hdiff.continuous⟩, hdiff⟩, Subtype.ext (ContinuousMap.ext fun z ↦ ?_)⟩
+    change f.val z = g.val z * toMeromorphicNFOn q univ z
+    by_cases hz : g.val z = 0
+    · have hpos := lt_of_lt_of_le (pos_iff_ne_zero.mpr ((ha g z).analyticOrderAt_ne_zero.mpr hz))
+          (hord z)
+      rw [hz, zero_mul]
+      exact (ha f z).analyticOrderAt_ne_zero.mp hpos.ne'
+    · rw [toMeromorphicNFOn_eq_toMeromorphicNFAt hq (mem_univ z),
+        toMeromorphicNFAt_eq_self.mpr ((ha f z).div (ha g z) hz).meromorphicNFAt]
+      exact (mul_div_cancel₀ _ hz).symm
+
+/-- The Schwartz–Bergman divisibility condition is detected by ordinary derivative jets. -/
+private theorem finiteNuclearity_trace_divisible (g : Entire) (f : B) :
+    f ∈ schwartzBergmanDivisible g ↔ ∀ z (k : ℕ), (k : ℕ∞) < analyticOrderAt (g.val : ℂ → ℂ) z →
+      iteratedDeriv k f.val z = 0 := by
+  change schwartzBergmanEntireInclusion f ∈ Ideal.span ({g} : Set Entire) ↔ _
+  rw [Ideal.mem_span_singleton, finiteNuclearity_trace_dvd]
+  have hv : ((schwartzBergmanEntireInclusion f).val : ℂ → ℂ) = f.val :=
+    funext (schwartzBergmanEntireInclusion_apply f)
+  rw [hv]
+  apply forall_congr'
+  intro z
+  have hf : Differentiable ℂ f.val := fun w ↦
+    (f.property.2.1 w (mem_univ w)).differentiableAt (Filter.univ_mem' mem_univ)
+  have ha := hf.analyticAt z
+  constructor
+  · intro h k hk
+    exact (natCast_le_analyticOrderAt_iff_iteratedDeriv_eq_zero ha).mp
+      (((ENat.add_one_le_iff (ENat.natCast_ne_top k)).mpr hk).trans h) k (Nat.lt_succ_self k)
+  · intro h
+    by_contra! hlt
+    obtain ⟨k, hk⟩ := ENat.ne_top_iff_exists.mp hlt.ne_top
+    have hle := (natCast_le_analyticOrderAt_iff_iteratedDeriv_eq_zero ha (n := k+1)).mpr
+      (fun i hi ↦ h i ((show (i : ℕ∞) ≤ k by exact_mod_cast (Nat.le_of_lt_succ hi)).trans_lt
+        (hk ▸ hlt)))
+    rw [← hk] at hle
+    exact (Nat.not_succ_le_self k) (by exact_mod_cast hle)
+
+/-- The Euler zeros lie on the imaginary axis, where the regularized completed
+generator has order zero. Thus the two sets of jet conditions are disjoint. -/
+private theorem finiteNuclearity_trace_orders (p : HeightOneSpectrum (𝓞 ℚ)) :
+    let R := reciprocalPartialHeckeEulerProduct χ (Sₚ(p))
+    let G := regularizedCompletedHeckeL χ τ hτ (continuedCompletedHeckeL χ)
+      (continuedCompletedHeckeL_spec χ).1 (continuedCompletedHeckeL_spec χ).2
+    (∀ z, ((analyticOrderAt R z).toNat : ℕ∞) = analyticOrderAt R z) ∧
+    (∀ z, 0 < analyticOrderAt R z → analyticOrderAt (G.val : ℂ → ℂ) z = 0) ∧
+    ∀ z, analyticOrderAt ((orbitalGenerator(Sₚ(p))).val : ℂ → ℂ) z =
+      max (analyticOrderAt (G.val : ℂ → ℂ) z) (analyticOrderAt R z) := by
+  classical
+  intro R G
+  let S := Sₚ(p)
+  have hs : S.filter (fun v ↦ v.under (𝓞 ℚ) = p) = S := by
+    ext v
+    exact Finset.mem_filter.trans (and_iff_left_of_imp fun hv ↦
+      (finite_nuclearityPlacesAbove (F := F) p).mem_toFinset.mp hv)
+  have ha : Differentiable ℂ R := by
+    apply Differentiable.fun_finsetProd
+    intro v _
+    by_cases hv : (ideleClassNormTwist χ 0).IsUnramifiedAt v
+    · simp only [finiteHeckeEulerFactor, ite_eq_left hv, inv_inv]
+      have hq : (v.asIdeal.absNorm : ℂ) ≠ 0 := by
+        exact_mod_cast (Ideal.absNorm_eq_zero_iff.not.mpr v.ne_bot)
+      exact (differentiable_const _).sub ((differentiable_const _).mul
+        (differentiable_id.neg.const_cpow (.inl hq)))
+    · simp only [finiteHeckeEulerFactor, ite_eq_right hv, inv_one]
+      exact differentiable_const _
+  constructor
+  · intro z
+    have h := reciprocalEulerProduct_over_prime_order_le χ S p z
+    rw [hs] at h
+    exact ENat.natCast_toNat ((lt_of_le_of_lt h (ENat.natCast_lt_top _)).ne)
+  · have disjoint (z : ℂ) (h : 0 < analyticOrderAt R z) :
+        analyticOrderAt (G.val : ℂ → ℂ) z = 0 := by
+      have hl := reciprocalEulerProduct_over_prime_zero χ S p (s := z)
+      rw [hs] at hl
+      obtain ⟨_, _, _, _, _, _, _, he⟩ := hl ((ha.analyticAt z).analyticOrderAt_ne_zero.mp h.ne')
+      have hre : z.re = 0 := by
+        rw [he, Complex.mul_re, Complex.I_re, Complex.ofReal_im, mul_zero, zero_mul, sub_zero]
+      by_contra hn
+      obtain ⟨n, hn', _, hdiv⟩ := spectralNuclearity_trace_zero_order χ τ hτ
+        ⟨z, pos_iff_ne_zero.mpr hn⟩
+      exact (spectralNuclearity_trace_zero_strip χ (z := z)
+        (by rw [hdiv]; exact_mod_cast hn')).1.ne' hre
+    refine ⟨disjoint, fun z ↦ ?_⟩
+    change analyticOrderAt (R * (G.val : ℂ → ℂ)) z = _
+    rw [analyticOrderAt_mul (ha.analyticAt z)
+      ((show Differentiable ℂ G.val from G.property).analyticAt z)]
+    by_cases h : analyticOrderAt R z = 0
+    · simp [h]
+    · simp [disjoint z (pos_iff_ne_zero.mpr h)]
+
+open Classical in
+/-- The Mellin jets up to the full local Euler order separate the polar quotient.
+The comparison vectors of §7.1 lift to polar classes because all their completed
+L-function jets vanish. -/
+private theorem finiteNuclearity_trace_jets (p : HeightOneSpectrum (𝓞 ℚ)) :
+    let D := finiteNuclearityDenominator χ p
+    let R := reciprocalPartialHeckeEulerProduct χ (Sₚ(p))
+    let Zeros := {z : ℂ // 0 < analyticOrderAt R z}
+    let J := Σ z : Zeros, Fin (analyticOrderAt R z.val).toNat
+    ∃ (d : J → StrongDual ℂ (Θ₀(χ) ⧸ D)) (b : J → Θ₀(χ) ⧸ D),
+      (∀ j x, d j (D.mkQ x) = iteratedDeriv j.2.val ((Z(χ, τ, hτ)) x).val j.1.val) ∧
+      (∀ i j, d i (b j) = if i = j then 1 else 0) ∧
+      ∀ x, (∀ j, d j x = 0) → x = 0 := by
+  classical
+  intro D R Zeros J
+  let G := regularizedCompletedHeckeL χ τ hτ (continuedCompletedHeckeL χ)
+    (continuedCompletedHeckeL_spec χ).1 (continuedCompletedHeckeL_spec χ).2
+  let H := orbitalGenerator(Sₚ(p))
+  let ord (g : Entire) (z : ℂ) := analyticOrderAt (g.val : ℂ → ℂ) z
+  obtain ⟨hfinite, hdisjoint, hmax⟩ := finiteNuclearity_trace_orders χ τ hτ p
+  have range_iff (f : B) : (∃ x, (Z(χ, τ, hτ)) x = f) ↔
+      ∀ z (k : ℕ), (k : ℕ∞) < ord G z → iteratedDeriv k f.val z = 0 :=
+    (specDenom_range_mem χ τ hτ f).trans
+      ((specDenom_mem_div G f).symm.trans (finiteNuclearity_trace_divisible G f))
+  let jet (j : J) :=
+    ((entireJet j.1.val j.2.val).comp schwartzBergmanEntireInclusion).comp (Z(χ, τ, hτ))
+  have eval (j : J) (x : Θ₀(χ)) :
+      jet j x = iteratedDeriv j.2.val ((Z(χ, τ, hτ)) x).val j.1.val := by
+    dsimp only [jet, ContinuousLinearMap.comp_apply]
+    rw [entireJet_apply]
+    exact congrArg (fun f : ℂ → ℂ ↦ iteratedDeriv j.2.val f j.1.val)
+      (funext (schwartzBergmanEntireInclusion_apply _))
+  have jk (j : J) : (j.2.val : ℕ∞) < analyticOrderAt R j.1.val := by
+    apply lt_of_lt_of_eq ?_ (hfinite j.1.val)
+    exact_mod_cast j.2.isLt
+  have den (x : Θ₀(χ)) : x ∈ D ↔ ∀ j, jet j x = 0 := by
+    rw [finiteNuclearity_mellin_mem χ τ hτ p, finiteNuclearity_trace_divisible]
+    constructor
+    · intro h j
+      rw [eval]
+      exact h _ _ ((jk j).trans_le ((le_max_right _ _).trans_eq (hmax _).symm))
+    · intro h z k hk
+      rw [hmax, lt_max_iff] at hk
+      rcases hk with hk | hk
+      · exact (range_iff _).mp ⟨x, rfl⟩ z k hk
+      · let z' : Zeros := ⟨z, zero_le.trans_lt hk⟩
+        have hk' : k < (analyticOrderAt R z).toNat := by
+          rw [← hfinite] at hk
+          exact_mod_cast hk
+        exact (eval ⟨z', k, hk'⟩ x).symm.trans (h ⟨z', k, hk'⟩)
+  let d (j : J) := D.liftQL (jet j) (fun x hx ↦ (den x).mp hx j)
+  let I := {i : ℂ × ℕ // (i.2 : ℕ∞) < ord H i.1}
+  let i (j : J) : I := ⟨(j.1.val, j.2.val), (jk j).trans_le
+    ((le_max_right _ _).trans_eq (hmax _).symm)⟩
+  have inj : Injective i := by
+    rintro ⟨z, k⟩ ⟨w, l⟩ he
+    have ez : z = w := Subtype.ext (congrArg (fun v : I ↦ v.val.1) he)
+    subst w
+    exact congrArg (Sigma.mk z) (Fin.ext (congrArg (fun v : I ↦ v.val.2) he))
+  obtain ⟨v, hv⟩ := orbitalSchwartzBergman_biorthogonal χ τ hτ (continuedCompletedHeckeL χ)
+    (continuedCompletedHeckeL_spec χ).1 (continuedCompletedHeckeL_spec χ).2 (Sₚ(p))
+  have lift (j : J) : ∃ x, (Z(χ, τ, hτ)) x = v (i j) := by
+    apply (range_iff _).mpr
+    intro z k hk
+    let l : I := ⟨(z, k), hk.trans_le ((le_max_left _ _).trans_eq (hmax z).symm)⟩
+    have hne : l ≠ i j := by
+      intro he
+      have hz : z = j.1.val := congrArg (fun t : I ↦ t.val.1) he
+      exact (not_lt_of_ge (zero_le : (0 : ℕ∞) ≤ k))
+        (hk.trans_eq (hz ▸ hdisjoint _ j.1.property))
+    exact (hv l (i j)).trans (ite_eq_right hne)
+  choose u hu using lift
+  refine ⟨d, fun j ↦ D.mkQ (u j), eval, fun a j ↦ ?_, ?_⟩
+  · change jet a (u j) = _
+    rw [eval, hu]
+    exact (hv (i a) (i j)).trans (by simp only [inj.eq_iff])
+  · intro x hx
+    obtain ⟨y, rfl⟩ := D.mkQ_surjective x
+    exact (Submodule.Quotient.mk_eq_zero D).mpr ((den y).mpr hx)
+
+/-- A closed quotient of a space embedded linearly in a nuclear space is nuclear. -/
+private theorem finiteNuclearity_trace_quotient_nuclear {X Y : Type*}
+    [AddCommGroup X] [Module ℂ X] [TopologicalSpace X] [IsTopologicalAddGroup X]
+    [ContinuousSMul ℂ X] [AddCommGroup Y] [Module ℂ Y] [TopologicalSpace Y]
+    (f : X →L[ℂ] Y) (hf : IsEmbedding f) (hY : IsNuclearTVS.{0} Y)
+    (D : Submodule ℂ X) (hD : IsClosed (D : Set X)) : IsNuclearTVS.{0} (X ⧸ D) := by
+  let := hY.2.1
+  let : PolynormableSpace ℂ X := hf.isInducing.polynormableSpace (f := f.toLinearMap)
+  let e := LinearEquiv.ofInjective f.toLinearMap hf.injective
+  have he : IsInducing e := IsInducing.subtypeVal.of_comp_iff.mp hf.isInducing
+  let h := e.toEquiv.toHomeomorphOfIsInducing he
+  let L : X ≃L[ℂ] f.range := ⟨e, h.continuous, h.continuous_symm⟩
+  exact isNuclearTVS_quotient (nuclear_of_equiv L.symm (isNuclearTVS_submodule hY f.range)) D
+
+open Classical in
+/-- In a multiplication action on jets, the Leibniz terms with a positive-order
+derivative of the multiplier vanish on the matching biorthogonal vector. -/
+private theorem finiteNuclearity_trace_diagonal {X E Z : Type*} [DecidableEq Z] [AddCommGroup E] [Module ℂ E]
+    [TopologicalSpace E] (p : X → E) (hp : Surjective p) (A : X → X) (T : E → E)
+    (hT : ∀ x, T (p x) = p (A x)) (f : X → ℂ → ℂ) (hf : ∀ x, Differentiable ℂ (f x))
+    (M : ℂ → ℂ) (hM : Differentiable ℂ M) (hA : ∀ x, f (A x) = M * f x)
+    (z : Z → ℂ) (m : Z → ℕ)
+    (d : (Σ s, Fin (m s)) → StrongDual ℂ E) (b : (Σ s, Fin (m s)) → E)
+    (hd : ∀ j x, d j (p x) = iteratedDeriv j.2.val (f x) (z j.1))
+    (hb : ∀ i j, d i (b j) = if i = j then 1 else 0) (j : Σ s, Fin (m s)) :
+    d j (T (b j)) = M (z j.1) := by
+  obtain ⟨x, hx⟩ := hp (b j)
+  rw [← hx, hT, hd, hA, iteratedDeriv_mul hM.contDiff.contDiffAt (hf x).contDiff.contDiffAt,
+    Finset.sum_eq_single 0]
+  · simp [← hd j x, hx, hb]
+  · intro k hk hk0
+    let i : Σ s, Fin (m s) := ⟨j.1, j.2.val - k, (Nat.sub_le _ _).trans_lt j.2.isLt⟩
+    have hij : i ≠ j := by
+      intro he
+      have h := congrArg (fun u : Σ s, Fin (m s) ↦ u.2.val) he
+      have hk' := Finset.mem_range.mp hk
+      change j.2.val - k = j.2.val at h
+      omega
+    rw [← hd i x, hx, hb, ite_eq_right hij, mul_zero]
+  · simp
+
+open Classical in
+/-- Synthesize the rank-one series in the complete disc, then use the separating
+jets to identify its sum with the action. The approximation property identifies
+the traces of all presentations. Each finite fiber contributes its multiplicity. -/
+private theorem finiteNuclearity_trace_of_bounds {E Z : Type*} [DecidableEq Z] [AddCommGroup E] [Module ℂ E]
+    [UniformSpace E] [IsUniformAddGroup E] [ContinuousSMul ℂ E]
+    (T : E →L[ℂ] E) (hE : IsNuclearTVS.{0} E) (m : Z → ℕ) (M : Z → ℂ)
+    (d : (Σ z, Fin (m z)) → StrongDual ℂ E) (b : (Σ z, Fin (m z)) → E)
+    (hb : ∀ i j, d i (b j) = if i = j then 1 else 0) (hsep : ∀ x, (∀ j, d j x = 0) → x = 0)
+    (hdiag : ∀ j, d j (T (b j)) = M j.1)
+    (e : (Σ z, Fin (m z)) ↪ ℕ) (a c : (Σ z, Fin (m z)) → ℂˣ) (B₀ : Set E) (q : Seminorm ℂ E)
+    (hB : IsBanachDisc B₀) (hv : ∀ j, (a j : ℂ) • b j ∈ B₀) (hq : Continuous q)
+    (hd : ∀ j x, ‖((c j : ℂ) * (a j : ℂ))⁻¹ * d j (T x)‖ ≤ q x)
+    (hr : ∀ k : ℕ, ∃ C : ℝ, ∀ j, ‖(c j : ℂ)‖ * ((e j : ℝ) + 1) ^ k ≤ C) :
+    IsStronglyNuclearOperator T ∧ Summable (fun z ↦ ‖(m z : ℂ) * M z‖) ∧
+    ∀ r : NuclearPresentation T, HasSum (fun n ↦ r.coeff n * r.functional n (r.vector n).val)
+      (∑' z, (m z : ℂ) * M z) := by
+  classical
+  let := hE.1
+  let := hE.2.1
+  let J := Σ z, Fin (m z)
+  let G := WithLocalSeminorm (gaugeSeminorm hB.balanced hB.convex hB.absorbent)
+  let : CompleteSpace G := hB.complete
+  let : T2Space G := hB.separated
+  let v (j : J) : G := ⟨(a j : ℂ) • b j, Submodule.subset_span (hv j)⟩
+  let L (j : J) : StrongDual ℂ E := ((c j : ℂ) * (a j : ℂ))⁻¹ • (d j).comp T
+  let u := extend e v (fun _ ↦ (0 : G))
+  let ℓ := extend e L (fun _ ↦ (0 : StrongDual ℂ E))
+  let coeff := extend e (fun j ↦ (c j : ℂ)) (fun _ ↦ 0)
+  let incl : G →L[ℂ] E := ⟨(Submodule.span ℂ B₀).subtype, spectralTrace_banachDisc_inclusion hB⟩
+  have mem (n) : incl (u n) ∈ B₀ := by
+    by_cases h : n ∈ range e
+    · obtain ⟨j, rfl⟩ := h
+      rw [show u (e j) = v j from e.injective.extend_apply _ _ _]
+      exact hv j
+    · simpa only [u, extend_apply' _ _ _ h, map_zero] using
+        (show (0 : E) ∈ B₀ from hB.absorbent.zero_mem)
+  have rapid (k : ℕ) : ∃ C : ℝ, ∀ n, ‖coeff n‖ * ((n : ℝ) + 1) ^ k ≤ C := by
+    obtain ⟨C, hC⟩ := hr k
+    refine ⟨max C 0, fun n ↦ ?_⟩
+    by_cases h : n ∈ range e
+    · obtain ⟨j, rfl⟩ := h
+      simpa only [coeff, e.injective.extend_apply] using (hC j).trans (le_max_left C 0)
+    · simp [coeff, extend_apply' _ _ _ h]
+  have hsum : Summable (fun n ↦ ‖coeff n‖) := by
+    obtain ⟨C, hC⟩ := rapid 2
+    have h : Summable (fun n : ℕ ↦ 1 / ((n : ℝ) + 1) ^ 2) := by
+      simpa only [Real.rpow_two, sq_abs] using (Real.summable_one_div_nat_add_rpow 1 2).mpr (by norm_num)
+    exact Summable.of_nonneg_of_le (fun _ ↦ norm_nonneg _) (fun n ↦ by
+      rw [mul_one_div, le_div_iff₀ (by positivity)]
+      exact hC n) (h.mul_left C)
+  have bound (n x) : ‖ℓ n x‖ ≤ q x := by
+    by_cases h : n ∈ range e
+    · obtain ⟨j, rfl⟩ := h
+      rw [show ℓ (e j) = L j from e.injective.extend_apply _ _ _]
+      exact hd j x
+    · simp [ℓ, extend_apply' _ _ _ h, apply_nonneg]
+  have hequi : EquicontinuousAt (fun n x ↦ ℓ n x) 0 := by
+    apply Metric.equicontinuousAt_of_continuity_modulus (fun x ↦ q x)
+      (by simpa using hq.tendsto 0)
+    exact Filter.Eventually.of_forall fun x n ↦ by simpa [map_zero, dist_zero_left] using bound n x
+  obtain ⟨S, hS⟩ := spectralTrace_boundedSeries_toBanach ℓ u coeff hsum q hq bound
+    (fun n ↦ gauge_le_one_of_mem (show u n ∈ ((↑) ⁻¹' B₀ : Set (Submodule.span ℂ B₀)) from mem n))
+  have active (j : J) (x : E) :
+      (coeff (e j) * ℓ (e j) x) • incl (u (e j)) = d j (T x) • b j := by
+    simp only [coeff, ℓ, u, e.injective.extend_apply, L, smul_apply,
+      ContinuousLinearMap.comp_apply, smul_eq_mul]
+    change _ • ((a j : ℂ) • b j) = _
+    rw [smul_smul]
+    congr 1
+    field_simp
+  have series (x) : HasSum (fun n ↦ (coeff n * ℓ n x) • incl (u n)) (incl (S x)) := by
+    simpa only [map_smul] using (hS x).mapL incl
+  have eqT (x) : incl (S x) = T x := by
+    apply sub_eq_zero.mp
+    apply hsep
+    intro j
+    rw [map_sub, sub_eq_zero]
+    have hj := (series x).mapL (d j)
+    apply hj.unique
+    convert hasSum_single (e j) (f := fun n ↦ d j ((coeff n * ℓ n x) • incl (u n))) ?_ using 1
+    · simp [active, hb]
+    · intro n hne
+      by_cases h : n ∈ range e
+      · obtain ⟨i, rfl⟩ := h
+        have hij : j ≠ i := fun h ↦ hne (congrArg e h.symm)
+        simp [active, hb, hij]
+      · simp [coeff, extend_apply' _ _ _ h]
+  let r : NuclearPresentation T := {
+    coeff := coeff, functional := ℓ, disc := B₀, isBanachDisc := hB
+    vector := fun n ↦ ⟨incl (u n), Submodule.subset_span (mem n)⟩
+    vector_mem := mem, summable_coeff := hsum, equicontinuous := hequi
+    hasSum := fun x ↦ eqT x ▸ series x }
+  obtain ⟨t, ht, _⟩ := exists_nuclearTrace_hasSum (dense_finiteRank_of_isNuclearTVS E hE) T
+    ((isNuclearOperator_iff_nonempty_presentation T).mpr ⟨r⟩)
+  let scalar (n : ℕ) := coeff n * ℓ n (incl (u n))
+  have hs := (e.injective.hasSum_iff (f := scalar)
+    (fun n hn ↦ by simp [scalar, coeff, extend_apply' _ _ _ hn])).mpr (ht r).2
+  have hjet : HasSum (fun j : Σ z, Fin (m z) ↦ M j.1) t := by
+    apply hs.congr_fun
+    intro j
+    rw [← hdiag j]
+    change d j (T (b j)) = coeff (e j) * ℓ (e j) (incl (u (e j)))
+    simp only [coeff, ℓ, u, e.injective.extend_apply, L, smul_apply,
+      smul_eq_mul, ContinuousLinearMap.comp_apply]
+    change _ = _ * (_ * d j (T ((a j : ℂ) • b j)))
+    rw [map_smul, map_smul, smul_eq_mul]
+    field_simp
+  have hterm : HasSum (fun z ↦ (m z : ℂ) * M z) t := hjet.sigma fun z ↦ by
+    simpa only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+      using hasSum_fintype (fun _ : Fin (m z) ↦ M z)
+  exact ⟨⟨r, rapid⟩, hterm.summable.norm, fun s ↦ hterm.tsum_eq.symm ▸ (ht s).2⟩
+
+/-- Restricting the Mellin closed embedding to its range and then taking the
+closed principal-value quotient preserves the Fréchet property. -/
+private theorem finiteNuclearity_trace_jet_bounds_frechet {X Y : Type*}
+    [AddCommGroup X] [Module ℂ X] [TopologicalSpace X] [IsTopologicalAddGroup X]
+    [AddCommGroup Y] [Module ℂ Y] [TopologicalSpace Y]
+    (i : X →L[ℂ] Y) (hi : IsClosedEmbedding i) (hY : IsFrechetTVS Y)
+    (D : Submodule ℂ X) (hD : IsClosed (D : Set X)) : IsFrechetTVS (X ⧸ D) := by
+  obtain ⟨_, _, _, c⟩ := hY
+  let : UniformSpace Y := IsTopologicalAddGroup.rightUniformSpace Y
+  have : IsUniformAddGroup Y := isUniformAddGroup_of_addCommGroup
+  have : CompleteSpace Y := c
+  let : UniformSpace X := IsTopologicalAddGroup.rightUniformSpace X
+  have : IsUniformAddGroup X := isUniformAddGroup_of_addCommGroup
+  have hu := AddMonoidHom.isUniformInducing_of_isInducing
+    (f := i.toLinearMap.toAddMonoidHom) hi.isInducing
+  exact isFrechetTVS_quotient
+    ⟨inferInstance, hi.isInducing.polynormableSpace (f := i.toLinearMap),
+      hi.isEmbedding.metrizableSpace, hu.completeSpace hi.isClosed_range.isComplete⟩ D hD
+
+/-- A positive envelope for the test multiplier on the unit circles about the
+imaginary axis. Its square dominates the multiplier and the envelope itself
+still decreases faster than every inverse power of the height. -/
+private theorem finiteNuclearity_trace_jet_bounds_envelope (M : ℂ → ℂ) (hM : Continuous M)
+    (hdecay : ∀ k : ℕ, ∃ C : ℝ, ∀ w : ℂ, w.re ∈ Icc (-1 : ℝ) 1 →
+      ‖M w‖ * (1 + |w.im|) ^ k ≤ C) :
+    ∃ r : ℂ → ℝ, (∀ z, 0 < r z) ∧
+      (∀ z, ∀ w ∈ Metric.sphere z 1, ‖M w‖ ≤ (r z) ^ 2) ∧
+      ∀ k : ℕ, ∃ C : ℝ, ∀ z : ℂ, z.re = 0 → r z * (1 + |z.im|) ^ k ≤ C := by
+  classical
+  choose u hu hmax using fun z : ℂ ↦
+    (isCompact_closedBall z 1).exists_isMaxOn (Metric.nonempty_closedBall.mpr zero_le_one)
+      hM.norm.continuousOn
+  let W (z : ℂ) := 1 + |z.im|
+  let r (z : ℂ) := Real.sqrt (‖M (u z)‖ + (Real.exp (W z))⁻¹)
+  have hW (z : ℂ) : 0 ≤ W z := by dsimp [W]; positivity
+  have hr (z : ℂ) : 0 < r z := Real.sqrt_pos.2 (by positivity)
+  have hs (z : ℂ) : (r z) ^ 2 = ‖M (u z)‖ + (Real.exp (W z))⁻¹ := Real.sq_sqrt (by positivity)
+  refine ⟨r, hr, fun z w hw ↦ (hmax z (Metric.sphere_subset_closedBall hw)).trans
+    ((le_add_of_nonneg_right (by positivity)).trans_eq (hs z).symm), ?_⟩
+  intro k
+  let n := k + k
+  obtain ⟨C, hC⟩ := hdecay n
+  refine ⟨Real.sqrt (C * 2 ^ n + n.factorial), fun z hz ↦ ?_⟩
+  have hd := mem_closedBall_iff_norm.mp (hu z)
+  have hx := (Complex.abs_re_le_norm (u z - z)).trans hd
+  have hy := (Complex.abs_im_le_norm (u z - z)).trans hd
+  rw [Complex.sub_re, hz, sub_zero] at hx
+  rw [Complex.sub_im, abs_sub_comm] at hy
+  have hw : W z ≤ 2 * W (u z) := by
+    dsimp [W]
+    linarith [abs_sub_abs_le_abs_sub z.im (u z).im, abs_nonneg (u z).im]
+  have h₁ : ‖M (u z)‖ * W z ^ n ≤ C * 2 ^ n := calc
+    _ ≤ ‖M (u z)‖ * (2 * W (u z)) ^ n := by gcongr
+    _ = (‖M (u z)‖ * W (u z) ^ n) * 2 ^ n := by rw [mul_pow]; ring
+    _ ≤ C * 2 ^ n := by gcongr; exact hC _ (abs_le.mp hx)
+  have h₂ : (Real.exp (W z))⁻¹ * W z ^ n ≤ n.factorial := by
+    rw [inv_mul_le_iff₀ (Real.exp_pos _)]
+    exact (div_le_iff₀ (by positivity : (0 : ℝ) < n.factorial)).mp
+      (Real.pow_div_factorial_le_exp (W z) (hW z) n)
+  apply Real.le_sqrt_of_sq_le
+  calc
+    (r z * W z ^ k) ^ 2 = (r z) ^ 2 * W z ^ n := by rw [mul_pow, sq (W z ^ k), ← pow_add]
+    _ ≤ C * 2 ^ n + n.factorial := by rw [hs, add_mul]; exact add_le_add h₁ h₂
+
+/-- A bounded-order Cauchy estimate with one bound on the entire input strip.
+The square of the envelope accounts for the multiplier on each integration circle. -/
+private theorem finiteNuclearity_trace_jet_bounds_cauchy (M : ℂ → ℂ) (hM : Differentiable ℂ M)
+    (r : ℂ → ℝ)
+    (hs : ∀ z, ∀ w ∈ Metric.sphere z 1, ‖M w‖ ≤ r z ^ 2)
+    (N : ℕ) (f : SchwartzBergman (univ : Set ℝ)) :
+    ∃ C : ℝ, ∀ (z : ℂ) (k : ℕ), z.re = 0 → k ≤ N →
+      ‖iteratedDeriv k (M * f.val) z‖ ≤ r z ^ 2 * C := by
+  obtain ⟨K, hK⟩ := f.property.2.2 (-1) 1 (by norm_num) (subset_univ _) 0
+  have hf : Differentiable ℂ f.val := differentiableOn_univ.mp (by simpa using f.property.2.1)
+  refine ⟨N.factorial * max K 0, fun z k hz hk ↦ ?_⟩
+  have hcircle (w : ℂ) (hw : w ∈ Metric.sphere z 1) : ‖(M * f.val) w‖ ≤ r z ^ 2 * max K 0 := by
+    have hx := (Complex.abs_re_le_norm (w - z)).trans (mem_sphere_iff_norm.mp hw).le
+    rw [Complex.sub_re, hz, sub_zero] at hx
+    have hb : ‖f.val w‖ ≤ K := by simpa only [pow_zero, one_mul] using hK ⟨w, abs_le.mp hx, rfl⟩
+    exact (norm_mul ..).le.trans (mul_le_mul (hs z w hw) (hb.trans (le_max_left ..))
+      (norm_nonneg _) (sq_nonneg _))
+  have h := Complex.norm_iteratedDeriv_le_of_forall_mem_sphere_norm_le k one_pos
+    (hM.mul hf).diffContOnCl hcircle
+  rw [one_pow, div_one] at h
+  calc
+    _ ≤ (k.factorial : ℝ) * (r z ^ 2 * max K 0) := h
+    _ ≤ (N.factorial : ℝ) * (r z ^ 2 * max K 0) := by
+      gcongr
+    _ = _ := by ring
+
+/-- Encode a jet by one vanishing local factor, its integer phase and its derivative
+order. There are finitely many factor/order labels, so the code grows at most
+linearly in the absolute imaginary part, even when local factors share zeros. -/
+private theorem finiteNuclearity_trace_jet_bounds_enumeration
+    (χ : PontryaginDual (IdeleClassGroup (𝓞 F) F)) (p : HeightOneSpectrum (𝓞 ℚ)) :
+    let S := Sₚ(p)
+    let R := reciprocalPartialHeckeEulerProduct χ S
+    let J := Σ z : {z : ℂ // 0 < analyticOrderAt R z}, Fin (analyticOrderAt R z.val).toNat
+    ∃ (e : J ↪ ℕ) (C : ℝ), ∀ j, j.1.val.re = 0 ∧ j.2.val ≤ Module.finrank ℚ F ∧
+      (e j : ℝ) + 1 ≤ C * (1 + |j.1.val.im|) := by
+  classical
+  intro S R J
+  let Z := {z : ℂ // 0 < analyticOrderAt R z}
+  let l (v : S) := Real.log (v.val.asIdeal.absNorm : ℝ)
+  let c (v : S) := (ideleClassNormTwist χ 0).localValue v.val
+  have hl (v : S) : 0 < l v := Real.log_pos (by exact_mod_cast HeightOneSpectrum.one_lt_absNorm v.val)
+  have hs : S.filter (fun v ↦ v.under (𝓞 ℚ) = p) = S := by
+    ext v
+    exact Finset.mem_filter.trans (and_iff_left_of_imp fun hv ↦
+      (finite_nuclearityPlacesAbove (F := F) p).mem_toFinset.mp hv)
+  let N := Module.finrank ℚ F
+  have order (z : Z) : (analyticOrderAt R z.val).toNat ≤ N := by
+    have h := reciprocalEulerProduct_over_prime_order_le χ S p z.val
+    rw [hs] at h
+    exact ENat.toNat_le_of_le_natCast h
+  have phase (z : Z) : ∃ (v : S) (n : ℤ),
+      Complex.log (c v) - (l v : ℂ) * z.val = n * (2 * Real.pi * Complex.I) := by
+    obtain ⟨v, hv, h⟩ := Finset.prod_eq_zero_iff.mp
+      (show R z.val = 0 from apply_eq_zero_of_analyticOrderAt_ne_zero z.property.ne')
+    by_cases hu : (ideleClassNormTwist χ 0).IsUnramifiedAt v
+    · let w : S := ⟨v, hv⟩
+      have hc := norm_ideleClassNormTwist_zero_localValue χ v
+      have hne : c w ≠ 0 := norm_ne_zero_iff.mp (hc.trans_ne one_ne_zero)
+      have hq : (v.asIdeal.absNorm : ℂ) ≠ 0 := Nat.cast_ne_zero.mpr
+        (zero_lt_one.trans (HeightOneSpectrum.one_lt_absNorm v)).ne'
+      rw [finiteHeckeEulerFactor, ite_eq_left hu, inv_inv, sub_eq_zero,
+        Complex.cpow_def_of_ne_zero hq, ← Complex.natCast_log] at h
+      refine ⟨w, Complex.exp_eq_one_iff.mp ?_⟩
+      rw [sub_eq_add_neg, Complex.exp_add, Complex.exp_log hne]
+      simpa only [l, c, w, mul_neg] using h.symm
+    · simp [finiteHeckeEulerFactor, hu] at h
+  choose v n hn using phase
+  have hre (z : Z) : z.val.re = 0 := by
+    have h := reciprocalEulerProduct_over_prime_zero χ S p (s := z.val)
+    rw [hs] at h
+    obtain ⟨_, _, _, _, _, _, _, he⟩ := h (apply_eq_zero_of_analyticOrderAt_ne_zero z.property.ne')
+    rw [he, Complex.mul_re, Complex.ofReal_im, Complex.I_re, mul_zero, zero_mul, sub_zero]
+  let label (j : J) : S × Fin (N + 1) := ⟨v j.1, j.2.val, by
+    exact Nat.lt_succ_of_le (j.2.isLt.le.trans (order _))⟩
+  let code := Fintype.equivFin (S × Fin (N + 1))
+  let L := Fintype.card (S × Fin (N + 1)) + 1
+  let tag (j : J) : Fin L := (code (label j)).castSucc
+  let e (j : J) := (Nat.divModEquiv L).symm (Equiv.intEquivNat (n j.1), tag j)
+  have inj : Injective e := by
+    intro i j h
+    have he := (Nat.divModEquiv L).symm.injective h
+    have hi := Equiv.intEquivNat.injective (congrArg Prod.fst he)
+    have ht := code.injective (Fin.castSucc_injective _ (congrArg Prod.snd he))
+    have hv : v i.1 = v j.1 := congrArg Prod.fst ht
+    have hp := hn i.1
+    rw [hv, hi, ← hn j.1] at hp
+    have hz : i.1 = j.1 := Subtype.ext (mul_left_cancel₀ (Complex.ofReal_ne_zero.mpr (hl _).ne')
+      (sub_right_injective hp))
+    have hk : i.2.val = j.2.val := congrArg (fun a : S × Fin (N + 1) ↦ a.2.val) ht
+    cases i with | mk z k =>
+      cases j with | mk w m =>
+        cases hz
+        exact congrArg (Sigma.mk z) (Fin.ext hk)
+  let K := 1 + ∑ w : S, l w
+  have hK (w : S) : l w ≤ K := (Finset.single_le_sum
+    (f := l) (fun u _ ↦ (hl u).le) (Finset.mem_univ w)).trans (by dsimp [K]; linarith)
+  let A := (Real.pi + K) / (2 * Real.pi)
+  have hA (z : Z) : |((n z : ℤ) : ℝ)| ≤ A * (1 + |z.val.im|) := by
+    have hi := congrArg Complex.im (hn z)
+    simp only [Complex.sub_im, Complex.mul_im, Complex.ofReal_re, Complex.ofReal_im,
+      Complex.I_im, Complex.I_re, Complex.intCast_re, Complex.intCast_im, Complex.log_im,
+      Complex.mul_re, Complex.re_ofNat, Complex.im_ofNat, sub_zero,
+      zero_mul, mul_zero, mul_one, add_zero] at hi
+    have hb := abs_sub ((c (v z)).arg) (l (v z) * z.val.im)
+    rw [hi, abs_mul, abs_of_pos Real.two_pi_pos, abs_mul, abs_of_pos (hl _)] at hb
+    dsimp only [A]
+    rw [div_mul_eq_mul_div, le_div_iff₀ Real.two_pi_pos]
+    have h₁ := Complex.abs_arg_le_pi (c (v z))
+    have h₂ := mul_le_mul_of_nonneg_right (hK (v z)) (abs_nonneg z.val.im)
+    have hk₀ := (hl (v z)).le.trans (hK (v z))
+    nlinarith [mul_nonneg Real.pi_pos.le (abs_nonneg z.val.im)]
+  refine ⟨⟨e, inj⟩, (L : ℝ) * (2 * (1 + A)), fun j ↦ ⟨hre _, j.2.isLt.le.trans (order _), ?_⟩⟩
+  let m := Equiv.intEquivNat (n j.1)
+  have hm := (latticeWeight_bounds m).2.2
+  simp only [m, latticeWeight, Equiv.symm_apply_apply] at hm
+  have hb : (m : ℝ) + 1 ≤ (2 * (1 + A)) * (1 + |j.1.val.im|) := by
+    nlinarith [hA j.1, abs_nonneg j.1.val.im]
+  change ((m * L + (tag j).val : ℕ) : ℝ) + 1 ≤ _
+  push_cast
+  have ht : ((tag j).val : ℝ) + 1 ≤ L := by exact_mod_cast (tag j).isLt
+  calc
+    _ ≤ (L : ℝ) * ((m : ℝ) + 1) := by linarith only [ht]
+    _ ≤ (L : ℝ) * ((2 * (1 + A)) * (1 + |j.1.val.im|)) := mul_le_mul_of_nonneg_left hb (Nat.cast_nonneg _)
+    _ = _ := by ring
+
+/-- In a Fréchet space a rapid positive scale absorbs polynomial column growth.
+Pointwise boundedness of the rows divided by its square gives one continuous
+seminorm by the barrelled-space uniform boundedness principle. -/
+private theorem finiteNuclearity_trace_jet_bounds_rescale {I E : Type*}
+    [AddCommGroup E] [Module ℂ E] [TopologicalSpace E] [IsTopologicalAddGroup E]
+    [ContinuousSMul ℂ E] (hE : IsFrechetTVS E)
+    (e : I ↪ ℕ) (W r : I → ℝ) (hW : ∀ j, 0 ≤ W j) (hr : ∀ j, 0 < r j)
+    (K : ℝ) (he : ∀ j, (e j : ℝ) + 1 ≤ K * W j)
+    (hrapid : ∀ k : ℕ, ∃ C : ℝ, ∀ j, r j * W j ^ k ≤ C)
+    (b : I → E) (row : I → StrongDual ℂ E)
+    (hb : ∀ q : Seminorm ℂ E, Continuous q → ∃ (m : ℕ) (C : ℝ), ∀ j, q (b j) ≤ C * W j ^ m)
+    (hd : ∀ x, ∃ C : ℝ, ∀ j, ‖row j x‖ ≤ r j ^ 2 * C) :
+    letI : UniformSpace E := IsTopologicalAddGroup.rightUniformSpace E
+    ∃ (a : I → ℂˣ) (disc : Set E) (q : Seminorm ℂ E),
+      IsBanachDisc disc ∧ (∀ j, (a j : ℂ) • b j ∈ disc) ∧ Continuous q ∧
+      (∀ j x, ‖((a j : ℂ) * (a j : ℂ))⁻¹ * row j x‖ ≤ q x) ∧
+      ∀ k : ℕ, ∃ C : ℝ, ∀ j, ‖(a j : ℂ)‖ * ((e j : ℝ) + 1) ^ k ≤ C := by
+  classical
+  let : UniformSpace E := IsTopologicalAddGroup.rightUniformSpace E
+  let : IsUniformAddGroup E := isUniformAddGroup_of_addCommGroup
+  let : BarrelledSpace ℂ E := isFrechetTVS_barrelled hE
+  obtain ⟨_, hpoly, hmet, hcomp⟩ := hE
+  let : CompleteSpace E := hcomp
+  let a (j : I) : ℂˣ := Units.mk0 (r j : ℂ) (Complex.ofReal_ne_zero.mpr (hr j).ne')
+  have ha (j : I) : ‖(a j : ℂ)‖ = r j := Complex.norm_of_nonneg (hr j).le
+  have hbounded : Bornology.IsVonNBounded ℂ (range fun j ↦ (a j : ℂ) • b j) := by
+    apply (PolynormableSpace.withSeminorms ℂ E).isVonNBounded_iff_seminorm_bddAbove.mpr
+    intro q
+    obtain ⟨m, C, hC⟩ := hb q.val q.property
+    obtain ⟨L, hL⟩ := hrapid m
+    refine ⟨max C 0 * L, ?_⟩
+    rintro _ ⟨_, ⟨j, rfl⟩, rfl⟩
+    change q.val ((a j : ℂ) • b j) ≤ _
+    rw [map_smul_eq_mul, ha]
+    calc
+      _ ≤ r j * (max C 0 * W j ^ m) := by
+        apply mul_le_mul_of_nonneg_left _ (hr j).le
+        exact (hC j).trans (mul_le_mul_of_nonneg_right (le_max_left ..) (pow_nonneg (hW _) _))
+      _ = max C 0 * (r j * W j ^ m) := by ring
+      _ ≤ _ := mul_le_mul_of_nonneg_left (hL j) (le_max_right ..)
+  obtain ⟨disc, hdisc, hv⟩ := spectralBoundary_bounded_common_disc _ hbounded
+  let scaled (j : I) : StrongDual ℂ E := ((a j : ℂ) * (a j : ℂ))⁻¹ • row j
+  let norms (j : I) := (normSeminorm ℂ ℂ).comp (scaled j).toLinearMap
+  have bounded : BddAbove (range norms) := by
+    rw [Seminorm.bddAbove_range_iff]
+    intro x
+    obtain ⟨C, hC⟩ := hd x
+    refine ⟨C, forall_mem_range.mpr fun j ↦ ?_⟩
+    change ‖((a j : ℂ) * (a j : ℂ))⁻¹ * row j x‖ ≤ C
+    rw [norm_mul, norm_inv, norm_mul, ha, ← sq, inv_mul_le_iff₀ (sq_pos_of_pos (hr j))]
+    exact hC j
+  have hq : Continuous ⇑(⨆ j, norms j) := by
+    rw [Seminorm.coe_iSup_eq bounded]
+    exact Seminorm.continuous_iSup norms (fun j ↦ (scaled j).continuous.norm) bounded
+  refine ⟨a, disc, ⨆ j, norms j, hdisc, hv, hq, fun j x ↦ (le_ciSup bounded j : norms j ≤ _) x, ?_⟩
+  intro k
+  obtain ⟨C, hC⟩ := hrapid k
+  refine ⟨(max K 0) ^ k * C, fun j ↦ ?_⟩
+  rw [ha]
+  have h := (he j).trans (mul_le_mul_of_nonneg_right (le_max_left K 0) (hW j))
+  calc
+    _ ≤ r j * (max K 0 * W j) ^ k :=
+      mul_le_mul_of_nonneg_left (pow_le_pow_left₀ (by positivity) h k) (hr j).le
+    _ = (max K 0) ^ k * (r j * W j ^ k) := by rw [mul_pow]; ring
+    _ ≤ _ := mul_le_mul_of_nonneg_left (hC j) (by positivity)
+
+/-- One extra power of strip decay dominates the weighted vertical trace by an
+L² function independent of the jet. A continuous seminorm uses finitely many such traces. -/
+private theorem finiteNuclearity_trace_jet_bounds_cardinal_growth_seminorm {J : Type*}
+    (w : J → ℝ) (hw : ∀ j, 1 ≤ w j) (f : J → B)
+    (hb : ∀ A : ℝ, ∀ n : ℕ, ∃ (m : ℕ) (C : ℝ), 0 ≤ C ∧ ∀ j (z : ℂ), |z.re| ≤ A →
+      (1 + ‖z‖) ^ n * ‖(f j).val z‖ ≤ C * w j ^ m)
+    (q : Seminorm ℂ B) (hq : Continuous q) :
+    ∃ (m : ℕ) (C : ℝ), ∀ j, q (f j) ≤ C * w j ^ m := by
+  classical
+  let I := (univ : Set ℝ)
+  let lineNorm (i : I × ℕ) : Seminorm ℂ B := Seminorm.of
+    (fun g : schwartzBergmanSubmodule I ↦ (eLpNorm (weightedVerticalTrace i.1 i.2 g.val) 2 volume).toReal)
+    (schwartzBergman_l2_seminorm I i).1 (schwartzBergman_l2_seminorm I i).2
+  have hP : WithSeminorms lineNorm := withGeneratingSeminorms_spec (schwartzBergmanSubmodule I) lineNorm
+  let u (t : ℝ) := (1 + ‖t‖)⁻¹
+  have hu : MemLp u 2 volume := by
+    apply (integrable_norm_rpow_iff (by dsimp [u]; fun_prop) (by norm_num) (by norm_num)).mp
+    have hnorm (t : ℝ) : ‖u t‖ = (1 + ‖t‖)⁻¹ := Real.norm_of_nonneg (by dsimp [u]; positivity)
+    simpa only [hnorm, Real.rpow_neg_eq_inv_rpow] using
+      (integrable_one_add_norm (μ := (volume : Measure ℝ)) (r := (2 : ENNReal).toReal) (by simp))
+  have line (i : I × ℕ) : ∃ (m : ℕ) (C : ℝ), 0 ≤ C ∧ ∀ j, lineNorm i (f j) ≤ C * w j ^ m := by
+    obtain ⟨m, C, hC, h⟩ := hb |(i.1 : ℝ)| (i.2 + 1)
+    refine ⟨m, C * lpNorm u 2 volume, mul_nonneg hC (lpNorm_nonneg ..), fun j ↦ ?_⟩
+    let K := C * w j ^ m
+    have hK : 0 ≤ K := mul_nonneg hC (pow_nonneg (zero_le_one.trans (hw j)) _)
+    have bound (t : ℝ) : ‖weightedVerticalTrace i.1 i.2 (f j).val t‖ ≤ (K • u) t := by
+      let z : ℂ := (i.1 : ℝ) + t * Complex.I
+      have ht : ‖t‖ ≤ ‖z‖ := by simpa [z, Real.norm_eq_abs] using Complex.abs_im_le_norm z
+      change ‖z ^ i.2 * (f j).val z‖ ≤ K * (1 + ‖t‖)⁻¹
+      rw [← div_eq_mul_inv, le_div_iff₀ (by positivity), norm_mul, norm_pow]
+      calc
+        _ ≤ ((1 + ‖z‖) ^ i.2 * ‖(f j).val z‖) * (1 + ‖z‖) := by gcongr; linarith
+        _ = (1 + ‖z‖) ^ (i.2 + 1) * ‖(f j).val z‖ := by rw [pow_succ]; ring
+        _ ≤ K := h j z (by simp [z])
+    change lpNorm _ 2 volume ≤ _
+    refine (lpNorm_mono_real (hu.const_smul K) bound).trans_eq ?_
+    rw [lpNorm_const_smul]
+    change ‖K‖ * _ = _
+    rw [Real.norm_of_nonneg hK]
+    dsimp [K]; ring
+  obtain ⟨s, c, _, hc⟩ := Seminorm.bound_of_continuous hP q hq
+  choose m C hC h using line
+  let A := ∑ i ∈ s, C i
+  refine ⟨s.sup m, c * A, fun j ↦ (hc _).trans ?_⟩
+  rw [mul_assoc]
+  apply mul_le_mul_of_nonneg_left _ c.coe_nonneg
+  apply Seminorm.finset_sup_apply_le (mul_nonneg (Finset.sum_nonneg fun i _ ↦ hC i)
+    (pow_nonneg (zero_le_one.trans (hw j)) _))
+  intro i hi
+  exact (h i j).trans (mul_le_mul (Finset.single_le_sum (fun k _ ↦ hC k) hi)
+    (pow_le_pow_right₀ (hw j) (Finset.le_sup hi)) (pow_nonneg (zero_le_one.trans (hw j)) _)
+    (Finset.sum_nonneg fun k _ ↦ hC k))
+
+/-- The inverse Euler product over one rational prime has common imaginary period
+2π/log N(p), since each residue - field logarithm is an integral multiple of log N(p). -/
+private theorem finiteNuclearity_trace_jet_bounds_cardinal_growth_period
+    (χ : U) (p : HeightOneSpectrum (𝓞 ℚ)) :
+    ∃ T : ℝ, 0 < T ∧ Periodic (reciprocalPartialHeckeEulerProduct χ (Sₚ(p))) ((T : ℂ) * Complex.I) := by
+  classical
+  let T := 2 * Real.pi / Real.log (p.asIdeal.absNorm : ℝ)
+  have hp : 1 < (p.asIdeal.absNorm : ℝ) := by exact_mod_cast HeightOneSpectrum.one_lt_absNorm p
+  refine ⟨T, div_pos Real.two_pi_pos (Real.log_pos hp), fun z ↦ Finset.prod_congr rfl fun v hv ↦ ?_⟩
+  have he := (finite_nuclearityPlacesAbove (F := F) p).mem_toFinset.mp hv
+  let : v.asIdeal.IsPrime := v.isPrime
+  let : v.asIdeal.LiesOver p.asIdeal := ⟨(congrArg HeightOneSpectrum.asIdeal he).symm⟩
+  let d := v.asIdeal.inertiaDeg (𝓞 ℚ)
+  have hlog : Real.log (v.asIdeal.absNorm : ℝ) = d * Real.log (p.asIdeal.absNorm : ℝ) := by
+    rw [← Ideal.absNorm_pow_inertiaDeg p.asIdeal v.asIdeal, Nat.cast_pow, Real.log_pow]
+  by_cases h : (ideleClassNormTwist χ 0).IsUnramifiedAt v
+  · simp only [finiteHeckeEulerFactor, ite_eq_left h, inv_inv]
+    have hv0 : (v.asIdeal.absNorm : ℂ) ≠ 0 := by exact_mod_cast (Ideal.absNorm_eq_zero_iff.not.mpr v.ne_bot)
+    have hpow : (v.asIdeal.absNorm : ℂ) ^ ((T : ℂ) * Complex.I) = 1 := by
+      rw [Complex.cpow_def_of_ne_zero hv0, ← Complex.natCast_log, hlog]
+      have heq : d * Real.log (p.asIdeal.absNorm : ℝ) * T = (d : ℝ) * (2 * Real.pi) := by
+        dsimp [T]; field_simp [(Real.log_pos hp).ne']
+      have hc := congrArg (fun r : ℝ ↦ (r : ℂ) * Complex.I) heq
+      push_cast at hc ⊢
+      rw [← mul_assoc, hc]
+      simpa only [mul_assoc, Int.cast_natCast] using Complex.exp_int_mul_two_pi_mul_I (d : ℤ)
+    rw [neg_add, Complex.cpow_add _ _ hv0, Complex.cpow_neg _ ((T : ℂ) * Complex.I), hpow, inv_one, mul_one]
+  · simp [finiteHeckeEulerFactor, h]
+
+/-- Reflecting the pole - cleared finite generator gives an entire function vanishing to
+the completed orders. On the imaginary axis its reciprocal has polynomial growth by
+Theorem B.6.1.6 on the line Re(s) = 1. -/
+private theorem finiteNuclearity_trace_jet_bounds_cardinal_growth_multiplier
+    (χ : U) (τ : ℝ≥0ˣ →ₜ* IdeleGroup (𝓞 F) F) (hτ : RightInverse τ (ideleNorm F)) :
+    let G := regularizedCompletedHeckeL χ τ hτ (continuedCompletedHeckeL χ)
+      (continuedCompletedHeckeL_spec χ).1 (continuedCompletedHeckeL_spec χ).2
+    ∃ H : ℂ → ℂ, Differentiable ℂ H ∧
+      (∀ z, analyticOrderAt (G.val : ℂ → ℂ) z ≤ analyticOrderAt H z) ∧
+      (∀ A : ℝ, ∃ (n : ℕ) (C : ℝ), 0 ≤ C ∧ ∀ z : ℂ, |z.re| ≤ A → ‖H z‖ ≤ C * (1 + ‖z‖) ^ n) ∧
+      (∃ (k : ℕ) (C : ℝ), 0 ≤ C ∧ ∀ z : ℂ, z.re = 0 →
+        H z ≠ 0 ∧ ‖(H z)⁻¹‖ ≤ C * (1 + |z.im|) ^ k) := by
+  classical
+  intro G
+  let ψ := χ⁻¹
+  let H (z : ℂ) := spectralFiniteG ψ τ hτ (1 - z)
+  have hd : Differentiable ℂ H := (spectralFiniteG_diff ψ τ hτ).comp (differentiable_id.const_sub 1)
+  refine ⟨H, hd, fun z ↦ ?_, fun A ↦ ?_, ?_⟩
+  · by_cases hz : 0 < analyticOrderAt (G.val : ℂ → ℂ) z
+    · obtain ⟨n, _, hn, _⟩ := spectralNuclearity_trace_zero_order χ τ hτ ⟨z, hz⟩
+      have h := spectralBoundaryFinite_reflected_retained_order χ τ hτ 0 z hz
+      change analyticOrderAt (G.val : ℂ → ℂ) z = (n : ℕ∞) at hn
+      change ((analyticOrderAt (G.val : ℂ → ℂ) z).toNat : ℕ∞) ≤ _ at h
+      rw [ENat.natCast_toNat (hn.trans_ne (ENat.natCast_ne_top n))] at h
+      simpa only [Complex.ofReal_zero, add_zero, sub_zero] using h
+    · exact (le_of_not_gt hz).trans zero_le
+  · obtain ⟨n, C, hC, h⟩ := spectralBoundaryFinite_strip_growth ψ τ hτ (1 + A)
+    refine ⟨n, C, hC.le, fun z hz ↦ (h (1 - z) ?_).trans ?_⟩
+    · simpa using (abs_sub (1 : ℝ) z.re).trans (by simpa using add_le_add_left hz 1)
+    · simp only [Complex.sub_im, Complex.one_im, zero_sub, abs_neg]
+      gcongr
+      exact Complex.abs_im_le_norm _
+  · let G' := regularizedCompletedHeckeL ψ τ hτ (continuedCompletedHeckeL ψ)
+      (continuedCompletedHeckeL_spec ψ).1 (continuedCompletedHeckeL_spec ψ).2
+    have ne (w : ℂ) (hw : w.re = 1) : spectralFiniteG ψ τ hτ w ≠ 0 := by
+      apply mul_ne_zero (inv_ne_zero (heckeGammaFactor_ne_zero_of_re_pos ψ (by linarith)))
+      intro he
+      have ha : AnalyticAt ℂ (G'.val : ℂ → ℂ) w := G'.property.analyticAt _
+      obtain ⟨k, hk, _, hord⟩ := spectralNuclearity_trace_zero_order ψ τ hτ
+        ⟨w, pos_iff_ne_zero.mpr (ha.analyticOrderAt_ne_zero.mpr he)⟩
+      exact (spectralNuclearity_trace_zero_strip ψ (by rw [hord]; exact_mod_cast hk)).2.ne hw
+    obtain ⟨L, hL, hs⟩ := finiteHeckeL_exists_continuation ψ
+    obtain ⟨ha, k, _, hb⟩ := finiteHeckeL_inv_isBigO_oneLine ψ L hL hs
+    obtain ⟨C, hC, hb⟩ := Asymptotics.isBigO_iff'.mp hb
+    obtain ⟨T, hT⟩ := Filter.eventually_atTop.mp (Filter.eventually_comap.mp (ha.and hb))
+    let b := ((existsUnique_ideleNormSection_character_phase ψ τ hτ).exists.choose : ℂ) * Complex.I
+    let S := |T| + ‖b‖ + 2
+    let pole := spectralFiniteP ψ τ hτ
+    let value (t : ℝ) := spectralFiniteG ψ τ hτ ⟨1, t⟩
+    have hV : Continuous (fun t : ℝ ↦ (value t)⁻¹) :=
+      ((spectralFiniteG_diff ψ τ hτ).continuous.comp
+        (show Continuous (fun t : ℝ ↦ (⟨1, t⟩ : ℂ)) by
+          exact ((continuous_const.add (Complex.continuous_ofReal.mul_const Complex.I)) :
+            Continuous (fun t : ℝ ↦ 1 + (t : ℂ) * Complex.I)).congr (fun t ↦ by apply Complex.ext <;> simp))).inv₀ (fun t ↦ ne _ rfl)
+    obtain ⟨B₀, hB⟩ := isCompact_Icc.exists_bound_of_continuousOn
+      (s := Icc (-S) S) hV.continuousOn
+    refine ⟨k, max C B₀, hC.le.trans (le_max_left ..), fun z hz ↦ ⟨ne _ (by simp [hz]), ?_⟩⟩
+    have heq : 1 - z = (⟨1, -z.im⟩ : ℂ) := by apply Complex.ext <;> simp [hz]
+    rw [show H z = value (-z.im) from congrArg (spectralFiniteG ψ τ hτ) heq]
+    by_cases ht : |z.im| ≤ S
+    · exact (hB _ (abs_le.mp (abs_neg z.im ▸ ht))).trans ((le_max_right _ _).trans
+        (le_mul_of_one_le_right (hC.le.trans (le_max_left ..)) (one_le_pow₀ (by linarith [abs_nonneg z.im]))))
+    let w : ℂ := ⟨1, -z.im⟩
+    have ht' := (hT |z.im| (by dsimp [S] at ht; linarith [le_abs_self T, norm_nonneg b])
+      (-z.im) (abs_neg z.im))
+    have hp : 1 ≤ ‖pole w‖ := by
+      have h₁ : 1 ≤ ‖w + b‖ := by
+        have := norm_sub_le (w + b) b
+        rw [add_sub_cancel_right] at this
+        have hw := Complex.abs_im_le_norm w
+        dsimp [w] at hw
+        rw [abs_neg] at hw
+        dsimp [S] at ht; linarith [abs_nonneg T]
+      have h₂ : 1 ≤ ‖1 - w - b‖ := by
+        have hw := norm_sub_le (1 - w - b) (1 - b)
+        rw [show 1 - w - b - (1 - b) = -w by ring, norm_neg] at hw
+        have hh := Complex.abs_im_le_norm w
+        dsimp [w] at hh
+        rw [abs_neg] at hh
+        dsimp [S] at ht; linarith [norm_sub_le (1 : ℂ) b, norm_one (α := ℂ), abs_nonneg T]
+      change 1 ≤ ‖(w + b) ^ _ * (1 - w - b) ^ _‖
+      rw [norm_mul, norm_pow, norm_pow]
+      exact one_le_mul_of_one_le_of_one_le (one_le_pow₀ h₁) (one_le_pow₀ h₂)
+    have hm : MeromorphicOn (pole * L) univ := fun x hx ↦
+      ((spectralFiniteP_diff ψ τ hτ).analyticAt x).meromorphicAt.mul (hL hx).meromorphicAt
+    have hv : value (-z.im) = pole w * L w := by
+      change spectralFiniteG ψ τ hτ w = _
+      rw [spectralFiniteG_eq_finite ψ τ hτ L hL hs, toMeromorphicNFOn_eq_toMeromorphicNFAt hm (mem_univ _),
+        toMeromorphicNFAt_eq_self.mpr (((spectralFiniteP_diff ψ τ hτ).analyticAt w).mul ht'.1.1).meromorphicNFAt]
+      rfl
+    have hb' : ‖(L w)⁻¹‖ ≤ C * |z.im| ^ k := by
+      simpa only [abs_neg, Real.norm_of_nonneg (pow_nonneg (abs_nonneg _) _)] using ht'.2
+    rw [hv, mul_inv, norm_mul]
+    exact (mul_le_of_le_one_left (norm_nonneg _) (by simpa using inv_le_one_of_one_le₀ hp)).trans
+      (hb'.trans (mul_le_mul (le_max_left ..) (pow_le_pow_left₀ (abs_nonneg _) (by linarith) k)
+        (by positivity) (hC.le.trans (le_max_left ..))))
+
+open Classical in
+/-- Cardinal functions on one fundamental interval supply cardinal functions on all
+its translates. The strip weight changes by at most a power of the translation height. -/
+private theorem finiteNuclearity_trace_jet_bounds_cardinal_growth_translates
+    (R : ℂ → ℂ) (T : ℝ) (hT : 0 < T) (hper : Periodic R ((T : ℂ) * Complex.I)) :
+    let J := Σ z : {z : ℂ // 0 < analyticOrderAt R z}, Fin (analyticOrderAt R z.val).toNat
+    ∀ (e : J ↪ ℕ) (K : ℝ), (∀ j, (e j : ℝ) + 1 ≤ K * (1 + |j.1.val.im|)) →
+    ∀ f : J → B, (∀ i j, iteratedDeriv i.2.val (f j).val i.1.val = if i = j then 1 else 0) →
+    ∃ u : J → ℂ → ℂ, (∀ j, Differentiable ℂ (u j)) ∧
+      (∀ i j, iteratedDeriv i.2.val (u j) i.1.val = if i = j then 1 else 0) ∧
+      ∀ A : ℝ, ∀ k : ℕ, ∃ C ≥ (0 : ℝ), ∀ j (z : ℂ), |z.re| ≤ A →
+        (1 + ‖z‖) ^ k * ‖u j z‖ ≤ C * (1 + |j.1.val.im|) ^ k := by
+  classical
+  intro J e K he f hf
+  let v (n : ℤ) : ℂ := n • ((T : ℂ) * Complex.I)
+  have hord (n : ℤ) (z : ℂ) : analyticOrderAt R (z - v n) = analyticOrderAt R z := by
+    have eq : R ∘ (fun x : ℂ ↦ x - v n) = R := funext fun _ ↦ hper.sub_zsmul_eq n
+    rw [← analyticOrderAt_comp_of_deriv_ne_zero (f := R) (g := fun x : ℂ ↦ x - v n)
+      (z₀ := z) (by fun_prop) (by simp), eq]
+  let shift (n : ℤ) (j : J) : J :=
+    ⟨⟨j.1.val - v n, (hord n _).symm ▸ j.1.property⟩, ⟨j.2.val, by rw [hord]; exact j.2.isLt⟩⟩
+  have shift_inj (n : ℤ) : Injective (shift n) := by
+    rintro ⟨z, k⟩ ⟨w, l⟩ h
+    have hz : z = w := Subtype.ext (sub_left_injective (congrArg (fun j : J ↦ j.1.val) h))
+    subst w
+    exact congrArg (Sigma.mk z) (Fin.ext (congrArg (fun j : J ↦ j.2.val) h))
+  let n (j : J) := ⌊j.1.val.im / T⌋
+  let rep (j : J) := shift (n j) j
+  have hband (j : J) : |(rep j).1.val.im| ≤ T := by
+    have h₁ := (le_div_iff₀ hT).mp (Int.floor_le (j.1.val.im / T))
+    have h₂ := (div_lt_iff₀ hT).mp (Int.lt_floor_add_one (j.1.val.im / T))
+    change |(j.1.val - v (n j)).im| ≤ _
+    simp only [v, zsmul_eq_mul, Complex.sub_im, ← mul_assoc, ← Complex.ofReal_intCast,
+      ← Complex.ofReal_mul, Complex.mul_I_im, Complex.ofReal_re]
+    dsimp only [n]
+    rw [abs_of_nonneg (sub_nonneg.mpr h₁)]
+    linarith
+  let band := {i : J // |i.1.val.im| ≤ T}
+  obtain ⟨M, hM⟩ := exists_nat_gt (max K 0 * (1 + T))
+  have heM (i : band) : e i.val < M := by
+    have h := (he i.val).trans (mul_le_mul (le_max_left ..) (by gcongr; exact i.property)
+      (by positivity) (le_max_right ..) : K * (1 + |i.val.1.val.im|) ≤ max K 0 * (1 + T))
+    exact_mod_cast (show (e i.val : ℝ) < M by linarith)
+  have : Finite band := Finite.of_injective (fun i : band ↦ (⟨e i.val, heM i⟩ : Fin M))
+    (fun i j h ↦ Subtype.ext (e.injective (congrArg Fin.val h)))
+  let _ := Fintype.ofFinite band
+  let u (j : J) (z : ℂ) := (f (rep j)).val (z - v (n j))
+  have hd (j : J) : Differentiable ℂ (f j).val := differentiableOn_univ.mp (by simpa using (f j).property.2.1)
+  refine ⟨u, fun j ↦ (hd _).comp (differentiable_id.sub_const _), fun i j ↦ ?_, fun A k ↦ ?_⟩
+  · have h := hf (shift (n j) i) (rep j)
+    simpa only [u, iteratedDeriv_comp_sub_const, rep, (shift_inj (n j)).eq_iff] using h
+  · have bound (i : band) : ∃ C ≥ (0 : ℝ), ∀ z : ℂ, |z.re| ≤ A →
+        (1 + ‖z‖) ^ k * ‖(f i.val).val z‖ ≤ C := by
+      have bnd (m : ℕ) := (f i.val).property.2.2 (-|A|) |A| (by linarith [abs_nonneg A]) (subset_univ _) m
+      obtain ⟨C₀, h₀⟩ := bnd 0
+      obtain ⟨C₁, h₁⟩ := bnd k
+      refine ⟨2 ^ (k - 1) * (max C₀ 0 + max C₁ 0), by positivity, fun z hz ↦ ?_⟩
+      have hz' : z ∈ Complex.re ⁻¹' Icc (-|A|) |A| := abs_le.mp (hz.trans (le_abs_self A))
+      have h0 : ‖(f i.val).val z‖ ≤ C₀ := by simpa using h₀ ⟨z, hz', rfl⟩
+      have h1 : ‖z‖ ^ k * ‖(f i.val).val z‖ ≤ C₁ := by simpa [norm_mul] using h₁ ⟨z, hz', rfl⟩
+      calc
+        _ ≤ (2 ^ (k - 1) * (1 ^ k + ‖z‖ ^ k)) * ‖(f i.val).val z‖ :=
+          mul_le_mul_of_nonneg_right (add_pow_le zero_le_one (norm_nonneg _) k) (norm_nonneg _)
+        _ ≤ _ := by
+          rw [one_pow, mul_assoc, add_mul, one_mul]
+          exact mul_le_mul_of_nonneg_left (add_le_add (h0.trans (le_max_left ..))
+            (h1.trans (le_max_left ..))) (by positivity)
+    choose C hC hb using bound
+    let A₀ := ∑ i : band, C i
+    refine ⟨A₀ * (1 + T) ^ k, mul_nonneg (Finset.sum_nonneg fun i _ ↦ hC i) (by positivity), fun j z hz ↦ ?_⟩
+    let i : band := ⟨rep j, hband j⟩
+    let t := v (n j)
+    have ht : t.re = 0 := by simp [t, v, zsmul_eq_mul, ← mul_assoc]
+    have him : (rep j).1.val.im = j.1.val.im - t.im := Complex.sub_im ..
+    have ht' : ‖t‖ ≤ |j.1.val.im| + T := by
+      have ht1 := Complex.norm_le_abs_re_add_abs_im t
+      have ht2 := abs_sub j.1.val.im (rep j).1.val.im
+      rw [him, sub_sub_cancel] at ht2
+      rw [ht, abs_zero, zero_add] at ht1
+      exact ht1.trans (ht2.trans (add_le_add le_rfl (him ▸ hband j)))
+    have hv : 1 + ‖z‖ ≤ (1 + ‖z - t‖) * ((1 + T) * (1 + |j.1.val.im|)) := by
+      have h := norm_add_le (z - t) t
+      rw [sub_add_cancel] at h
+      calc
+        _ ≤ (1 + ‖z - t‖) * (1 + ‖t‖) := by nlinarith [mul_nonneg (norm_nonneg (z - t)) (norm_nonneg t)]
+        _ ≤ _ := by gcongr; nlinarith [mul_nonneg hT.le (abs_nonneg j.1.val.im)]
+    have h := hb i (z - t) (by simpa [Complex.sub_re, ht] using hz)
+    have hsum : C i ≤ A₀ := Finset.single_le_sum (fun r _ ↦ hC r) (Finset.mem_univ i)
+    change (1 + ‖z‖) ^ k * ‖(f i.val).val (z - t)‖ ≤ _
+    calc
+      _ ≤ ((1 + ‖z - t‖) * ((1 + T) * (1 + |j.1.val.im|))) ^ k * ‖(f i.val).val (z - t)‖ := by gcongr
+      _ = ((1 + ‖z - t‖) ^ k * ‖(f i.val).val (z - t)‖) * ((1 + T) ^ k * (1 + |j.1.val.im|) ^ k) := by
+        rw [mul_pow, mul_pow]; ring
+      _ ≤ _ := by
+        simpa only [mul_assoc] using (mul_le_mul_of_nonneg_right (h.trans hsum)
+          (show 0 ≤ (1 + T) ^ k * (1 + |j.1.val.im|) ^ k by positivity))
+
+/-- The factor 1 − (1 − H(s)/H(w))ᴺ is a multiple of H and equals one through order
+N − 1 at w. Multiplication by it preserves all vanishing conditions at other sites. -/
+private theorem finiteNuclearity_trace_jet_bounds_cardinal_growth_correct
+    (H u : ℂ → ℂ) (hH : Differentiable ℂ H) (hu : Differentiable ℂ u)
+    (w : ℂ) (hw : H w ≠ 0) (N : ℕ) :
+    let f := fun z ↦ (1 - (1 - (H w)⁻¹ * H z) ^ N) * u z
+    Differentiable ℂ f ∧ (∀ z, analyticOrderAt H z ≤ analyticOrderAt f z) ∧
+      (∀ z, analyticOrderAt u z ≤ analyticOrderAt f z) ∧
+      ∀ k < N, iteratedDeriv k f w = iteratedDeriv k u w := by
+  intro f
+  let E := fun z ↦ 1 - (H w)⁻¹ * H z
+  have hE : Differentiable ℂ E := (hH.const_mul _).const_sub 1
+  have hP : Differentiable ℂ (fun z ↦ 1 - E z ^ N) := (hE.pow N).const_sub 1
+  refine ⟨hP.mul hu, fun z ↦ ?_, fun z ↦ ?_, fun k hk ↦ ?_⟩
+  · let v := fun z ↦ ((H w)⁻¹ * ∑ i ∈ Finset.range N, E z ^ i) * u z
+    have hv : Differentiable ℂ v := ((Differentiable.fun_sum fun i _ ↦ hE.pow i).const_mul _).mul hu
+    have he : f = H * v := by
+      funext s
+      change (1 - E s ^ N) * u s = H s * (((H w)⁻¹ * _) * u s)
+      rw [← geom_sum_mul_neg]
+      dsimp only [E]
+      ring
+    rw [he, analyticOrderAt_mul (hH.analyticAt _) (hv.analyticAt _)]
+    exact self_le_add_right ..
+  · change _ ≤ analyticOrderAt ((fun s ↦ 1 - E s ^ N) * u) z
+    rw [analyticOrderAt_mul (hP.analyticAt _) (hu.analyticAt _)]
+    exact self_le_add_left ..
+  · have h₁ : 1 ≤ analyticOrderAt E w := Order.one_le_iff_ne_zero.mpr
+      ((hE.analyticAt w).analyticOrderAt_ne_zero.mpr (by simp [E, hw]))
+    have hn : (N : ℕ∞) ≤ analyticOrderAt (E ^ N * u) w := by
+      rw [analyticOrderAt_mul ((hE.pow N).analyticAt _) (hu.analyticAt _), analyticOrderAt_pow (hE.analyticAt _)]
+      exact (show (N : ℕ∞) ≤ N • analyticOrderAt E w by simpa using nsmul_le_nsmul_right h₁ N).trans
+        (self_le_add_right ..)
+    have hz := (natCast_le_analyticOrderAt_iff_iteratedDeriv_eq_zero
+      (((hE.pow N).mul hu).analyticAt w)).mp hn k hk
+    have he : f = u - E ^ N * u := by funext s; change (1 - E s ^ N) * u s = u s - E s ^ N * u s; ring
+    rw [he, iteratedDeriv_sub hu.contDiff.contDiffAt ((hE.pow N).mul hu).contDiff.contDiffAt, hz, sub_zero]
+
+/-- The jet correction costs only polynomial weights in the centre and the argument.
+The degree N is fixed for the whole Euler fibre. -/
+private theorem finiteNuclearity_trace_jet_bounds_cardinal_growth_correct_bound {J : Type*}
+    (H : ℂ → ℂ) (c : J → ℂ) (w : J → ℝ) (hw : ∀ j, 1 ≤ w j) (u : J → ℂ → ℂ)
+    (hH : ∀ A : ℝ, ∃ (n : ℕ) (C : ℝ), 0 ≤ C ∧ ∀ z : ℂ, |z.re| ≤ A → ‖H z‖ ≤ C * (1 + ‖z‖) ^ n)
+    (hc : ∃ (k : ℕ) (C : ℝ), 0 ≤ C ∧ ∀ j, ‖c j‖ ≤ C * w j ^ k)
+    (hu : ∀ A : ℝ, ∀ k : ℕ, ∃ C ≥ (0 : ℝ), ∀ j (z : ℂ), |z.re| ≤ A →
+      (1 + ‖z‖) ^ k * ‖u j z‖ ≤ C * w j ^ k) (N : ℕ) (A : ℝ) (k : ℕ) :
+    ∃ (m : ℕ) (C : ℝ), 0 ≤ C ∧ ∀ j (z : ℂ), |z.re| ≤ A →
+      (1 + ‖z‖) ^ k * ‖(1 - (1 - c j * H z) ^ N) * u j z‖ ≤ C * w j ^ m := by
+  obtain ⟨r, D, hD, hd⟩ := hc
+  obtain ⟨l, C, hC, h⟩ := hH A
+  obtain ⟨B₀, hB, hb⟩ := hu A (k + l * N)
+  let K := 1 + (1 + D * C) ^ N
+  have hK : 0 ≤ K := by dsimp [K]; positivity
+  refine ⟨r * N + (k + l * N), K * B₀, mul_nonneg hK hB, fun j z hz ↦ ?_⟩
+  let s := 1 + ‖z‖
+  have hs : 1 ≤ s := by dsimp [s]; linarith [norm_nonneg z]
+  let v := w j ^ r * s ^ l
+  have hv : 1 ≤ v := one_le_mul_of_one_le_of_one_le (one_le_pow₀ (hw j)) (one_le_pow₀ hs)
+  have h₁ : ‖1 - c j * H z‖ ≤ (1 + D * C) * v := calc
+    _ ≤ 1 + ‖c j‖ * ‖H z‖ := by simpa only [norm_one, norm_mul] using norm_sub_le (1 : ℂ) (c j * H z)
+    _ ≤ v + (D * w j ^ r) * (C * s ^ l) := add_le_add hv (mul_le_mul (hd j) (h z hz) (norm_nonneg _)
+      (mul_nonneg hD (pow_nonneg (zero_le_one.trans (hw j)) _)))
+    _ = _ := by dsimp [v]; ring
+  have h₂ : ‖1 - (1 - c j * H z) ^ N‖ ≤ K * v ^ N := calc
+    _ ≤ 1 + ‖1 - c j * H z‖ ^ N := by simpa only [norm_one, norm_pow] using norm_sub_le (1 : ℂ) ((1 - c j * H z) ^ N)
+    _ ≤ v ^ N + ((1 + D * C) * v) ^ N := add_le_add (one_le_pow₀ hv) (pow_le_pow_left₀ (norm_nonneg _) h₁ _)
+    _ = _ := by rw [mul_pow (1 + D * C) v]; dsimp only [K]; ring
+  change s ^ k * _ ≤ _
+  rw [norm_mul]
+  calc
+    _ ≤ s ^ k * ((K * v ^ N) * ‖u j z‖) := by gcongr
+    _ = (K * w j ^ (r * N)) * (s ^ (k + l * N) * ‖u j z‖) := by dsimp [v]; rw [mul_pow, pow_add, pow_mul, pow_mul]; ring
+    _ ≤ (K * w j ^ (r * N)) * (B₀ * w j ^ (k + l * N)) := mul_le_mul_of_nonneg_left (hb j z hz)
+      (mul_nonneg hK (pow_nonneg (zero_le_one.trans (hw j)) _))
+    _ = _ := by rw [pow_add]; ring
+
+open Classical in
+/-- Correct translated Euler cardinal functions by the reflected generator before lifting
+them to the polar image. The uniform bound on the Euler orders fixes one correction degree. -/
+private theorem finiteNuclearity_trace_jet_bounds_cardinal_growth_interpolants (R H : ℂ → ℂ)
+    (hH : Differentiable ℂ H) (N : ℕ) :
+    let J := Σ z : {z : ℂ // 0 < analyticOrderAt R z}, Fin (analyticOrderAt R z.val).toNat
+    ∀ (u : J → ℂ → ℂ), (∀ j, Differentiable ℂ (u j)) →
+    (∀ i j, iteratedDeriv i.2.val (u j) i.1.val = if i = j then 1 else 0) →
+    (∀ j : J, j.2.val < N ∧ H j.1.val ≠ 0) →
+    (∀ A : ℝ, ∃ (n : ℕ) (C : ℝ), 0 ≤ C ∧ ∀ z : ℂ, |z.re| ≤ A → ‖H z‖ ≤ C * (1 + ‖z‖) ^ n) →
+    (∃ (k : ℕ) (C : ℝ), 0 ≤ C ∧ ∀ j : J, ‖(H j.1.val)⁻¹‖ ≤ C * (1 + |j.1.val.im|) ^ k) →
+    (∀ A : ℝ, ∀ k : ℕ, ∃ C ≥ (0 : ℝ), ∀ j (z : ℂ), |z.re| ≤ A →
+      (1 + ‖z‖) ^ k * ‖u j z‖ ≤ C * (1 + |j.1.val.im|) ^ k) →
+    ∃ f : J → B, (∀ j z, analyticOrderAt H z ≤ analyticOrderAt (f j).val z) ∧
+      (∀ i j, iteratedDeriv i.2.val (f j).val i.1.val = if i = j then 1 else 0) ∧
+      ∀ q : Seminorm ℂ B, Continuous q →
+        ∃ (m : ℕ) (C : ℝ), ∀ j, q (f j) ≤ C * (1 + |j.1.val.im|) ^ m := by
+  intro J u hu hjet hN hg hi hb
+  let w (j : J) := 1 + |j.1.val.im|
+  have hw (j : J) : 1 ≤ w j := le_add_of_nonneg_right (abs_nonneg _)
+  let c (j : J) := (H j.1.val)⁻¹
+  let v (j : J) (z : ℂ) := (1 - (1 - c j * H z) ^ N) * u j z
+  have hv (j : J) := finiteNuclearity_trace_jet_bounds_cardinal_growth_correct H (u j) hH (hu j)
+    j.1.val (hN j).2 N
+  have bounds := finiteNuclearity_trace_jet_bounds_cardinal_growth_correct_bound H c w hw u hg hi hb N
+  have mem (j : J) : v j ∈ schwartzBergmanSubmodule (univ : Set ℝ) := by
+    refine ⟨fun z hz ↦ (hz (mem_univ _)).elim, (hv j).1.differentiableOn, fun a b _ _ k ↦ ?_⟩
+    obtain ⟨m, C, _, h⟩ := bounds (|a| + |b|) k
+    refine ⟨C * w j ^ m, ?_⟩
+    rintro _ ⟨z, hz, rfl⟩
+    change ‖z ^ k * v j z‖ ≤ _
+    rw [norm_mul, norm_pow]
+    refine (mul_le_mul_of_nonneg_right (pow_le_pow_left₀ (norm_nonneg z)
+      (le_add_of_nonneg_left zero_le_one) k) (norm_nonneg _)).trans (h j z ?_)
+    exact abs_le.mpr ⟨by linarith [hz.1, neg_abs_le a, abs_nonneg b],
+      by linarith [hz.2, le_abs_self b, abs_nonneg a]⟩
+  let f (j : J) : B := ⟨v j, mem j⟩
+  refine ⟨f, fun j ↦ (hv j).2.1, fun i j ↦ ?_,
+    finiteNuclearity_trace_jet_bounds_cardinal_growth_seminorm w hw f bounds⟩
+  by_cases he : i.1 = j.1
+  · change iteratedDeriv i.2.val (v j) i.1.val = _
+    apply Eq.trans _ (hjet i j)
+    exact (congrArg (fun z : ℂ ↦ iteratedDeriv i.2.val (v j) z = iteratedDeriv i.2.val (u j) z)
+      (congrArg Subtype.val he)).mpr ((hv j).2.2.2 _ (hN i).1)
+  · rw [ite_eq_right (fun h ↦ he (congrArg Sigma.fst h))]
+    have ho : ((i.2.val + 1 : ℕ) : ℕ∞) ≤ analyticOrderAt (u j) i.1.val := by
+      apply (natCast_le_analyticOrderAt_iff_iteratedDeriv_eq_zero ((hu j).analyticAt _)).mpr
+      intro n hn
+      let l : J := ⟨i.1, n, (Nat.le_of_lt_succ hn).trans_lt i.2.isLt⟩
+      have hlj : l ≠ j := by
+        intro h
+        have h' : l.1 = j.1 := congrArg (fun t : J ↦ t.1) h
+        exact he h'
+      exact (hjet l j).trans (ite_eq_right hlj)
+    exact (natCast_le_analyticOrderAt_iff_iteratedDeriv_eq_zero ((hv j).1.analyticAt _)).mp
+      (ho.trans ((hv j).2.2.1 _)) _ (Nat.lt_succ_self _)
+
+open Classical in
+/-- Polynomial growth of the cardinal Euler jets in each continuous seminorm of the
+polar quotient. The constants and exponent may depend on the seminorm. A construction
+of interpolants in the polar Mellin image with polynomial strip bounds suffices,
+since the jets separate the quotient. This estimate is independent of the test action. -/
+private theorem finiteNuclearity_trace_jet_bounds_cardinal_growth
+    (χ : PontryaginDual (IdeleClassGroup (𝓞 F) F))
+    (τ : ℝ≥0ˣ →ₜ* IdeleGroup (𝓞 F) F) (hτ : RightInverse τ (ideleNorm F))
+    (p : HeightOneSpectrum (𝓞 ℚ)) :
+    let D := finiteNuclearityDenominator χ p
+    let Q := Θ₀(χ) ⧸ D
+    let R := reciprocalPartialHeckeEulerProduct χ (Sₚ(p))
+    let J := Σ z : {z : ℂ // 0 < analyticOrderAt R z}, Fin (analyticOrderAt R z.val).toNat
+    ∀ (d : J → StrongDual ℂ Q) (b : J → Q),
+      (∀ j x, d j (D.mkQ x) = iteratedDeriv j.2.val ((Z(χ, τ, hτ)) x).val j.1.val) →
+      (∀ i j, d i (b j) = if i = j then 1 else 0) →
+      ∀ q : Seminorm ℂ Q, Continuous q →
+        ∃ (m : ℕ) (C : ℝ), ∀ j, q (b j) ≤ C * (1 + |j.1.val.im|) ^ m := by
+  classical
+  intro D Q R J d b hd hb q hq
+  let Zf := Z(χ, τ, hτ)
+  choose a ha using fun j ↦ D.mkQ_surjective (b j)
+  have jet (i j : J) : iteratedDeriv i.2.val (Zf (a j)).val i.1.val = if i = j then 1 else 0 :=
+    (hd i (a j)).symm.trans ((congrArg (d i) (ha j)).trans (hb i j))
+  obtain ⟨e, K, he⟩ := finiteNuclearity_trace_jet_bounds_enumeration χ p
+  obtain ⟨T, hT, hper⟩ := finiteNuclearity_trace_jet_bounds_cardinal_growth_period χ p
+  obtain ⟨u, hu, hjet, hbound⟩ := finiteNuclearity_trace_jet_bounds_cardinal_growth_translates R T hT hper
+    e K (fun j ↦ (he j).2.2) (fun j ↦ Zf (a j)) jet
+  obtain ⟨H, hH, hord, hstrip, k, C, hC, hinv⟩ := finiteNuclearity_trace_jet_bounds_cardinal_growth_multiplier χ τ hτ
+  obtain ⟨f, hf, hfj, hfq⟩ := finiteNuclearity_trace_jet_bounds_cardinal_growth_interpolants R H hH
+    (Module.finrank ℚ F + 1) u hu hjet
+    (fun j ↦ ⟨Nat.lt_succ_of_le (he j).2.1, (hinv _ (he j).1).1⟩)
+    hstrip ⟨k, C, hC, fun j ↦ (hinv _ (he j).1).2⟩ hbound
+  have lift (j : J) : ∃ x, Zf x = f j := by
+    apply (specDenom_range_mem χ τ hτ _).mpr
+    apply (specDenom_mem_div _ _).mp
+    apply (finiteNuclearity_trace_divisible _ _).mpr
+    intro z n hn
+    have h := hn.trans_le ((hord z).trans (hf j z))
+    have hol : Differentiable ℂ (f j).val := differentiableOn_univ.mp (by simpa using (f j).property.2.1)
+    exact (natCast_le_analyticOrderAt_iff_iteratedDeriv_eq_zero (hol.analyticAt z)).mp
+      ((ENat.add_one_le_iff (ENat.natCast_ne_top n)).mpr h) n (Nat.lt_succ_self n)
+  choose x hx using lift
+  obtain ⟨d₀, _, hd₀, _, sep⟩ := finiteNuclearity_trace_jets χ τ hτ p
+  have eqd (i : J) : d₀ i = d i := ContinuousLinearMap.ext fun y ↦ by
+    obtain ⟨v, rfl⟩ := D.mkQ_surjective y
+    exact (hd₀ i v).trans (hd i v).symm
+  have eqb (j : J) : D.mkQ (x j) = b j := by
+    apply sub_eq_zero.mp
+    apply sep
+    intro i
+    rw [eqd, map_sub, hd, hb]
+    exact sub_eq_zero.mpr ((congrArg (fun g : B ↦ iteratedDeriv i.2.val g.val i.1.val) (hx j)).trans (hfj i j))
+  obtain ⟨r, hr, hdom⟩ := Seminorm.exists_le_comp_of_isInducing
+    (p := q.comp D.mkQ) (hq.comp D.mkQL.continuous) (f := Zf.toLinearMap)
+    (exists_polarThetaNuclearityAction_mellin_closedEmbedding F χ τ hτ).isInducing
+  obtain ⟨m, C₀, h⟩ := hfq r hr
+  refine ⟨m, C₀, fun j ↦ ?_⟩
+  rw [← eqb j]
+  exact (hdom (x j)).trans ((congrArg r (hx j)).le.trans (h j))
+
 -- TODO(paper-gap): The cited §7.1.4.3 concerns the entire comparison space.
 -- To apply the rapid-decay argument on this quotient, one needs bounds in its
 -- own topology for the functionals and the biorthogonal vectors.
+
+open Classical in
+/-- Uniform rescaling of the finite orbital jet expansion. The scaled coordinate
+vectors must lie in one Banach disc of the polar quotient, while one continuous
+seminorm bounds the correspondingly rescaled rows of the test action. The residual
+coefficients must decrease rapidly in a single enumeration (allowing unused indices).
+The comparison jets in §7.1.4.3 give biorthogonality without these simultaneous bounds.
+A periodic interpolation estimate in the topology of the polar quotient would supply them. -/
+private theorem finiteNuclearity_trace_jet_bounds (p : HeightOneSpectrum (𝓞 ℚ)) (φ : 𝒟) :
+    let D := finiteNuclearityDenominator χ p
+    let Q := Θ₀(χ) ⧸ D
+    letI : UniformSpace Q := IsTopologicalAddGroup.rightUniformSpace Q
+    let R := reciprocalPartialHeckeEulerProduct χ (Sₚ(p))
+    let J := Σ z : {z : ℂ // 0 < analyticOrderAt R z}, Fin (analyticOrderAt R z.val).toNat
+    ∀ (d : J → StrongDual ℂ Q) (b : J → Q),
+      (∀ j x, d j (D.mkQ x) = iteratedDeriv j.2.val ((Z(χ, τ, hτ)) x).val j.1.val) →
+      (∀ i j, d i (b j) = if i = j then 1 else 0) →
+      ∃ (e : J ↪ ℕ) (a c : J → ℂˣ) (B₀ : Set Q) (q : Seminorm ℂ Q),
+        IsBanachDisc B₀ ∧ (∀ j, (a j : ℂ) • b j ∈ B₀) ∧ Continuous q ∧
+        (∀ j x, ‖((c j : ℂ) * (a j : ℂ))⁻¹ * d j (D.mkQ (Aθ(φ) x))‖ ≤ q (D.mkQ x)) ∧
+        ∀ k : ℕ, ∃ C : ℝ, ∀ j, ‖(c j : ℂ)‖ * ((e j : ℝ) + 1) ^ k ≤ C := by
+  classical
+  intro D Q R J d b hd hb
+  obtain ⟨hclosed, hmaps⟩ := finiteNuclearityDenominator_closed_invariant χ τ hτ p φ
+  have hQ : IsFrechetTVS Q := finiteNuclearity_trace_jet_bounds_frechet (Z(χ, τ, hτ))
+    (exists_polarThetaNuclearityAction_mellin_closedEmbedding F χ τ hτ)
+    (schwartzBergman_frechet univ isOpen_univ ordConnected_univ univ_nonempty) D hclosed
+  let M := nuclearityTestMellin χ φ
+  have hM : Differentiable ℂ M := archNuclearityDenominator_closed_invariant_multiplier χ φ
+  have decay (k : ℕ) : ∃ C : ℝ, ∀ w : ℂ, w.re ∈ Icc (-1 : ℝ) 1 →
+      ‖M w‖ * (1 + |w.im|) ^ k ≤ C := by
+    obtain ⟨C, _, h⟩ := spectralBoundary_globalStrip hM.continuous
+      (spectralNuclearity_trace_vertical_decay χ φ (-1) 1 (by norm_num)) k
+    exact ⟨C, h⟩
+  obtain ⟨r, hr, hcircle, hrapid⟩ := finiteNuclearity_trace_jet_bounds_envelope M hM.continuous decay
+  have enumeration : ∃ (e : J ↪ ℕ) (K : ℝ), ∀ j, j.1.val.re = 0 ∧
+      j.2.val ≤ Module.finrank ℚ F ∧ (e j : ℝ) + 1 ≤ K * (1 + |j.1.val.im|) :=
+    finiteNuclearity_trace_jet_bounds_enumeration (F := F) χ p
+  obtain ⟨e, K, hcode⟩ := enumeration
+  let T₀ := D.mapQ D (Aθ(φ)).toLinearMap (fun _ hx ↦ hmaps hx)
+  let T : Q →L[ℂ] Q := ⟨T₀, (Submodule.isQuotientMap_mkQ D).continuous_iff.mpr
+    ((Submodule.isQuotientMap_mkQ D).continuous.comp (Aθ(φ)).continuous)⟩
+  let row (j : J) := (d j).comp T
+  have hrow (x : Q) : ∃ C : ℝ, ∀ j, ‖row j x‖ ≤ r j.1.val ^ 2 * C := by
+    obtain ⟨y, rfl⟩ := D.mkQ_surjective x
+    let f := (Z(χ, τ, hτ)) y
+    obtain ⟨C, hC⟩ := finiteNuclearity_trace_jet_bounds_cauchy M hM r hcircle (Module.finrank ℚ F) f
+    refine ⟨C, fun j ↦ ?_⟩
+    change ‖d j (D.mkQ (Aθ(φ) y))‖ ≤ _
+    have hprod : ((Z(χ, τ, hτ)) ((Aθ(φ)) y)).val = M * f.val :=
+      funext ((exists_polarThetaNuclearityAction χ τ hτ φ).choose_spec.1 y)
+    rw [hd, hprod]
+    exact hC _ _ (hcode j).1 (hcode j).2.1
+  have hcol := finiteNuclearity_trace_jet_bounds_cardinal_growth χ τ hτ p d b hd hb
+  let : UniformSpace Q := IsTopologicalAddGroup.rightUniformSpace Q
+  have rescaled : ∃ (a : J → ℂˣ) (disc : Set Q) (q : Seminorm ℂ Q),
+      IsBanachDisc disc ∧ (∀ j, (a j : ℂ) • b j ∈ disc) ∧ Continuous q ∧
+      (∀ j x, ‖((a j : ℂ) * (a j : ℂ))⁻¹ * row j x‖ ≤ q x) ∧
+      ∀ k : ℕ, ∃ C : ℝ, ∀ j, ‖(a j : ℂ)‖ * ((e j : ℝ) + 1) ^ k ≤ C :=
+    finiteNuclearity_trace_jet_bounds_rescale (I := J) (E := Q)
+    hQ e (fun j ↦ 1 + |j.1.val.im|) (fun j ↦ r j.1.val) (fun j ↦ by positivity)
+    (fun j ↦ hr _) K (fun j ↦ (hcode j).2.2)
+    (fun k ↦ (hrapid k).imp fun C h j ↦ h _ (hcode j).1) b row hcol hrow
+  obtain ⟨a, disc, q, hB, hv, hq, hrows, hc⟩ := rescaled
+  exact ⟨e, a, a, disc, q, hB, hv, hq, fun j x ↦ hrows j (D.mkQ x), hc⟩
 
 /-- Paper: Theorem 7.4.2.1(2), p. 367.
 The operator induced on the finite orbital quotient is of order zero. Its trace sums
@@ -2258,7 +6041,37 @@ theorem finiteNuclearity_trace (p : HeightOneSpectrum (𝓞 ℚ)) (φ : 𝒟) :
       (∀ f : Θ₀(χ), T (D.mkQ f) = D.mkQ (Aθ(φ) f)) ∧
       IsStronglyNuclearOperator T ∧ Summable (fun z ↦ ‖term z‖) ∧
       ∀ r : NuclearPresentation T,
-        HasSum (fun n ↦ r.coeff n * r.functional n (r.vector n).val) (∑' z, term z) := by sorry
+        HasSum (fun n ↦ r.coeff n * r.functional n (r.vector n).val) (∑' z, term z) := by
+  classical
+  intro D Q R zeros term
+  let : UniformSpace Q := IsTopologicalAddGroup.rightUniformSpace Q
+  let : IsUniformAddGroup Q := isUniformAddGroup_of_addCommGroup
+  obtain ⟨hclosed, hmaps⟩ := finiteNuclearityDenominator_closed_invariant χ τ hτ p φ
+  let T₀ : Q →ₗ[ℂ] Q := D.mapQ D (Aθ(φ)).toLinearMap (fun _ hx ↦ hmaps hx)
+  let T : Q →L[ℂ] Q := ⟨T₀, (Submodule.isQuotientMap_mkQ D).continuous_iff.mpr
+    ((Submodule.isQuotientMap_mkQ D).continuous.comp (Aθ(φ)).continuous)⟩
+  have hT (x : Θ₀(χ)) : T (D.mkQ x) = D.mkQ (Aθ(φ) x) := rfl
+  have hQ := finiteNuclearity_trace_quotient_nuclear (Z(χ, τ, hτ))
+    (exists_polarThetaNuclearityAction_mellin_closedEmbedding F χ τ hτ).isEmbedding
+    spectralJet_sb_nuclear D hclosed
+  choose d b hd hb hsep using finiteNuclearity_trace_jets χ τ hτ p
+  choose e a c disc q hB hv hq hrow hr using
+    finiteNuclearity_trace_jet_bounds χ τ hτ p φ d b hd hb
+  let M := nuclearityTestMellin χ φ
+  let m (z : zeros) := (analyticOrderAt R z.val).toNat
+  have diag (j : Σ z, Fin (m z)) : d j (T (b j)) = M j.1.val :=
+    finiteNuclearity_trace_diagonal D.mkQ D.mkQ_surjective (Aθ(φ)) T hT
+      (fun x ↦ ((Z(χ, τ, hτ)) x).val) (fun x z ↦
+        (((Z(χ, τ, hτ)) x).property.2.1 z (mem_univ _)).differentiableAt (Filter.univ_mem' mem_univ))
+      M (archNuclearityDenominator_closed_invariant_multiplier χ φ)
+      (fun x ↦ funext ((exists_polarThetaNuclearityAction χ τ hτ φ).choose_spec.1 x))
+      Subtype.val m d b hd hb j
+  have hrow' (j) (x : Q) : ‖((c j : ℂ) * (a j : ℂ))⁻¹ * d j (T x)‖ ≤ q x := by
+    obtain ⟨y, rfl⟩ := D.mkQ_surjective x
+    exact hrow j y
+  refine ⟨T, hT, ?_⟩
+  exact finiteNuclearity_trace_of_bounds T hQ m (fun z ↦ M z.val) d b hb hsep diag e a c disc q
+    hB hv hq hrow' hr
 
 end Orbital
 
@@ -3895,12 +7708,300 @@ theorem archRegularizedFiniteHeckeL_apply (s : {s : ℂ // 1 < s.re}) :
 -- lie in the kernel of the printed adjoint to the theta annihilator. Pass to
 -- the relative quotient of the completed ideal by the finite ideal.
 
+/-- Splitting Haar measure on the ideles gives the same finite factor for every choice
+of archimedean test paired with a fixed finite test. -/
+private theorem archNuclearityQuotient_jetEquiv_annihilate_product
+    (χ : U) (b : ℬ(FiniteAdeleRing (𝓞 F) F)) (s : ℂ) :
+    ∃ factor : ℂ, ∀ a : ℬ(InfiniteAdeleRing F),
+      globalIdelicZetaIntegral ((adeleSchwartz_inductiveTensor_equiv F).choose (a ⊗ₜ[ℂ] b))
+          (ideleClassNormTwist χ s) =
+        (∫ u : (SAdeleRing F ∅)ˣ, a (Multiplicative.ofAdd u.val.1) *
+          ideleClassNormTwist χ s (QuotientGroup.mk (sIdeleInsertion F ∅ u))
+          ∂sMultiplicativeTamagawaMeasure F ∅) * factor := by
+  let A := (SAdeleRing F ∅)ˣ
+  let Bf := (FiniteAdeleRing (𝓞 F) F)ˣ
+  let I := IdeleGroup (𝓞 F) F
+  let e₀ : (SAdeleRing F ∅) ≃ₜ* InfiniteAdeleRing F := ContinuousMulEquiv.mk'
+    (Homeomorph.prodUnique _ (∀ v : (∅ : Finset V), v.val.adicCompletion F)) (fun _ _ ↦ rfl)
+  let e₁ := Units.mapContinuousMulEquiv e₀
+  let e₂ := (ContinuousMulEquiv.prodUnits (InfiniteAdeleRing F) (FiniteAdeleRing (𝓞 F) F)).symm
+  let e : A × Bf ≃ₜ* I := (ContinuousMulEquiv.mk'
+    (e₁.toHomeomorph.prodCongr (Homeomorph.refl Bf)) (fun x y ↦ Prod.ext (map_mul e₁ _ _) rfl)).trans e₂
+  let : MeasurableSpace I := borel _
+  let : BorelSpace I := ⟨rfl⟩
+  let : LocallyCompactSpace I := (ideleGroup_topology F).2.1
+  let : SecondCountableTopology I := idele_secondCountable F
+  let : LocallyCompactSpace (A × Bf) := e.toHomeomorph.isOpenEmbedding.locallyCompactSpace
+  let : SecondCountableTopology (A × Bf) := e.toHomeomorph.isEmbedding.secondCountableTopology
+  let : LocallyCompactSpace A := (isOpenQuotientMap_fst (Y := Bf)).locallyCompactSpace
+  let : LocallyCompactSpace Bf := (isOpenQuotientMap_snd (X := A)).locallyCompactSpace
+  let : SecondCountableTopology Bf := (isEmbedding_prodMkRight (X := A) (Y := Bf) 1).secondCountableTopology
+  let : SecondCountableTopology A := (isEmbedding_prodMkLeft (X := A) (Y := Bf) 1).secondCountableTopology
+  let : MeasurableSpace Bf := borel _
+  let : BorelSpace Bf := ⟨rfl⟩
+  let : MeasurableSpace (SAdeleRing F ∅) := instMeasurableSpaceSAdeleRing F ∅
+  let : BorelSpace A := sIdeleGroup_borelSpace (F := F) (S := ∅)
+  let μ := sMultiplicativeTamagawaMeasure F ∅
+  let ν := (Measure.haar : Measure Bf)
+  let : μ.IsHaarMeasure := sMultiplicativeTamagawaMeasure_isHaarMeasure (F := F) (S := ∅)
+  let m := (μ.prod ν).map e
+  let : m.IsHaarMeasure := inferInstanceAs ((μ.prod ν).map e).IsHaarMeasure
+  let M := multiplicativeTamagawaMeasure F
+  let : M.IsHaarMeasure := (multiplicativeTamagawaMeasures_existsUnique F).exists.choose_spec.1
+  let k := Measure.haarScalarFactor M m
+  have hm : M = k • m := Measure.isMulLeftInvariant_eq_smul M m
+  let c := (ideleClassNormTwist χ s).toMonoidHom.comp (QuotientGroup.mk' _)
+  let archChar (u : A) := c (sIdeleInsertion F ∅ u)
+  let finiteChar (v : Bf) := c (e (1, v))
+  let p (v : Bf) := b (Multiplicative.ofAdd v.val) * finiteChar v
+  have he (u : A) : e (u, 1) = sIdeleInsertion F ∅ u := by
+    apply Units.ext
+    exact Prod.ext (sIdeleInsertion_apply F ∅ u).1.symm (Subtype.ext (funext fun v ↦
+      ((sIdeleInsertion_apply F ∅ u).2.2 v (Finset.notMem_empty v)).symm))
+  refine ⟨(k : ℂ) * ∫ v, p v ∂ν, fun a ↦ ?_⟩
+  let q (u : A) := a (Multiplicative.ofAdd u.val.1) * archChar u
+  let f := (adeleSchwartz_inductiveTensor_equiv F).choose (a ⊗ₜ[ℂ] b)
+  change (∫ g : I, f (Multiplicative.ofAdd g.val) * c g ∂M) = _
+  rw [hm, integral_smul_nnreal_measure]
+  change (k : ℂ) * (∫ g : I, f (Multiplicative.ofAdd g.val) * c g
+    ∂(μ.prod ν).map e.toHomeomorph.toMeasurableEquiv) = _
+  rw [integral_map_equiv]
+  have h (x : A × Bf) : f (Multiplicative.ofAdd (e x).val) * c (e x) = q x.1 * p x.2 := by
+    have hx : c (e x) = archChar x.1 * finiteChar x.2 := by
+      rw [← show e (x.1, 1) * e (1, x.2) = e x by rw [← map_mul]; simp, map_mul, he]
+    rw [(adeleSchwartz_inductiveTensor_equiv F).choose_spec a b (e x).val, hx]
+    exact mul_mul_mul_comm _ _ _ _
+  change (k : ℂ) * (∫ x : A × Bf, f (Multiplicative.ofAdd (e x).val) * c (e x) ∂μ.prod ν) = _
+  simp_rw [h]
+  rw [integral_prod_mul (μ := μ) (ν := ν) q p]
+  exact mul_left_comm _ _ _
+
+/-- Flatness along all coordinate walls makes the archimedean integral entire.
+Absolute convergence uses the untwisted local estimate, since the character has norm one. -/
+private theorem archNuclearityQuotient_jetEquiv_annihilate_arch
+    (χ : U) (a : ℬ(InfiniteAdeleRing F))
+    (h : archimedeanFlatSchwartz (ι := RealPlaces) (κ := ComplexPlaces))
+    (ha : ∀ x, a (Multiplicative.ofAdd x) = h.val (InfiniteAdeleRing.ringEquiv_mixedSpace F x)) :
+    Differentiable ℂ (fun s ↦ ∫ u : (SAdeleRing F ∅)ˣ, a (Multiplicative.ofAdd u.val.1) *
+      ideleClassNormTwist χ s (QuotientGroup.mk (sIdeleInsertion F ∅ u))
+      ∂sMultiplicativeTamagawaMeasure F ∅) := by
+  let S : Finset V := ∅
+  let : MeasurableSpace (SAdeleRing F S) := instMeasurableSpaceSAdeleRing F S
+  let : BorelSpace (SAdeleRing F S)ˣ := sIdeleGroup_borelSpace
+  let r (w : RealPlaces) : {e : w.val.Completion ≃+* ℝ // IsHomeomorph (e : w.val.Completion → ℝ)} :=
+    ⟨InfinitePlace.Completion.ringEquivRealOfIsReal w.2,
+    (InfinitePlace.Completion.isometryEquivRealOfIsReal w.2).toHomeomorph.isHomeomorph⟩
+  let c (w : ComplexPlaces) : {e : w.val.Completion ≃+* ℂ // IsHomeomorph (e : w.val.Completion → ℂ)} :=
+    ⟨InfinitePlace.Completion.ringEquivComplexOfIsComplex w.2,
+    (InfinitePlace.Completion.isometryEquivComplexOfIsComplex w.2).toHomeomorph.isHomeomorph⟩
+  let g : ∀ v : S, ℬ(v.val.adicCompletion F) := fun v ↦ isEmptyElim v
+  let t := (sAdeleSchwartz_inductiveTensor_equiv F S).choose (a ⊗ₜ[ℂ] (⨂ₜ[ℂ] v, g v))
+  have ht (x : SAdeleRing F S) : t (Multiplicative.ofAdd x) = a (Multiplicative.ofAdd x.1) := by
+    rw [(sAdeleSchwartz_inductiveTensor_equiv F S).choose_spec a g x, Fintype.prod_empty, mul_one]
+  have hflat : t ∈ sAdelePolarFree S r c := by
+    rw [sAdelePolarFree_eq_span_tmul]
+    refine Submodule.subset_span ⟨a, g, ⟨h, fun x ↦ ?_⟩, fun v ↦ isEmptyElim v, rfl⟩
+    rw [ha]
+    apply congrArg h.val
+    refine Prod.ext (funext fun i ↦ ?_) (funext fun j ↦ ?_)
+    · change _ = (r i).val (if hw : i.val.IsReal then _ else _)
+      simp only [i.2, ↓reduceDIte, RingEquiv.apply_symm_apply]
+    · change _ = (c j).val (if hw : j.val.IsReal then _ else _)
+      simp only [InfinitePlace.not_isReal_iff_isComplex.mpr j.2, ↓reduceDIte]
+      exact ((c j).val.apply_symm_apply _).symm
+  let q (u : (SAdeleRing F S)ˣ) : C𝔽 := QuotientGroup.mk (sIdeleInsertion F S u)
+  have hq : Continuous q := QuotientGroup.continuous_mk.comp (isClosedEmbedding_sIdeleInsertion F S).continuous
+  let n (u : (SAdeleRing F S)ˣ) := ((ideleClassNorm F (q u)).val : ℝ)
+  have hn : Continuous n := NNReal.continuous_coe.comp (Units.continuous_val.comp
+    ((isProperMap_ideleClassNorm F).continuous.comp hq))
+  have hn' (u : (SAdeleRing F S)ˣ) : ((sIdeleQuotientNorm F S (QuotientGroup.mk u)).val : ℝ) = n u := by
+    change ((sIdeleQuotientNorm F S _).val : ℝ) = ((ideleNorm F (sIdeleInsertion F S u)).val : ℝ)
+    rw [sIdeleQuotientNorm_mk, ideleNorm_sIdeleInsertion]
+  let w (u : (SAdeleRing F S)ˣ) := a (Multiplicative.ofAdd u.val.1) * (χ (q u) : ℂ)
+  have hw : Continuous w := ((continuous_schwartzBruhat a).comp (continuous_ofAdd.comp
+    (continuous_fst.comp Units.continuous_val))).mul (continuous_subtype_val.comp (χ.continuous.comp hq))
+  have H := analyticOnNhd_integral_mul_cpow_of_integrable (sMultiplicativeTamagawaMeasure F S)
+    w n hn.measurable (fun u ↦ NNReal.coe_pos.mpr (Units.zero_lt _)) isOpen_univ (fun z _ ↦ by
+      have hI := sLocalIdelicZFunction_entire_of_polarFree_integrable r c t hflat 1 z
+      apply hI.norm.mono' (hw.mul ((Complex.continuous_ofReal.comp hn).cpow continuous_const
+        (fun u ↦ Complex.ofReal_mem_slitPlane.mpr (NNReal.coe_pos.mpr (Units.zero_lt _))))).aestronglyMeasurable
+      filter_upwards with u
+      change ‖w u * _‖ ≤ _
+      simp only [w, norm_mul, Circle.norm_coe, mul_one, ht]
+      change _ ≤ _ * ‖(1 : ℂ) * ((((sIdeleQuotientNorm F S (QuotientGroup.mk u)).val : ℝ) : ℂ) ^ z)‖
+      rw [one_mul, hn']
+      exact le_rfl)
+  intro z
+  change DifferentiableAt ℂ (fun s ↦ ∫ u, a (Multiplicative.ofAdd u.val.1) *
+    ((χ (q u) : ℂ) * (n u : ℂ) ^ s) ∂sMultiplicativeTamagawaMeasure F S) z
+  simpa only [w, mul_assoc] using (H z (mem_univ z)).differentiableAt
+
+/-- Pair the given finite test with a Gaussian at infinity. Its normalized global zeta
+function is entire. Canceling the Gaussian Mellin factor on the right half-plane
+therefore gives an entire cofactor of the finite Hecke function for a flat tensor. -/
+private theorem archNuclearityQuotient_jetEquiv_annihilate_tensor
+    (χ : U) (a : ℬ(InfiniteAdeleRing F)) (b : ℬ(FiniteAdeleRing (𝓞 F) F))
+    (h : archimedeanFlatSchwartz (ι := RealPlaces) (κ := ComplexPlaces))
+    (ha : ∀ x, a (Multiplicative.ofAdd x) = h.val (InfiniteAdeleRing.ringEquiv_mixedSpace F x)) :
+    ∃ u : ℂ → ℂ, Differentiable ℂ u ∧ ∀ s : {z : ℂ // 1 < z.re},
+      globalIdelicZetaIntegral ((adeleSchwartz_inductiveTensor_equiv F).choose (a ⊗ₜ[ℂ] b))
+        (ideleClassNormTwist χ s) = u s * finiteHeckeL χ s := by
+  let e : Multiplicative (SAdeleRing F ∅) ≃ₜ* Multiplicative (InfiniteAdeleRing F) :=
+    ContinuousMulEquiv.mk' (Homeomorph.prodUnique _ (∀ v : (∅ : Finset V), v.val.adicCompletion F))
+      (fun _ _ ↦ rfl)
+  let : T2Space (Multiplicative (InfiniteAdeleRing F)) :=
+    inferInstanceAs (T2Space ((w : InfinitePlace F) → w.Completion))
+  let : LocallyCompactSpace (Multiplicative (InfiniteAdeleRing F)) := InfiniteAdeleRing.locallyCompactSpace F
+  let : T2Space (Multiplicative (SAdeleRing F ∅)) := e.toHomeomorph.isEmbedding.t2Space
+  let : LocallyCompactSpace (Multiplicative (SAdeleRing F ∅)) := e.toHomeomorph.isOpenEmbedding.locallyCompactSpace
+  obtain ⟨G, hG⟩ := exists_archimedeanHeckeTest χ
+  obtain ⟨T, hT⟩ := schwartzBruhat_transport e
+  let g := (adeleSchwartz_inductiveTensor_equiv F).choose (T G ⊗ₜ[ℂ] b)
+  let arch (a : ℬ(InfiniteAdeleRing F)) (z : ℂ) := ∫ u : (SAdeleRing F ∅)ˣ,
+    a (Multiplicative.ofAdd u.val.1) * ideleClassNormTwist χ z (QuotientGroup.mk (sIdeleInsertion F ∅ u))
+      ∂sMultiplicativeTamagawaMeasure F ∅
+  have hΓ (s : {z : ℂ // 1 < z.re}) : arch (T G) s = heckeGammaFactor χ s := by
+    refine Eq.trans (integral_congr_ae (Filter.Eventually.of_forall fun u ↦ ?_)) (hG s)
+    apply congrArg (· * _)
+    exact (hT G _).trans (congrArg G (e.symm_apply_apply (Multiplicative.ofAdd u.val)))
+  let D := (adelicEigendistribution_normalized χ).choose
+  let k : ℂ := ((Real.sqrt |(NumberField.discr F : ℝ)|)⁻¹ : ℝ)
+  have hD := analytic_eval_normalized (adelicEigendistribution_normalized χ).choose_spec.1 g
+  have hd : Differentiable ℂ (fun z ↦ D z g) := fun z ↦ (hD z (mem_univ z)).differentiableAt
+  refine ⟨fun z ↦ arch a z * (k * D z g),
+    (archNuclearityQuotient_jetEquiv_annihilate_arch χ a h ha).mul
+      (hd.const_mul k),
+    fun s ↦ ?_⟩
+  obtain ⟨v, hv⟩ := archNuclearityQuotient_jetEquiv_annihilate_product χ b s
+  have h₁ : globalIdelicZetaIntegral g (ideleClassNormTwist χ s) = heckeGammaFactor χ s * v :=
+    (hv (T G)).trans (congrArg (· * v) (hΓ s))
+  have h₂ := globalIntegral_normalized_ratio χ s.property g
+  rw [gaussianCompletedHeckeL_eq_completedHeckeL χ s s.property] at h₂
+  have hv' : v = k * D s g * finiteHeckeL χ s := by
+    apply mul_left_cancel₀ (heckeGammaFactor_ne_zero_of_re_pos χ (zero_lt_one.trans s.property))
+    refine h₁.symm.trans (h₂.trans ?_)
+    change k * (heckeGammaFactor χ s * finiteHeckeL χ s) * D s g = _
+    ring
+  rw [hv a, hv']
+  exact (mul_assoc _ _ _).symm
+
+/-- The half-plane factorization of flat tensors is preserved by finite sums, including
+sums for which only the whole representative satisfies the two global polar conditions. -/
+private theorem archNuclearityQuotient_jetEquiv_annihilate_flat
+    (χ : U) {requireArchMoment : Prop} (f : ℬ(𝔸[F]))
+    (hf : f ∈ globalArchimedeanFlatTests F requireArchMoment) :
+    ∃ u : ℂ → ℂ, Differentiable ℂ u ∧ ∀ s : {z : ℂ // 1 < z.re},
+      globalIdelicZetaIntegral f (ideleClassNormTwist χ s) = u s * finiteHeckeL χ s := by
+  let D := (adelicEigendistribution_normalized χ).choose
+  have hlin (s : {z : ℂ // 1 < z.re}) (g : ℬ(𝔸[F])) :
+      globalIdelicZetaIntegral g (ideleClassNormTwist χ s) = gaussianCompletedHeckeL χ s * D s g :=
+    globalIntegral_normalized_ratio χ s.property g
+  induction hf using Submodule.span_induction with
+  | mem _ hx =>
+    obtain ⟨a, b, h, ha, _, rfl⟩ := hx
+    exact archNuclearityQuotient_jetEquiv_annihilate_tensor χ a b h ha
+  | zero => exact ⟨0, differentiable_const _, fun s ↦ by simp [hlin]⟩
+  | add _ _ _ _ h₁ h₂ =>
+    obtain ⟨u, hu, huf⟩ := h₁
+    obtain ⟨v, hv, hvg⟩ := h₂
+    refine ⟨u + v, hu.add hv, fun s ↦ ?_⟩
+    rw [hlin, map_add, mul_add, ← hlin, ← hlin, huf, hvg, Pi.add_apply, add_mul]
+  | smul c _ _ h₁ =>
+    obtain ⟨u, hu, huf⟩ := h₁
+    refine ⟨fun z ↦ c * u z, hu.const_mul c, fun s ↦ ?_⟩
+    rw [hlin, map_smul, smul_eq_mul, mul_left_comm, ← hlin, huf, mul_assoc]
+
+/-- At a gamma pole the factor regularizing the completed function has order one at
+the trivial quasi-character and order zero at all other retained sites. -/
+private theorem archNuclearityQuotient_jetEquiv_annihilate_polarOrder
+    (χ : U) (τ : ℝ≥0ˣ →ₜ* IdeleGroup (𝓞 F) F) (hτ : RightInverse τ (ideleNorm F))
+    (z : ℂ) (hz : 0 < gammaOrder(χ, z)) :
+    analyticOrderAt (spectralFiniteP χ τ hτ) z =
+      if ω(χ) = 1 ∧ z = atZeroPole(χ, τ, hτ) then 1 else 0 := by
+  let b := ((existsUnique_ideleNormSection_character_phase χ τ hτ).exists.choose : ℂ) * Complex.I
+  have hb : b.re = 0 := by simp [b]
+  have hleft : z.re ≤ 0 := by
+    by_contra! hpos
+    rw [((differentiable_inv_heckeGammaFactor χ).analyticAt z).analyticOrderAt_eq_zero.mpr
+      (inv_ne_zero (heckeGammaFactor_ne_zero_of_re_pos χ hpos))] at hz
+    simp at hz
+  have hone : 1 - z - b ≠ 0 := by
+    intro he
+    have hr := congrArg Complex.re he
+    simp only [Complex.sub_re, Complex.one_re, hb, sub_zero, Complex.zero_re] at hr
+    linarith
+  have hpole : atZeroPole(χ, τ, hτ) = -b := neg_mul _ _
+  rw [hpole]
+  by_cases hω : ω(χ) = 1
+  · have he : spectralFiniteP χ τ hτ = (fun w ↦ w - -b) * (fun w ↦ 1 - w - b) := by
+      funext w
+      simp [spectralFiniteP, b, specDenom_hδ' χ hω]
+    rw [he, analyticOrderAt_mul (by fun_prop) (by fun_prop),
+      (show AnalyticAt ℂ (fun w : ℂ ↦ 1 - w - b) z by fun_prop).analyticOrderAt_eq_zero.mpr hone, add_zero]
+    by_cases hz₀ : z = -b
+    · rw [hz₀, analyticOrderAt_id_sub_const_self, ite_eq_left ⟨hω, rfl⟩]
+    · rw [analyticOrderAt_id_sub_const_of_ne hz₀, ite_eq_right (fun h ↦ hz₀ h.2)]
+  · have he : spectralFiniteP χ τ hτ = fun _ ↦ 1 := by
+      funext w
+      simp [spectralFiniteP, specDenom_hδ χ hω]
+    simp [he, hω]
+
 /-- Paper: Equation (7.4.3.13), p. 372.
 Each adjusted jet annihilates the archimedean orbital denominator, so the jets are
 well defined on the quotient by it. -/
 theorem archNuclearityQuotient_jetEquiv_annihilate (j : ArchNuclearityJetIndex χ τ hτ)
     (x : archNuclearityDenominator χ) :
-    archNuclearityJet χ τ hτ j x.val = 0 := by sorry
+    archNuclearityJet χ τ hτ j x.val = 0 := by
+  obtain ⟨f, hf, hx⟩ := (archNuclearityDenominator_mem_restricted χ x.val).mp x.property
+  obtain ⟨u, hu, hfactor⟩ := archNuclearityQuotient_jetEquiv_annihilate_flat χ f.val hf
+  let φ := (Z(χ, τ, hτ)) x.val
+  have hφ : Differentiable ℂ (φ.val : ℂ → ℂ) := fun z ↦
+    (φ.property.2.1 z (mem_univ _)).differentiableAt (Filter.univ_mem' fun _ ↦ mem_univ _)
+  let p := spectralFiniteP χ τ hτ
+  let R (z : ℂ) := (heckeGammaFactor χ z)⁻¹
+  let Λ₀ := regularizedCompletedHeckeL χ τ hτ (continuedCompletedHeckeL χ)
+    (continuedCompletedHeckeL_spec χ).1 (continuedCompletedHeckeL_spec χ).2
+  have hp := spectralFiniteP_diff χ τ hτ
+  have hR := differentiable_inv_heckeGammaFactor χ
+  have hreg : p * (φ.val : ℂ → ℂ) = R * ((Λ₀.val : ℂ → ℂ) * u) := by
+    apply eq_of_agree_rightHalf (fun z _ ↦ ((hp.analyticAt z).mul (hφ.analyticAt z)).meromorphicNFAt)
+      (fun z _ ↦ ((hR.analyticAt z).mul ((Λ₀.property.analyticAt z).mul (hu.analyticAt z))).meromorphicNFAt) 1
+    intro z hz
+    have he : φ.val z = u z * finiteHeckeL χ ⟨z, hz⟩ := by
+      dsimp only [φ]
+      rw [hx, ((exists_globalPolarThetaMellin χ τ hτ).choose_spec f z).2,
+        globalIdelicZFunction_eq_integral _ (globalTwist_mem_rightHalf χ hz)]
+      exact hfactor ⟨z, hz⟩
+    have hg := spectralFiniteG_right χ τ hτ hz
+    change R z * Λ₀.val z = p z * finiteHeckeL χ ⟨z, hz⟩ at hg
+    change p z * φ.val z = R z * (Λ₀.val z * u z)
+    rw [he, ← mul_assoc (R z), hg]
+    ring
+  let z := j.val.1
+  let m := gammaOrder(χ, z)
+  let d : ℕ := if ω(χ) = 1 ∧ z = atZeroPole(χ, τ, hτ) then 1 else 0
+  have hj : j.val.2 < m - d := j.property
+  have hm : 0 < m := by omega
+  have hd : analyticOrderAt p z = (d : ℕ∞) := by
+    simpa only [d, Nat.cast_ite, Nat.cast_one, Nat.cast_zero] using
+      archNuclearityQuotient_jetEquiv_annihilate_polarOrder χ τ hτ z hm
+  have ho := congrArg (fun v : ℂ → ℂ ↦ analyticOrderAt v z) hreg
+  rw [analyticOrderAt_mul (hp.analyticAt z) (hφ.analyticAt z),
+    analyticOrderAt_mul (hR.analyticAt z) ((Λ₀.property.mul hu).analyticAt z), hd] at ho
+  have hbound : (m : ℕ∞) ≤ (d : ℕ∞) + analyticOrderAt (φ.val : ℂ → ℂ) z :=
+    (ENat.natCast_toNat_le_self _).trans (le_self_add.trans_eq ho.symm)
+  have horder : ((m - d : ℕ) : ℕ∞) ≤ analyticOrderAt (φ.val : ℂ → ℂ) z := by
+    cases h : analyticOrderAt (φ.val : ℂ → ℂ) z using ENat.recTopCoe with
+    | top => exact le_top
+    | coe k =>
+      rw [h, ← Nat.cast_add] at hbound
+      exact_mod_cast (Nat.sub_le_iff_le_add'.mpr (by exact_mod_cast hbound) : m - d ≤ k)
+  unfold archNuclearityJet
+  rw [ContinuousLinearMap.comp_apply, ContinuousLinearMap.comp_apply, entireJet_apply]
+  change iteratedDeriv j.val.2 (schwartzBergmanEntireInclusion φ).val z = 0
+  rw [show ((schwartzBergmanEntireInclusion φ).val : ℂ → ℂ) = φ.val from
+    funext (schwartzBergmanEntireInclusion_apply φ)]
+  exact (natCast_le_analyticOrderAt_iff_iteratedDeriv_eq_zero (hφ.analyticAt z)).mp horder _ hj
 
 /-- Paper: Equation (7.4.3.13), p. 372.
 The adjusted jets assemble into a single continuous linear map from the archimedean
@@ -3918,13 +8019,573 @@ theorem archNuclearityQuotient_jetEquiv_coefficients :
   exact Submodule.liftQ_apply (p := archNuclearityDenominator χ)
     (f := (archNuclearityJet χ τ hτ j).toLinearMap) (h := hker j) (x := x)
 
+/-- Adapted from `globalPrincipalValueConverse_mellin_insertion` in §6.3.
+Insertion through the stage agrees with insertion at the chosen finite place. -/
+private theorem archNuclearityQuotient_jetEquiv_separating_insertion {T : Finset V}
+    (v : T) (x : (v.val.adicCompletion F)ˣ) :
+    sIdeleInsertion F T ((ContinuousMulEquiv.prodUnits (InfiniteAdeleRing F)
+        ((w : T) → w.val.adicCompletion F)).symm
+      (1, ContinuousMulEquiv.piUnits.symm (@Pi.mulSingle _ _ _ (Classical.decEq _) v x))) =
+      IdeleGroup.ofAdicCompletion (𝓞 F) F v.val x := by
+  classical
+  let : DecidableEq T := Classical.decEq _
+  let g : (SAdeleRing F T)ˣ := (ContinuousMulEquiv.prodUnits (InfiniteAdeleRing F) _).symm
+    (1, ContinuousMulEquiv.piUnits.symm (@Pi.mulSingle _ _ _ (Classical.decEq _) v x))
+  obtain ⟨ha, hf, ho⟩ := sIdeleInsertion_apply F T g
+  apply Units.ext
+  apply Prod.ext
+  · exact ha
+  · apply RestrictedProduct.ext
+    intro u
+    change (sIdeleInsertion F T g).val.2 u =
+      RestrictedProduct.mulSingle (fun w : V ↦ w.adicCompletionIntegers F) v.val x.val u
+    by_cases hu : u = v.val
+    · subst u
+      rw [hf v, RestrictedProduct.mulSingle_eq_same]
+      change ((Pi.mulSingle (M := fun t : T ↦ (t.val.adicCompletion F)ˣ) v x v :
+        (v.val.adicCompletion F)ˣ) : v.val.adicCompletion F) = _
+      rw [Pi.mulSingle_eq_same]
+    · rw [RestrictedProduct.mulSingle_eq_of_ne _ _ hu]
+      by_cases hm : u ∈ T
+      · rw [hf ⟨u, hm⟩]
+        change ((Pi.mulSingle (M := fun t : T ↦ (t.val.adicCompletion F)ˣ) v x ⟨u, hm⟩ :
+          (u.adicCompletion F)ˣ) : u.adicCompletion F) = 1
+        rw [Pi.mulSingle_eq_of_ne (fun e ↦ hu (congrArg Subtype.val e)), Units.val_one]
+      · exact ho u hm
+
+/-- Adapted from `globalPrincipalValueConverse_mellin_factor` in §6.3.
+The finite Euler factors in the local and global conventions agree. -/
+private theorem archNuclearityQuotient_jetEquiv_separating_factor
+    (χ' : U) (v : V) (s : ℂ) :
+    finiteLocalEulerFactor v (finitePlaceRestriction F v (ideleClassNormTwist χ' s)) =
+      finiteHeckeEulerFactor χ' v s := by
+  classical
+  let c := finitePlaceRestriction F v (ideleClassNormTwist χ' s)
+  let c₀ := finitePlaceRestriction F v (ideleClassNormTwist χ' 0)
+  have htwist (x : (v.adicCompletion F)ˣ) :
+      c x = c₀ x * (‖x.val‖ : ℂ) ^ s := by
+    let g := IdeleClassGroup.ofAdicCompletion (𝓞 F) F v x
+    change (χ' g : ℂ) * (((ideleClassNorm F g : ℝ≥0) : ℝ) : ℂ) ^ s =
+      (χ' g : ℂ) * (((ideleClassNorm F g : ℝ≥0) : ℝ) : ℂ) ^ (0 : ℂ) * _
+    rw [Complex.cpow_zero, mul_one, ideleClassNorm_ofAdicCompletion]
+    rfl
+  have hrestrict (x : (v.adicCompletion F)ˣ) :
+      (ideleClassNormTwist χ' 0).restrict v x.val = c₀ x := by
+    rw [HeckeCharacter.restrict, MulChar.ofUnitHom_coe]
+    rfl
+  have hunram : (∀ u : (v.adicCompletionIntegers F)ˣ,
+      c (Units.map (v.adicCompletionIntegers F).subtype.toMonoidHom u) = 1) ↔
+        (ideleClassNormTwist χ' 0).IsUnramifiedAt v := by
+    rw [HeckeCharacter.isUnramifiedAt_iff]
+    refine forall_congr' fun u ↦ ?_
+    let x := Units.map (v.adicCompletionIntegers F).subtype.toMonoidHom u
+    change c x = 1 ↔ (ideleClassNormTwist χ' 0).restrict v x.val = 1
+    have hn : ‖x.val‖ = 1 :=
+      Valued.toNormedField.norm_eq_one_iff.mpr
+        ((HeightOneSpectrum.adicCompletionIntegers.mem_units_iff_valued_eq_one (a := x)).mp
+          ⟨u.val.property, u.inv.property⟩)
+    rw [htwist, hn, Complex.ofReal_one, Complex.one_cpow, mul_one, hrestrict]
+  change finiteLocalEulerFactor v c = finiteHeckeEulerFactor χ' v s
+  by_cases hv : (ideleClassNormTwist χ' 0).IsUnramifiedAt v
+  · rw [finiteLocalEulerFactor, ite_eq_left (hunram.mpr hv), finiteHeckeEulerFactor, ite_eq_left hv]
+    let val : Valuation (v.adicCompletion F) (WithZero (Multiplicative ℤ)) := Valued.v
+    let hπ := val.exists_isUniformizer_of_isCyclic_of_nontrivial.choose_spec
+    let π := Units.mk0 _ hπ.ne_zero
+    change (1 - c π)⁻¹ = _
+    have hn := norm_uniformizer_adicCompletion v π.val hπ
+    rw [htwist, hv.localValue_eq π.val hπ, hrestrict, hn,
+      Complex.ofReal_inv, Complex.inv_cpow_ofReal_nonneg (Nat.cast_nonneg _) s,
+      Complex.cpow_neg, Complex.ofReal_natCast]
+  · rw [finiteLocalEulerFactor, ite_eq_right (mt hunram.mp hv), finiteHeckeEulerFactor,
+      ite_eq_right hv]
+
+/-- Adapted from `globalPrincipalValueConverse_mellin_localFactor` in §6.3.
+Restriction to the local stage preserves each selected Euler factor. -/
+private theorem archNuclearityQuotient_jetEquiv_separating_localFactor {T : Finset V} (χ : U)
+    (hc : ideleClassNormTwist χ 0 ∈ unramifiedOutside F T) (η : PontryaginDual (SIdeleQuotient F T))
+    (hχ : sIdeleRestriction F T ⟨ideleClassNormTwist χ 0, hc⟩ =
+      (⟨Circle.coeHom, continuous_subtype_val⟩ : Circle →ₜ* ℂ).comp η) (v : T) (s : ℂ) :
+    let chart := quasiCharacterNormTwist (sIdeleQuotientNorm F T)
+      (isProperMap_sIdeleQuotientNorm F T).continuous
+      ((⟨Circle.coeHom, continuous_subtype_val⟩ : Circle →ₜ* ℂ).comp η)
+    finiteLocalEulerFactor v.val (sLocalFiniteRestriction v (chart s)) = finiteHeckeEulerFactor χ v.val s := by
+  intro chart
+  have htwist (g : (SAdeleRing F T)ˣ) :
+      chart s (QuotientGroup.mk g) =
+        ideleClassNormTwist χ s (QuotientGroup.mk (sIdeleInsertion F T g)) := by
+    have hbase := DFunLike.congr_fun hχ (QuotientGroup.mk g)
+    rw [sIdeleRestriction_mk] at hbase
+    change (χ (QuotientGroup.mk (sIdeleInsertion F T g)) : ℂ) * _ ^ (0 : ℂ) =
+      (η (QuotientGroup.mk g) : ℂ) at hbase
+    simp only [Complex.cpow_zero, mul_one] at hbase
+    change (η (QuotientGroup.mk g) : ℂ) *
+        ((((sIdeleQuotientNorm F T) (QuotientGroup.mk g) : ℝ≥0) : ℝ) : ℂ) ^ s =
+      (χ (QuotientGroup.mk (sIdeleInsertion F T g)) : ℂ) * _ ^ s
+    rw [← hbase, sIdeleQuotientNorm_mk, ← ideleNorm_sIdeleInsertion]
+    rfl
+  have hfinite (v : T) : sLocalFiniteRestriction v (chart s) =
+      finitePlaceRestriction F v.val (ideleClassNormTwist χ s) := by
+    ext1 x
+    change chart s (QuotientGroup.mk ((ContinuousMulEquiv.prodUnits (InfiniteAdeleRing F)
+        ((w : T) → w.val.adicCompletion F)).symm
+      (1, ContinuousMulEquiv.piUnits.symm (@Pi.mulSingle _ _ _ (Classical.decEq _) v x)))) =
+      ideleClassNormTwist χ s (QuotientGroup.mk (IdeleGroup.ofAdicCompletion (𝓞 F) F v.val x))
+    rw [htwist, archNuclearityQuotient_jetEquiv_separating_insertion]
+  rw [hfinite, archNuclearityQuotient_jetEquiv_separating_factor]
+
+/-- Removing the finite Euler factors at the stage gives the local principal-value chart.
+Multiplying it by the finite Hecke continuation and the outside unit masses recovers
+the global transform of every inserted test. -/
+private theorem archNuclearityQuotient_jetEquiv_separating_stage (χ : U) (S : Finset V)
+    (hS : ideleClassNormTwist χ 0 ∈ unramifiedOutside F S) (L : ℂ → ℂ)
+    (hL : MeromorphicNFOn L univ) (hseries : ∀ s : {s : ℂ // 1 < s.re}, L s = finiteHeckeL χ s) :
+    ∃ (η : PontryaginDual (SIdeleQuotient F S)) (c : ℂ), c ≠ 0 ∧
+      sIdeleRestriction F S ⟨ideleClassNormTwist χ 0, hS⟩ =
+        (⟨Circle.coeHom, continuous_subtype_val⟩ : Circle →ₜ* ℂ).comp η ∧
+      ∀ f : ℬ(SAdeleRing F S),
+        (fun z ↦ globalIdelicZFunction (sAdeleSchwartzToGlobal F S f) (ideleClassNormTwist χ z))
+          =ᶠ[Filter.codiscrete ℂ] fun z ↦ c * sLocalIdelicZFunction
+            (sAdelePrincipalValue F (Finset.Subset.refl S) f)
+            (quasiCharacterNormTwist (sIdeleQuotientNorm F S)
+              (isProperMap_sIdeleQuotientNorm F S).continuous
+              ((⟨Circle.coeHom, continuous_subtype_val⟩ : Circle →ₜ* ℂ).comp η) z) * L z := by
+  classical
+  -- Restrict the unitary character as in §6.3, heckeEulerProductOutside_eq_finite_unitary.
+  let unitary := sIdeleRestriction F S ⟨ideleClassNormTwist χ 0, hS⟩
+  have hunitary (x : SIdeleQuotient F S) : ‖unitary x‖ = 1 := by
+    obtain ⟨g, rfl⟩ := QuotientGroup.mk_surjective x
+    rw [show unitary (QuotientGroup.mk g) = ideleClassNormTwist χ 0
+      (QuotientGroup.mk (sIdeleInsertion F S g)) from sIdeleRestriction_mk F S _ g]
+    change ‖(χ _ : ℂ) * _ ^ (0 : ℂ)‖ = 1
+    simp
+  let η : PontryaginDual (SIdeleQuotient F S) :=
+    { toFun := fun x ↦ ⟨unitary x, mem_sphere_zero_iff_norm.mpr (hunitary x)⟩
+      map_one' := Subtype.ext (map_one unitary)
+      map_mul' x y := Subtype.ext (map_mul unitary x y)
+      continuous_toFun := unitary.continuous.subtype_mk _ }
+  have hb : sIdeleRestriction F S ⟨ideleClassNormTwist χ 0, hS⟩ =
+      (⟨Circle.coeHom, continuous_subtype_val⟩ : Circle →ₜ* ℂ).comp η := rfl
+  let c := ∏ᶠ v : {v : V // v ∉ S}, (((finiteLocalMultiplicativeTamagawaMeasure F v.val)
+    (v.val.adicCompletionIntegers F).units).toReal : ℂ)
+  have hc : c ≠ 0 := by
+    apply finprod_ne_zero
+    intro v
+    rw [finiteLocalMultiplicativeTamagawaMeasure_integerUnits, ENNReal.toReal_inv,
+      ENNReal.toReal_ofReal (Real.sqrt_nonneg _)]
+    exact Complex.ofReal_ne_zero.mpr (inv_ne_zero (Real.sqrt_ne_zero'.mpr
+      (pow_pos (Nat.cast_pos.mpr (zero_lt_one.trans (HeightOneSpectrum.one_lt_absNorm v.val))) _)))
+  refine ⟨η, c, hc, hb, fun f ↦ ?_⟩
+  have hw := weilIdentity_unramifiedOutside_meromorphic S f χ hS L hL fun s hs ↦ hseries ⟨s, hs⟩
+  dsimp only at hw
+  rw [hb] at hw
+  filter_upwards [hw, sLocalIdelicZFunction_principalValue S (Finset.Subset.refl S) f η] with z hz hp
+  dsimp only at hp
+  rw [hp, hz]
+  simp_rw [archNuclearityQuotient_jetEquiv_separating_localFactor χ hS η hb,
+    fun v : S ↦ ite_eq_left_iff.mpr (fun h ↦ (h v.property).elim :
+      ¬v.val ∈ S → (1 : ℂ) = finiteHeckeEulerFactor χ v.val z)]
+  rw [Finset.prod_coe_sort S (fun v ↦ finiteHeckeEulerFactor χ v z),
+    div_eq_mul_inv, ← Finset.prod_inv_distrib]
+  simp only [mul_assoc, c]
+
+/-- At the exceptional point the simple pole of the completed function accounts
+for the one jet omitted from the archimedean multiplicity. -/
+private theorem archNuclearityQuotient_jetEquiv_separating_pole (χ : U)
+    (τ : ℝ≥0ˣ →ₜ* IdeleGroup (𝓞 F) F) (hτ : RightInverse τ (ideleNorm F)) (hω : ω(χ) = 1) :
+    meromorphicOrderAt (continuedCompletedHeckeL χ) atZeroPole(χ, τ, hτ) = -1 := by
+  have htriv : χ.toMonoidHom.comp (ideleClassNorm F).ker.subtype = 1 := by
+    ext g
+    exact congrArg Subtype.val (DFunLike.congr_fun hω g)
+  obtain ⟨t, ⟨hc, hzero, -, -⟩, -⟩ := completedHeckeL_continuation_simplePoles χ _
+    (continuedCompletedHeckeL_spec χ).1 (continuedCompletedHeckeL_spec χ).2 htriv
+  have hphase := existsUnique_ideleNormSection_character_phase χ τ hτ
+  have hx : -t = hphase.exists.choose := by
+    apply hphase.unique _ hphase.exists.choose_spec
+    intro u
+    have he := DFunLike.congr_fun hc (QuotientGroup.mk (τ u))
+    change (χ (QuotientGroup.mk (τ u)) : ℂ) * _ ^ (0 : ℂ) =
+      1 * ((((ideleNorm F (τ u)).val : ℝ) : ℂ) ^ (-Complex.I * (t : ℂ))) at he
+    rw [Complex.cpow_zero, mul_one, one_mul, hτ u] at he
+    simpa only [Complex.ofReal_neg, neg_mul, mul_comm (t : ℂ) Complex.I] using he
+  change meromorphicOrderAt _ (-(hphase.exists.choose : ℂ) * Complex.I) = _
+  rwa [← hx, Complex.ofReal_neg, neg_neg, mul_comm (t : ℂ) Complex.I]
+
+/-- An entire global transform with the adjusted vanishing orders has a holomorphic
+finite-principal-value chart. On the left half-plane the completed function has no zeros,
+and its simple pole on a norm-twist component lowers the required order by one. -/
+private theorem archNuclearityQuotient_jetEquiv_separating_analytic (χ : U)
+    (τ : ℝ≥0ˣ →ₜ* IdeleGroup (𝓞 F) F) (hτ : RightInverse τ (ideleNorm F))
+    (u Φ : ℂ → ℂ) (hu : MeromorphicNFOn u univ) (hΦ : Differentiable ℂ Φ)
+    (hpos : ∀ z : ℂ, 0 < z.re → 0 ≤ meromorphicOrderAt u z)
+    (hjets : ∀ z, (archNuclearityMultiplicity χ τ hτ z : ℕ∞) ≤ analyticOrderAt Φ z)
+    (c : ℂ) (hc : c ≠ 0)
+    (he : Φ =ᶠ[Filter.codiscrete ℂ] fun z ↦
+      c * u z * ((heckeGammaFactor χ z)⁻¹ * continuedCompletedHeckeL χ z)) :
+    AnalyticOnNhd ℂ u univ := by
+  intro z hz
+  apply (hu hz).meromorphicOrderAt_nonneg_iff_analyticAt.mp
+  by_cases hp : 0 < z.re
+  · exact hpos z hp
+  let R := fun s ↦ (heckeGammaFactor χ s)⁻¹
+  let L := continuedCompletedHeckeL χ
+  have hR := (differentiable_inv_heckeGammaFactor χ).analyticAt z
+  have hL := (continuedCompletedHeckeL_spec χ).1 hz
+  have ho := meromorphicOrderAt_congr (he.filter_mono (nhdsNE_le_codiscrete z))
+  change meromorphicOrderAt Φ z = meromorphicOrderAt (((fun _ ↦ c) * u) * (R * L)) z at ho
+  rw [meromorphicOrderAt_mul (analyticAt_const.meromorphicAt.mul (hu hz).meromorphicAt)
+    (hR.meromorphicAt.mul hL.meromorphicAt), meromorphicOrderAt_mul_of_ne_zero analyticAt_const hc,
+    meromorphicOrderAt_mul hR.meromorphicAt hL.meromorphicAt, hR.meromorphicOrderAt_eq,
+    (hΦ.analyticAt z).meromorphicOrderAt_eq] at ho
+  have hn := hjets z
+  have hleft := archJet_completed_order_nonpos χ (le_of_not_gt hp)
+  change meromorphicOrderAt L z ≤ 0 at hleft
+  cases hU : meromorphicOrderAt u z with
+  | top => exact le_top
+  | coe k =>
+    rw [hU] at ho
+    obtain ⟨l, hl⟩ := WithTop.ne_top_iff_exists.mp (ne_top_of_le_ne_top (by simp) hleft)
+    rw [← hl] at ho hleft
+    have hl' : l ≤ 0 := by exact_mod_cast hleft
+    have hRfin : analyticOrderAt R z ≠ ⊤ := by
+      have ha : AnalyticOnNhd ℂ R univ := fun s _ ↦ (differentiable_inv_heckeGammaFactor χ).analyticAt s
+      exact fun h ↦ inv_ne_zero (heckeGammaFactor_ne_zero_of_re_pos χ (by norm_num : 0 < (1 : ℂ).re))
+        (ha.eqOn_zero_of_preconnected_of_eventuallyEq_zero isPreconnected_univ hz
+          (analyticOrderAt_eq_top.mp h) (mem_univ 1))
+    obtain ⟨r, hr⟩ := ENat.ne_top_iff_exists.mp hRfin
+    change (r : ℕ∞) = analyticOrderAt (fun s ↦ (heckeGammaFactor χ s)⁻¹) z at hr
+    rw [← hr] at ho
+    simp only [archNuclearityMultiplicity, ← hr, ENat.toNat_natCast] at hn
+    cases hφ : analyticOrderAt Φ z with
+    | top =>
+      rw [hφ] at ho
+      exact ((WithTop.coe_ne_top (a := k + ((r : ℤ) + l))) ho.symm).elim
+    | coe n =>
+      rw [hφ] at ho hn
+      have heq : (n : ℤ) = k + (r + l) := WithTop.coe_inj.mp ho
+      by_cases h : ω(χ) = 1 ∧ z = atZeroPole(χ, τ, hτ)
+      · have hLpole := archNuclearityQuotient_jetEquiv_separating_pole χ τ hτ h.1
+        rw [← h.2] at hLpole
+        change meromorphicOrderAt L z = -1 at hLpole
+        have hlone : l = -1 := WithTop.coe_inj.mp (hl.trans hLpole)
+        have hnr : r - 1 ≤ n := by
+          rw [ite_eq_left h] at hn
+          exact_mod_cast hn
+        exact WithTop.coe_le_coe.mpr (by omega)
+      · have hnr : r ≤ n := by
+          rw [ite_eq_right h, Nat.sub_zero] at hn
+          exact_mod_cast hn
+        exact WithTop.coe_le_coe.mpr (by omega)
+
+/-- Inserting a pure local tensor preserves its archimedean factor. A nonzero
+value of that factor extracts the inserted finite test by taking an adelic slice. -/
+private theorem archNuclearityQuotient_jetEquiv_separating_insert (S : Finset V)
+    (a : ℬ(InfiniteAdeleRing F)) (b : ∀ v : S, ℬ(v.val.adicCompletion F))
+    (ha : a ∈ archNuclearity_flatFactors) :
+    sAdeleSchwartzToGlobal F S ((sAdeleSchwartz_inductiveTensor_equiv F S).choose
+      (a ⊗ₜ[ℂ] (⨂ₜ[ℂ] v, b v))) ∈ globalArchimedeanFlatTests F := by
+  classical
+  let ins := sAdeleSchwartzToGlobal F S ((sAdeleSchwartz_inductiveTensor_equiv F S).choose
+    (a ⊗ₜ[ℂ] (⨂ₜ[ℂ] v, b v)))
+  let k (y : FiniteAdeleRing (𝓞 F) F) := if ∀ v ∉ S, y v ∈ v.adicCompletionIntegers F
+    then ∏ v : S, b v (Multiplicative.ofAdd (y v.val)) else 0
+  have hv (x : 𝔸[F]) : ins (Multiplicative.ofAdd x) = a (Multiplicative.ofAdd x.1) * k x.2 := by
+    dsimp only [ins]
+    rw [sAdeleSchwartzToGlobal_apply, (sAdeleSchwartz_inductiveTensor_equiv F S).choose_spec]
+    dsimp only [k]
+    split_ifs
+    · rfl
+    · exact (mul_zero _).symm
+  change ins ∈ _
+  by_cases haz : a = 0
+  · have hzero : ins = 0 := Subtype.ext (funext fun x ↦ (hv x.toAdd).trans (by
+        rw [haz]
+        exact zero_mul _))
+    rw [hzero]
+    exact Submodule.zero_mem _
+  obtain ⟨p, hp⟩ : ∃ p : InfiniteAdeleRing F, a (Multiplicative.ofAdd p) ≠ 0 := by
+    by_contra! h
+    exact haz (Subtype.ext (funext fun x ↦ h x.toAdd))
+  let e := (adeleSchwartz_inductiveTensor_equiv F).choose
+  have slice (w : InductiveTensor ℬ(InfiniteAdeleRing F) ℬ(FiniteAdeleRing (𝓞 F) F)) :
+      ∃ d : ℬ(FiniteAdeleRing (𝓞 F) F), ∀ y, d (Multiplicative.ofAdd y) =
+        e w (Multiplicative.ofAdd (p, y)) := by
+    induction w using TensorProduct.inductionOn with
+    | tmul v d => exact ⟨v (Multiplicative.ofAdd p) • d,
+        fun y ↦ ((adeleSchwartz_inductiveTensor_equiv F).choose_spec v d (p, y)).symm⟩
+    | add w t hw ht =>
+      obtain ⟨d, hd⟩ := hw
+      obtain ⟨b, hb⟩ := ht
+      exact ⟨d + b, fun y ↦ (congrArg₂ (· + ·) (hd y) (hb y)).trans
+        (congrArg (fun q : ℬ(𝔸[F]) ↦ q (Multiplicative.ofAdd (p, y))) (e.map_add w t).symm)⟩
+  obtain ⟨d, hd⟩ := slice (e.symm ins)
+  rw [e.apply_symm_apply] at hd
+  obtain ⟨f₀, hf₀⟩ := ha
+  refine Submodule.subset_span ⟨a, (a (Multiplicative.ofAdd p))⁻¹ • d, f₀, hf₀, False.elim, ?_⟩
+  apply Subtype.ext
+  funext x
+  refine ((adeleSchwartz_inductiveTensor_equiv F).choose_spec a _ x.toAdd).trans ?_
+  change a (Multiplicative.ofAdd x.toAdd.1) *
+    ((a (Multiplicative.ofAdd p))⁻¹ * d (Multiplicative.ofAdd x.toAdd.2)) = _
+  change _ = ins (Multiplicative.ofAdd x.toAdd)
+  rw [hd x.toAdd.2, hv (p, x.toAdd.2), hv x.toAdd]
+  exact congrArg (a (Multiplicative.ofAdd x.toAdd.1) * ·) (inv_mul_cancel_left₀ hp _)
+
+/-- Undoing the finite principal values on a polar-free local test leaves its
+archimedean factors flat. The resulting test still has flat archimedean factors
+after extension by the integer indicators outside the stage. -/
+private theorem archNuclearityQuotient_jetEquiv_separating_lift (S : Finset V)
+    (η : PontryaginDual (SIdeleQuotient F S)) (u : ℬ(SAdeleRing F S)) :
+    let chart := quasiCharacterNormTwist (sIdeleQuotientNorm F S)
+      (isProperMap_sIdeleQuotientNorm F S).continuous
+      ((⟨Circle.coeHom, continuous_subtype_val⟩ : Circle →ₜ* ℂ).comp η)
+    AnalyticOnNhd ℂ (fun z ↦ sLocalIdelicZFunction u (chart z)) univ →
+      ∃ h : ℬ(SAdeleRing F S), (∀ z, sLocalIdelicZFunction u (chart z) =
+        sLocalIdelicZFunction (sAdelePrincipalValue F (Finset.Subset.refl S) h) (chart z)) ∧
+        sAdeleSchwartzToGlobal F S h ∈ globalArchimedeanFlatTests F := by
+  classical
+  intro chart hu
+  let r (w : RealPlaces) : {e : w.val.Completion ≃+* ℝ // IsHomeomorph (e : w.val.Completion → ℝ)} :=
+    ⟨InfinitePlace.Completion.ringEquivRealOfIsReal w.2,
+      (InfinitePlace.Completion.isometryEquivRealOfIsReal w.2).toHomeomorph.isHomeomorph⟩
+  let c (w : ComplexPlaces) : {e : w.val.Completion ≃+* ℂ // IsHomeomorph (e : w.val.Completion → ℂ)} :=
+    ⟨InfinitePlace.Completion.ringEquivComplexOfIsComplex w.2,
+      (InfinitePlace.Completion.isometryEquivComplexOfIsComplex w.2).toHomeomorph.isHomeomorph⟩
+  obtain ⟨g, hg⟩ := (sLocalIdelicZFunction_entire_iff_eq_polarFree r c η u).mp hu
+  let pv := sAdelePrincipalValue F (Finset.Subset.refl S)
+  let A := (globalArchimedeanFlatTests F).comap (sAdeleSchwartzToGlobal F S)
+  suffices incl : sAdelePolarFree S r c ≤ A.map pv by
+    obtain ⟨h, hh, he⟩ := incl g.property
+    exact ⟨h, fun z ↦ (hg z).trans (congrArg (fun q ↦ sLocalIdelicZFunction q (chart z)) he.symm), hh⟩
+  rw [sAdelePolarFree_eq_span_tmul]
+  apply Submodule.span_le.mpr
+  rintro _ ⟨a, b, ⟨f₀, h₀⟩, hb, rfl⟩
+  have ha : a ∈ archNuclearity_flatFactors := by
+    refine ⟨f₀, fun x ↦ ?_⟩
+    let y := InfiniteAdeleRing.ringEquiv_mixedSpace F x
+    have he := h₀ y
+    refine Eq.trans ?_ he.symm
+    apply congrArg (fun t : InfiniteAdeleRing F ↦ a (Multiplicative.ofAdd t))
+    funext w
+    split_ifs with hw
+    · exact ((r ⟨w, hw⟩).val.symm_apply_apply (x w)).symm
+    · exact ((c ⟨w, InfinitePlace.not_isReal_iff_isComplex.mp hw⟩).val.symm_apply_apply (x w)).symm
+  choose t ht using fun v ↦ (Set.ext_iff.mp (finitePlacePrincipalValue_range v.val) (b v)).mpr (hb v)
+  let e := (sAdeleSchwartz_inductiveTensor_equiv F S).choose
+  refine ⟨e (a ⊗ₜ[ℂ] (⨂ₜ[ℂ] v, t v)), archNuclearityQuotient_jetEquiv_separating_insert S a t ha, ?_⟩
+  refine (sAdelePrincipalValue_tmul (Finset.Subset.refl S) a t).trans ?_
+  apply congrArg (fun q : ∀ v : S, ℬ(v.val.adicCompletion F) ↦ e (a ⊗ₜ[ℂ] (⨂ₜ[ℂ] v, q v)))
+  funext v
+  exact (ite_eq_left v.property).trans (ht v)
+
+/-- Unit translates preserve the span of global tensors with flat archimedean factor. -/
+private theorem archNuclearityQuotient_jetEquiv_separating_translate
+    (w : IdeleGroup (𝓞 F) F) (g : ℬ(𝔸[F])) (hg : g ∈ globalArchimedeanFlatTests F) :
+    schwartzBruhatUnitTranslate w g ∈ globalArchimedeanFlatTests F := by
+  obtain ⟨u, v, rfl⟩ := archNuclearity_unit_arch_finite w
+  refine (show globalArchimedeanFlatTests F ≤ (globalArchimedeanFlatTests F).comap
+    (archNuclearity_translateLinear (archNuclearity_archUnit u * archNuclearity_finiteUnit v)) from ?_) hg
+  apply Submodule.span_le.mpr
+  rintro _ ⟨a, b, f₀, ha, -, rfl⟩
+  change schwartzBruhatUnitTranslate (archNuclearity_archUnit u * archNuclearity_finiteUnit v)
+    ((adeleSchwartz_inductiveTensor_equiv F).choose (a ⊗ₜ[ℂ] b)) ∈ globalArchimedeanFlatTests F
+  rw [archNuclearity_translate_pure]
+  obtain ⟨f₁, h₁⟩ := archNuclearity_flatFactors_translate u a ⟨f₀, ha⟩
+  exact Submodule.subset_span ⟨_, _, f₁, h₁, False.elim, rfl⟩
+
+/-- Every character with the prescribed norm-one restriction belongs to the given norm chart.
+The two characters agree on the kernel, and their quotient on the section is a complex power.
+Adapted from the component calculation in §7.2, `sLocalPrincipalValue_chart`. -/
+private theorem archNuclearityQuotient_jetEquiv_separating_chart (χ : U)
+    (τ : ℝ≥0ˣ →ₜ* IdeleGroup (𝓞 F) F) (hτ : RightInverse τ (ideleNorm F))
+    (c : QuasiCharacter C𝔽) (hc : ∀ k : (ideleClassNorm F).ker, c k.val = (ω(χ) k : ℂ)) :
+    ∃ z : ℂ, ideleClassNormTwist χ z = c := by
+  let q : IdeleGroup (𝓞 F) F →ₜ* C𝔽 := ⟨QuotientGroup.mk' _, continuous_quotient_mk'⟩
+  let σ := q.comp τ
+  have hσ : RightInverse σ (ideleClassNorm F) := hτ
+  let d := (⟨Circle.coeHom, continuous_subtype_val⟩ : Circle →ₜ* ℂ).comp χ
+  obtain ⟨z, hz, -⟩ := existsUnique_complexPower (c.comp σ)
+  obtain ⟨w, hw, -⟩ := existsUnique_complexPower (d.comp σ)
+  refine ⟨z - w, ContinuousMonoidHom.ext fun g ↦ ?_⟩
+  let t := ideleClassNorm F g
+  let k : (ideleClassNorm F).ker := ⟨g / σ t, by
+    change ideleClassNorm F (g / σ t) = 1
+    rw [map_div, hσ]
+    exact div_self' _⟩
+  have hg : k.val * σ t = g := div_mul_cancel _ _
+  let N : ℂ := ((t.val : ℝ) : ℂ)
+  have hN : N ≠ 0 := Complex.ofReal_ne_zero.mpr (NNReal.coe_ne_zero.mpr t.ne_zero)
+  have hval : d (σ t) * N ^ (z - w) = c (σ t) := by
+    rw [show d (σ t) = N ^ w from hw t, show c (σ t) = N ^ z from hz t,
+      ← Complex.cpow_add _ _ hN, show w + (z - w) = z by ring]
+  change d g * N ^ (z - w) = c g
+  calc
+    d g * N ^ (z - w) = d k.val * (d (σ t) * N ^ (z - w)) := by rw [← mul_assoc, ← map_mul, hg]
+    _ = c g := by rw [hval, ← (show c k.val = d k.val from hc k), ← map_mul, hg]
+
+/-- A flat test with the same Mellin chart as a polar test can be chosen polar.
+On the trivial isotype their signed polar values agree. On any other isotype
+a normalized difference of norm-one translates kills both polar values. -/
+private theorem archNuclearityQuotient_jetEquiv_separating_polar (χ : U)
+    (τ : ℝ≥0ˣ →ₜ* IdeleGroup (𝓞 F) F) (hτ : RightInverse τ (ideleNorm F))
+    (f : P) (g : ℬ(𝔸[F])) (hg : g ∈ globalArchimedeanFlatTests F)
+    (he : ∀ z, globalIdelicZFunction g (ideleClassNormTwist χ z) =
+      globalIdelicZFunction f.val (ideleClassNormTwist χ z)) :
+    mkΘ(χ, f) ∈ archNuclearityDenominator χ := by
+  apply (mem_archNuclearityDenominator_iff_flatPolarImage χ _).mpr
+  have hcomp (c : QuasiCharacter C𝔽) (hc : ∀ k : (ideleClassNorm F).ker, c k.val = (ω(χ) k : ℂ)) :
+      globalIdelicZFunction g c = globalIdelicZFunction f.val c := by
+    obtain ⟨z, rfl⟩ := archNuclearityQuotient_jetEquiv_separating_chart χ τ hτ c hc
+    exact he z
+  let M := globalIdelicMellin (F := F)
+  have mk (b : P) (hb : ∀ (c : {c : QuasiCharacter C𝔽 // 0 ≤ globalIdelicOrderBound c}),
+      (∀ k : (ideleClassNorm F).ker, c.val k.val = (ω(χ) k : ℂ)) →
+      (M b.val).val c = (M g).val c) : mkΘ(χ, f) = mkΘ(χ, b) := by
+    apply (Submodule.Quotient.eq (Π(χ))).mpr
+    change f.val - b.val ∈ (homogeneousAdelicThetaLinearMap F (ω(χ))).ker
+    apply (mem_homogeneousAdelicTheta_ker_iff (ω(χ)) _).mpr
+    intro c hc
+    rw [map_sub]
+    change (M f.val).val c - (M b.val).val c = 0
+    exact sub_eq_zero.mpr ((hcomp c.val hc).symm.trans (hb c hc).symm)
+  by_cases hω : ω(χ) = 1
+  · have htriv (s : ℂ) : globalIdelicZFunction g (ideleClassNormTwist (1 : U) s) =
+        globalIdelicZFunction f.val (ideleClassNormTwist (1 : U) s) :=
+      hcomp _ fun k ↦ (normOneRestriction_unitaryChart (ideleClassNorm F)
+        (isProperMap_ideleClassNorm F).continuous (1 : U) s k).trans (by rw [hω]; rfl)
+    have hzero := tendsto_nhds_unique ((globalIdelicZFunction_residue_zero g).congr
+      (fun s ↦ congrArg (s * ·) (htriv s))) (globalIdelicZFunction_residue_zero f.val)
+    have hone := tendsto_nhds_unique ((globalIdelicZFunction_residue_one g).congr
+      (fun s ↦ congrArg ((s - 1) * ·) (htriv s))) (globalIdelicZFunction_residue_one f.val)
+    have hmass : ((normOneIdeleClassTamagawaMeasure F univ).toReal : ℂ) ≠ 0 := by
+      let : CompactSpace (ideleClassNorm F).ker := (ideleClassGroup_finiteness F).2.1
+      let : (normOneIdeleClassTamagawaMeasure F).IsHaarMeasure :=
+        (multiplicativeTamagawaMeasures_existsUnique F).exists.choose_spec.2.2.2.1
+      exact Complex.ofReal_ne_zero.mpr (ENNReal.toReal_ne_zero.mpr
+        ⟨(Measure.measure_univ_pos.mpr (NeZero.ne _)).ne', isCompact_univ.measure_ne_top⟩)
+    obtain ⟨h₀, h₁⟩ := (mem_adelePolarSubspace _).mp f.property
+    have hpol : g ∈ P := (mem_adelePolarSubspace g).mpr
+      ⟨(mul_left_cancel₀ (neg_ne_zero.mpr hmass) hzero).trans h₀,
+       (mul_left_cancel₀ hmass hone).trans h₁⟩
+    exact ⟨⟨g, hpol⟩, hg, mk _ fun _ _ ↦ rfl⟩
+  · obtain ⟨h, hh⟩ : ∃ h : (ideleClassNorm F).ker, (ω(χ) h : ℂ) ≠ 1 :=
+      not_forall.mp fun hall ↦ hω (PontryaginDual.ext fun u ↦ Subtype.ext (hall u))
+    obtain ⟨w, hw⟩ := QuotientGroup.mk_surjective h.val
+    have hw1 : ideleNorm F w = 1 := by
+      change ideleClassNorm F (QuotientGroup.mk w) = 1
+      rw [hw, MonoidHom.mem_ker.mp h.property]
+    let c := (ω(χ) h : ℂ) - 1
+    let b := c⁻¹ • (schwartzBruhatUnitTranslate w g - g)
+    have hb : b ∈ P := by
+      have hp : adelePolarValues (schwartzBruhatUnitTranslate w g) = adelePolarValues g := by
+        apply Prod.ext
+        · change g (Multiplicative.ofAdd (w.inv * 0)) = g (Multiplicative.ofAdd 0)
+          rw [mul_zero]
+        · have hd := archNuclearity_hatC_translate w g
+          change (adelePolarValues (schwartzBruhatUnitTranslate w g)).2 =
+            ((((ideleNorm F w).val : ℝ) : ℂ) * (adelePolarValues g).2) at hd
+          simpa only [hw1, Units.val_one, NNReal.coe_one, Complex.ofReal_one, one_mul] using hd
+      change (adelePolarValues (F := F)) (c⁻¹ • (schwartzBruhatUnitTranslate w g - g)) = 0
+      rw [map_smul, map_sub]
+      change c⁻¹ • (adelePolarValues (schwartzBruhatUnitTranslate w g) - adelePolarValues g) = 0
+      rw [hp, sub_self, smul_zero]
+    refine ⟨⟨b, hb⟩, (globalArchimedeanFlatTests F).smul_mem _
+      ((globalArchimedeanFlatTests F).sub_mem
+        (archNuclearityQuotient_jetEquiv_separating_translate w g hg) hg), mk _ ?_⟩
+    intro z hz
+    change (M (c⁻¹ • (schwartzBruhatUnitTranslate w g - g))).val z = _
+    rw [map_smul, map_sub]
+    change c⁻¹ * ((M (schwartzBruhatUnitTranslate w g)).val z - (M g).val z) = (M g).val z
+    rw [show (M (schwartzBruhatUnitTranslate w g)).val z = _ from globalIdelicMellin_unitTranslate w g z,
+      hw, hz h, show (ω(χ) h : ℂ) * (M g).val z - (M g).val z = c * (M g).val z by
+        rw [show c = _ from rfl, sub_mul, one_mul]]
+    exact inv_mul_cancel_left₀ (sub_ne_zero.mpr hh) _
+
+/-- On a finite stage containing the ramification, vanishing of the adjusted global
+jets removes every pole of the local principal-value chart. Replace that chart by
+a polar-free local test, then undo the finite principal values before insertion. -/
+private theorem archNuclearityQuotient_jetEquiv_separating_at_stage (χ : U)
+    (τ : ℝ≥0ˣ →ₜ* IdeleGroup (𝓞 F) F) (hτ : RightInverse τ (ideleNorm F))
+    (S : Finset V) (hS : ideleClassNormTwist χ 0 ∈ unramifiedOutside F S)
+    (a : ℬ(SAdeleRing F S)) (f : P) (hf : sAdeleSchwartzToGlobal F S a = f.val)
+    (hjets : ∀ z, (archNuclearityMultiplicity χ τ hτ z : ℕ∞) ≤
+      analyticOrderAt (fun s ↦ globalIdelicZFunction f.val (ideleClassNormTwist χ s)) z) :
+    mkΘ(χ, f) ∈ archNuclearityDenominator χ := by
+  let R (s : ℂ) := (heckeGammaFactor χ s)⁻¹
+  let Λ := continuedCompletedHeckeL χ
+  let L := toMeromorphicNFOn (R * Λ) univ
+  have hΛ := (continuedCompletedHeckeL_spec χ).1
+  have hR := differentiable_inv_heckeGammaFactor χ
+  have hm : MeromorphicOn (R * Λ) univ := fun s hs ↦
+    ((hR.analyticAt s).meromorphicAt.mul (hΛ hs).meromorphicAt)
+  have hseries (s : {s : ℂ // 1 < s.re}) : L s = finiteHeckeL χ s := by
+    have hn := heckeGammaFactor_ne_zero_of_re_pos χ (zero_lt_one.trans s.property)
+    have hnf : MeromorphicNFAt (R * Λ) s :=
+      (meromorphicNFAt_mul_iff_right (hR.analyticAt _) (inv_ne_zero hn)).mpr (hΛ (mem_univ _))
+    rw [show L s = _ from toMeromorphicNFOn_eq_toMeromorphicNFAt hm (mem_univ s.val),
+      toMeromorphicNFAt_eq_self.mpr hnf]
+    change (heckeGammaFactor χ s)⁻¹ * continuedCompletedHeckeL χ s = _
+    rw [(continuedCompletedHeckeL_spec χ).2 s]
+    exact inv_mul_cancel_left₀ hn _
+  obtain ⟨η, c, hc, hη, hstage⟩ := archNuclearityQuotient_jetEquiv_separating_stage χ S
+    hS L (meromorphicNFOn_toMeromorphicNFOn _ _) hseries
+  let chart := quasiCharacterNormTwist (sIdeleQuotientNorm F S)
+    (isProperMap_sIdeleQuotientNorm F S).continuous
+    ((⟨Circle.coeHom, continuous_subtype_val⟩ : Circle →ₜ* ℂ).comp η)
+  let pv := sAdelePrincipalValue F (Finset.Subset.refl S)
+  let u (z : ℂ) := sLocalIdelicZFunction (pv a) (chart z)
+  have hu : MeromorphicNFOn u univ := sLocalIdelicZFunction_meromorphic (pv a) η
+  have hpos (z : ℂ) (hz : 0 < z.re) : 0 ≤ meromorphicOrderAt u z := by
+    have hbound := sLocalIdelicZFunction_principalValue_pole_bound a η z
+    rw [← archNuclearityGammaOrder_eq_sLocal χ S η hS hη z,
+      ((hR.analyticAt z).analyticOrderAt_eq_zero.mpr
+        (inv_ne_zero (heckeGammaFactor_ne_zero_of_re_pos χ hz)))] at hbound
+    simpa only [ENat.toNat_zero, Nat.cast_zero, neg_zero, WithTop.coe_zero] using hbound
+  have hfac := hstage a
+  rw [hf] at hfac
+  have hd := globalIdelicZFunction_entire_of_vanishing f.val f.property χ
+  have han : AnalyticOnNhd ℂ u univ := by
+    apply archNuclearityQuotient_jetEquiv_separating_analytic χ τ hτ u _ hu hd hpos hjets c hc
+    have hL : R * Λ =ᶠ[Filter.codiscrete ℂ] L := toMeromorphicNFOn_eqOn_codiscrete hm
+    filter_upwards [hfac, hL] with s hs hLs
+    exact hs.trans (congrArg (c * u s * ·) hLs.symm)
+  obtain ⟨b, hb, hflat⟩ := archNuclearityQuotient_jetEquiv_separating_lift S η (pv a) han
+  apply archNuclearityQuotient_jetEquiv_separating_polar χ τ hτ f (sAdeleSchwartzToGlobal F S b) hflat
+  have eqZ : (fun z ↦ globalIdelicZFunction (sAdeleSchwartzToGlobal F S b) (ideleClassNormTwist χ z))
+      =ᶠ[Filter.codiscrete ℂ] fun z ↦ globalIdelicZFunction f.val (ideleClassNormTwist χ z) := by
+    filter_upwards [hstage b, hfac] with z hz hz'
+    change _ = c * sLocalIdelicZFunction (pv b) (chart z) * L z at hz
+    rw [← hb z] at hz
+    exact hz.trans hz'.symm
+  intro z
+  exact (((globalIdelicZFunction_meromorphic _ χ (mem_univ z)).eventuallyEq_nhdsNE_iff_eventuallyEq_nhds
+    (globalIdelicZFunction_meromorphic f.val χ (mem_univ z))).mp
+    (eqZ.filter_mono (nhdsNE_le_codiscrete z))).eq_of_nhds
+
 /-- Paper: Equation (7.4.3.13), p. 372.
 The adjusted jets separate the classes of the archimedean orbital quotient: a class
 on which every jet vanishes is the class of a flat test, that is, it lies in the
 denominator. -/
 theorem archNuclearityQuotient_jetEquiv_separating (x : Θ₀(χ))
     (hx : ∀ j, archNuclearityJet χ τ hτ j x = 0) : x ∈ archNuclearityDenominator χ := by
-  sorry
+  classical
+  obtain ⟨f, rfl⟩ := Submodule.Quotient.mk_surjective (Π(χ)) x
+  obtain ⟨A, a, ha⟩ := sAdeleSchwartzToGlobal_exhaustive F f.val
+  obtain ⟨T, hT⟩ : ∃ T : Finset V, ideleClassNormTwist χ 0 ∈ unramifiedOutside F T := by
+    apply Set.mem_iUnion.mp
+    rw [iUnion_unramifiedOutside]
+    trivial
+  let S := A ∪ T
+  have hAS : A ⊆ S := Finset.subset_union_left
+  have hS : ideleClassNormTwist χ 0 ∈ unramifiedOutside F S := fun v hv ↦
+    hT v (fun h ↦ hv (Finset.mem_union_right _ h))
+  apply archNuclearityQuotient_jetEquiv_separating_at_stage χ τ hτ S hS
+    (sAdeleSchwartzTransition F hAS a) f ((LinearMap.congr_fun (sAdeleSchwartzToGlobal_comp F hAS) a).trans ha)
+  intro z
+  apply (natCast_le_analyticOrderAt_iff_iteratedDeriv_eq_zero
+    ((globalIdelicZFunction_entire_of_vanishing f.val f.property χ).analyticAt z)).mpr
+  intro k hk
+  let j : ArchNuclearityJetIndex χ τ hτ := ⟨(z, k), hk⟩
+  exact (archNuclearityJet_apply χ τ hτ j f).2.2.1.symm.trans (hx j)
 
 /-- Entire divisibility is equivalent to the corresponding pointwise inequalities of vanishing orders. -/
 private theorem archNuclearityMellin_range_entire_dvd
@@ -4656,6 +9317,345 @@ private theorem archNuclearityDenominator_isClosed_jetEquiv
   exact isClosed_singleton.preimage
     (e.continuous.comp (Submodule.continuous_mkQ (archNuclearityDenominator χ)))
 
+/-- Smooth compactly supported cut-offs away from the coordinate walls of a mixed real and
+complex coordinate space that are eventually one at every point off the walls. -/
+private theorem archNuclearityDenominator_ne_bot_cutoff (ι κ : Type*) [Fintype ι] [Fintype κ] :
+    ∃ k : ℕ → ((ι → ℝ) × (κ → ℂ)) → ℝ,
+      (∀ n, ContDiff ℝ ((⊤ : ℕ∞) : WithTop ℕ∞) (k n)) ∧
+      (∀ n, HasCompactSupport (k n)) ∧
+      (∀ n, Disjoint (tsupport (k n)) {x | (∃ i, x.1 i = 0) ∨ ∃ j, x.2 j = 0}) ∧
+      (∀ n x, 0 ≤ k n x ∧ k n x ≤ 1) ∧
+      (∀ x, ¬((∃ i, x.1 i = 0) ∨ ∃ j, x.2 j = 0) →
+        ∀ᶠ n in Filter.atTop, k n x = 1) := by
+  let W : Set ((ι → ℝ) × (κ → ℂ)) := {x | (∃ i, x.1 i = 0) ∨ ∃ j, x.2 j = 0}
+  have hW : IsClosed W := by
+    have hWe : W = (⋃ i, {x : (ι → ℝ) × (κ → ℂ) | x.1 i = 0}) ∪
+        ⋃ j, {x : (ι → ℝ) × (κ → ℂ) | x.2 j = 0} := by
+      ext x
+      constructor
+      · rintro (⟨i, hi⟩ | ⟨j, hj⟩)
+        · exact Or.inl (mem_iUnion.mpr ⟨i, hi⟩)
+        · exact Or.inr (mem_iUnion.mpr ⟨j, hj⟩)
+      · rintro (h | h)
+        · exact Or.inl (mem_iUnion.mp h)
+        · exact Or.inr (mem_iUnion.mp h)
+    rw [hWe]
+    exact (isClosed_iUnion_of_finite fun i ↦ isClosed_eq (by fun_prop) continuous_const).union
+      (isClosed_iUnion_of_finite fun j ↦ isClosed_eq (by fun_prop) continuous_const)
+  obtain ⟨f, hfs, hfc, hfr⟩ := hW.isOpen_compl.exists_contDiff_support_eq (n := ⊤)
+  have hf0 (x : (ι → ℝ) × (κ → ℂ)) : 0 ≤ f x := (hfr ⟨x, rfl⟩).1
+  let b (n : ℕ) : ContDiffBump (0 : (ι → ℝ) × (κ → ℂ)) :=
+    ⟨(n : ℝ) + 1, (n : ℝ) + 2, by positivity, by linarith⟩
+  refine ⟨fun n x ↦ Real.smoothTransition (n * f x - 1) * b n x, fun n ↦ ?_, fun n ↦ ?_,
+    fun n ↦ ?_, fun n x ↦ ?_, fun x hx ↦ ?_⟩
+  · exact (Real.smoothTransition.contDiff.comp ((contDiff_const.mul hfc).sub contDiff_const)).mul
+      (b n).contDiff
+  · exact (b n).hasCompactSupport.mul_left
+  · have hcl : IsClosed {x : (ι → ℝ) × (κ → ℂ) | 1 ≤ n * f x} :=
+      isClosed_le continuous_const (continuous_const.mul hfc.continuous)
+    have hsub : tsupport (fun x ↦ Real.smoothTransition (n * f x - 1) * b n x) ⊆
+        {x : (ι → ℝ) × (κ → ℂ) | 1 ≤ n * f x} := by
+      refine closure_minimal (fun x hx ↦ ?_) hcl
+      by_contra hlt
+      have hlt' : n * f x < 1 := not_le.mp hlt
+      exact hx (mul_eq_zero_of_left
+        (Real.smoothTransition.zero_of_nonpos (by linarith)) _)
+    rw [Set.disjoint_left]
+    intro x hx hw
+    have h1 : 1 ≤ n * f x := hsub hx
+    have h0 : f x = 0 := by
+      have hn : x ∉ Function.support f := by
+        rw [hfs]
+        exact fun h ↦ h hw
+      exact Function.notMem_support.mp hn
+    rw [h0, mul_zero] at h1
+    linarith
+  · exact ⟨mul_nonneg (Real.smoothTransition.nonneg _) (b n).nonneg,
+      (mul_le_mul (Real.smoothTransition.le_one _) (b n).le_one (b n).nonneg
+        zero_le_one).trans_eq (one_mul 1)⟩
+  · have hmem : x ∈ Function.support f := by
+      rw [hfs]
+      exact hx
+    have hpos : 0 < f x := lt_of_le_of_ne (hf0 x) (Ne.symm hmem)
+    obtain ⟨N, hN⟩ := exists_nat_ge (max (2 / f x) ‖x‖)
+    filter_upwards [Filter.eventually_ge_atTop N] with n hn
+    have hn' : max (2 / f x) ‖x‖ ≤ n := hN.trans (by exact_mod_cast hn)
+    have h1 : 1 ≤ n * f x - 1 := by
+      have h2 := (div_le_iff₀ hpos).mp ((le_max_left _ _).trans hn')
+      linarith
+    have h2 : x ∈ Metric.closedBall (0 : (ι → ℝ) × (κ → ℂ)) (b n).rIn := by
+      rw [mem_closedBall_zero_iff]
+      exact ((le_max_right _ _).trans hn').trans (le_add_of_nonneg_right zero_le_one)
+    change Real.smoothTransition (n * f x - 1) * b n x = 1
+    rw [Real.smoothTransition.one_of_one_le h1, (b n).one_of_mem_closedBall h2, mul_one]
+
+/-- If an integrable function has zero integral against every member of a sequence of
+cut-offs with values in the unit interval that is eventually one at each point, then its
+integral is zero. -/
+private theorem archNuclearityDenominator_ne_bot_limit {X : Type*} [MeasurableSpace X]
+    (μ : Measure X) (G : X → ℂ) (hG : Integrable G μ) (k : ℕ → X → ℝ)
+    (hk : ∀ n x, 0 ≤ k n x ∧ k n x ≤ 1) (hlim : ∀ x, ∀ᶠ n in Filter.atTop, k n x = 1)
+    (hint : ∀ n, Integrable (fun x ↦ (k n x : ℂ) * G x) μ)
+    (h0 : ∀ n, ∫ x, (k n x : ℂ) * G x ∂μ = 0) : ∫ x, G x ∂μ = 0 := by
+  have h := tendsto_integral_of_dominated_convergence (fun x ↦ ‖G x‖)
+    (fun n ↦ (hint n).aestronglyMeasurable) hG.norm
+    (fun n ↦ ae_of_all _ fun x ↦ by
+      rw [norm_mul, Complex.norm_real, Real.norm_of_nonneg (hk n x).1]
+      exact mul_le_of_le_one_left (norm_nonneg _) (hk n x).2)
+    (ae_of_all _ fun x ↦ tendsto_nhds_of_eventually_eq
+      ((hlim x).mono fun n hn ↦ by rw [hn, Complex.ofReal_one, one_mul]))
+  simp only [h0] at h
+  exact tendsto_nhds_unique h tendsto_const_nhds
+
+/-- A norm twist of a unitary character whose exponent has real part greater than one lies in
+the half-plane of absolute convergence of the zeta integral. -/
+private theorem archNuclearityDenominator_ne_bot_rightHalf
+    (χ : PontryaginDual (IdeleClassGroup (𝓞 F) F)) (s : ℂ) (hs : 1 < s.re) :
+    ideleClassNormTwist χ s ∈
+      (relativeRightHalfPlane (ideleClassNorm F) (isProperMap_ideleClassNorm F)
+        (ideleClassNorm_ne_one (F := F)) 1 : Set (HeckeCharacter (𝓞 F) F)) :=
+  show 1 < quasiCharacterAbscissa (ideleClassNorm F) (isProperMap_ideleClassNorm F)
+      (ideleClassNorm_ne_one (F := F)) (ideleClassNormTwist χ s) from
+    (quasiCharacterAbscissa_ideleClassNormTwist χ s).symm ▸ hs
+
+/-- Some adelic test has a nonzero zeta integral at the square of the norm twist. -/
+private theorem archNuclearityDenominator_ne_bot_zeta_ne_zero
+    (χ : PontryaginDual (IdeleClassGroup (𝓞 F) F)) :
+    ∃ f : ℬ(𝔸[F]), globalIdelicZetaIntegral f (ideleClassNormTwist χ 2) ≠ 0 := by
+  have hs : (2 : ℂ) ∈ Complex.re ⁻¹' Set.Ioi (1 : ℝ) := by
+    change (1 : ℝ) < (2 : ℂ).re
+    norm_num
+  obtain ⟨fA, hfA⟩ := exists_archimedeanHeckeTest χ
+  obtain ⟨f, a, ha, hf⟩ := exists_globalHeckeTest χ fA
+  refine ⟨f, ?_⟩
+  have h1 := hf ⟨2, hs⟩
+  have h2 := hfA ⟨2, hs⟩
+  rw [h1, h2]
+  exact mul_ne_zero ha (mul_ne_zero (heckeGammaFactor_ne_zero_of_re_pos χ (by norm_num))
+    (finiteHeckeL_ne_zero_of_one_lt_re χ ⟨2, hs⟩))
+
+/-- Left invariance of the idelic Haar measure turns a translate of the test function into the
+value of the quasi-character at the translating idele. -/
+private theorem archNuclearityDenominator_ne_bot_zeta_translate
+    (u : IdeleGroup (𝓞 F) F) (f : ℬ(𝔸[F])) (c : HeckeCharacter (𝓞 F) F) :
+    globalIdelicZetaIntegral (schwartzBruhatUnitTranslate u f) c =
+      c (QuotientGroup.mk u) * globalIdelicZetaIntegral f c := by
+  let : MeasurableSpace (IdeleGroup (𝓞 F) F) := borel _
+  let : BorelSpace (IdeleGroup (𝓞 F) F) := ⟨rfl⟩
+  let : (multiplicativeTamagawaMeasure F).IsHaarMeasure :=
+    (multiplicativeTamagawaMeasures_existsUnique F).exists.choose_spec.1
+  let d (g : IdeleGroup (𝓞 F) F) : ℂ := c (QuotientGroup.mk g)
+  have hd (g k : IdeleGroup (𝓞 F) F) : d (g * k) = d g * d k := by
+    change c (QuotientGroup.mk (g * k)) = _
+    rw [QuotientGroup.mk_mul, map_mul]
+  let b (g : IdeleGroup (𝓞 F) F) : ℂ := f (Multiplicative.ofAdd g.val) * d g
+  change (∫ g : IdeleGroup (𝓞 F) F,
+    f (Multiplicative.ofAdd ((↑u⁻¹ : 𝔸[F]) * g.val)) * d g
+      ∂multiplicativeTamagawaMeasure F) = d u * ∫ g, b g ∂multiplicativeTamagawaMeasure F
+  have he (g : IdeleGroup (𝓞 F) F) : d u * d (u⁻¹ * g) = d g :=
+    (hd u (u⁻¹ * g)).symm.trans (congrArg d (mul_inv_cancel_left u g))
+  have e (g : IdeleGroup (𝓞 F) F) :
+      f (Multiplicative.ofAdd ((↑u⁻¹ : 𝔸[F]) * g.val)) * d g = d u * b (u⁻¹ * g) :=
+    (congrArg (f (Multiplicative.ofAdd (u⁻¹ * g).val) * ·) (he g).symm).trans
+      (mul_left_comm _ _ _)
+  exact (integral_congr_ae (ae_of_all _ e)).trans
+    ((integral_const_mul (d u) _).trans
+      (congrArg (d u * ·) (integral_mul_left_eq_self b (u⁻¹))))
+
+/-- A test whose homogeneous theta function vanishes has zero zeta integral on the half-plane
+of absolute convergence, because the zeta integral is the Mellin integral of the theta function. -/
+private theorem archNuclearityDenominator_ne_bot_zeta_of_theta
+    (χ : PontryaginDual (IdeleClassGroup (𝓞 F) F)) (f : ℬ(𝔸[F]))
+    (h : homogeneousAdelicThetaLinearMap F (ω(χ)) f = 0) (s : ℂ) (hs : 1 < s.re) :
+    globalIdelicZetaIntegral f (ideleClassNormTwist χ s) = 0 := by
+  let τ : ℝ≥0ˣ →ₜ* IdeleGroup (𝓞 F) F :=
+    ⟨canonicalIdeleNormSection F, canonicalIdeleNormSection_continuous F⟩
+  have hτ : RightInverse τ (ideleNorm F) := canonicalIdeleNormSection_rightInverse F
+  have h1 := ((homogeneousThetaMellinIntegral_meromorphicContinuation τ (ω(χ)) f hτ χ
+    (fun _ ↦ rfl) _).mpr rfl).2 (show s ∈ Complex.re ⁻¹' Ioi 1 from hs)
+  refine ((globalIdelicZFunction_eq_integral f
+    (archNuclearityDenominator_ne_bot_rightHalf χ s hs)).symm.trans h1).trans ?_
+  refine (integral_congr_ae (ae_of_all _ fun t ↦ ?_)).trans (integral_zero _ _)
+  have ht : homogeneousAdelicTheta (ω(χ)) f (QuotientGroup.mk (τ t)) = 0 :=
+    DFunLike.congr_fun h (QuotientGroup.mk (τ t))
+  exact mul_eq_zero_of_left ht _
+
+/-- On the half-plane of absolute convergence the zeta integral is linear in the test. -/
+private theorem archNuclearityDenominator_ne_bot_zeta_linear
+    (χ : PontryaginDual (IdeleClassGroup (𝓞 F) F)) :
+    ∃ L : ℬ(𝔸[F]) →ₗ[ℂ] ℂ,
+      ∀ f, L f = globalIdelicZetaIntegral f (ideleClassNormTwist χ 2) := by
+  let : MeasurableSpace (IdeleGroup (𝓞 F) F) := borel _
+  have hc := archNuclearityDenominator_ne_bot_rightHalf χ 2 (by norm_num)
+  have hint (f : ℬ(𝔸[F])) :=
+    globalIdelicZetaIntegral_integrable f (ideleClassNormTwist χ 2) hc
+  refine ⟨{ toFun := fun f ↦ globalIdelicZetaIntegral f (ideleClassNormTwist χ 2)
+            map_add' := fun f g ↦ ?_
+            map_smul' := fun r f ↦ ?_ }, fun f ↦ rfl⟩
+  · refine Eq.trans ?_ (integral_add (hint f) (hint g))
+    exact integral_congr_ae (ae_of_all _ fun x ↦ add_mul _ _ _)
+  · refine Eq.trans ?_ (integral_const_mul r _)
+    exact integral_congr_ae (ae_of_all _ fun x ↦ mul_assoc _ _ _)
+
+/-- Some pure adelic tensor has a nonzero zeta integral at the square of the norm twist. -/
+private theorem archNuclearityDenominator_ne_bot_pure
+    (χ : PontryaginDual (IdeleClassGroup (𝓞 F) F)) :
+    ∃ (a : ℬ(InfiniteAdeleRing F)) (b : ℬ(FiniteAdeleRing (𝓞 F) F)),
+      globalIdelicZetaIntegral ((adeleSchwartz_inductiveTensor_equiv F).choose (a ⊗ₜ[ℂ] b))
+        (ideleClassNormTwist χ 2) ≠ 0 := by
+  obtain ⟨L, hL⟩ := archNuclearityDenominator_ne_bot_zeta_linear χ
+  obtain ⟨f, hf⟩ := archNuclearityDenominator_ne_bot_zeta_ne_zero χ
+  by_contra! h
+  have hz : L.comp ((adeleSchwartz_inductiveTensor_equiv F).choose).toLinearMap = 0 :=
+    TensorProduct.ext' fun a b ↦ (hL _).trans (h a b)
+  have ht := LinearMap.congr_fun hz (((adeleSchwartz_inductiveTensor_equiv F).choose).symm f)
+  change L ((adeleSchwartz_inductiveTensor_equiv F).choose
+    (((adeleSchwartz_inductiveTensor_equiv F).choose).symm f)) = 0 at ht
+  rw [((adeleSchwartz_inductiveTensor_equiv F).choose).apply_symm_apply, hL] at ht
+  exact hf ht
+
+/-- Cutting the archimedean factor off near the coordinate walls keeps the zeta integral of
+some pure tensor nonzero, so a tensor with flat archimedean factor has that property. -/
+private theorem archNuclearityDenominator_ne_bot_flat
+    (χ : PontryaginDual (IdeleClassGroup (𝓞 F) F)) :
+    ∃ (a : ℬ(InfiniteAdeleRing F)) (b : ℬ(FiniteAdeleRing (𝓞 F) F)),
+      a ∈ archNuclearity_flatFactors (F := F) ∧
+      globalIdelicZetaIntegral ((adeleSchwartz_inductiveTensor_equiv F).choose (a ⊗ₜ[ℂ] b))
+        (ideleClassNormTwist χ 2) ≠ 0 := by
+  obtain ⟨a₀, b₀, hab⟩ := archNuclearityDenominator_ne_bot_pure χ
+  obtain ⟨J, hJ⟩ := archimedeanSchwartzBruhat_equiv (F := F)
+  obtain ⟨k, hks, hkc, hkd, hk01, hklim⟩ :=
+    archNuclearityDenominator_ne_bot_cutoff RealPlaces ComplexPlaces
+  by_contra! h
+  let h₀ : SchwartzMap Coordinates ℂ := J.symm a₀
+  let φ (n : ℕ) : SchwartzMap Coordinates ℂ :=
+    (show HasCompactSupport (fun x : Coordinates ↦ ((k n x : ℝ) : ℂ) * h₀ x) from
+      ((hkc n).comp_left Complex.ofReal_zero).mul_right).toSchwartzMap
+        ((Complex.ofRealCLM.contDiff.comp (hks n)).mul (h₀.smooth ⊤))
+  have hflat (n : ℕ) :
+      φ n ∈ archimedeanFlatSchwartz (ι := RealPlaces) (κ := ComplexPlaces) :=
+    mem_archimedeanFlatSchwartz_of_tsupport (φ n) ((hkd n).mono_left
+      ((tsupport_mul_subset_left).trans (tsupport_comp_subset Complex.ofReal_zero _)))
+  have hmem (n : ℕ) : J (φ n) ∈ archNuclearity_flatFactors (F := F) :=
+    ⟨⟨φ n, hflat n⟩, fun x ↦ hJ (φ n) x⟩
+  have hwall (g : IdeleGroup (𝓞 F) F) :
+      ¬((∃ i, (InfiniteAdeleRing.ringEquiv_mixedSpace F g.val.1).1 i = 0) ∨
+        ∃ j, (InfiniteAdeleRing.ringEquiv_mixedSpace F g.val.1).2 j = 0) := by
+    have hxy : InfiniteAdeleRing.ringEquiv_mixedSpace F g.val.1 *
+        InfiniteAdeleRing.ringEquiv_mixedSpace F g.inv.1 = 1 := by
+      rw [← map_mul]
+      exact (congrArg _ (congrArg Prod.fst g.val_inv)).trans (map_one _)
+    rintro (⟨i, hi⟩ | ⟨j, hj⟩)
+    · have h1 : (InfiniteAdeleRing.ringEquiv_mixedSpace F g.val.1).1 i *
+          (InfiniteAdeleRing.ringEquiv_mixedSpace F g.inv.1).1 i = 1 :=
+        congrArg (fun z : Coordinates ↦ z.1 i) hxy
+      rw [hi, zero_mul] at h1
+      exact zero_ne_one h1
+    · have h1 : (InfiniteAdeleRing.ringEquiv_mixedSpace F g.val.1).2 j *
+          (InfiniteAdeleRing.ringEquiv_mixedSpace F g.inv.1).2 j = 1 :=
+        congrArg (fun z : Coordinates ↦ z.2 j) hxy
+      rw [hj, zero_mul] at h1
+      exact zero_ne_one h1
+  let : MeasurableSpace (IdeleGroup (𝓞 F) F) := borel _
+  have hc := archNuclearityDenominator_ne_bot_rightHalf χ 2 (by norm_num)
+  let G (g : IdeleGroup (𝓞 F) F) : ℂ :=
+    (adeleSchwartz_inductiveTensor_equiv F).choose (a₀ ⊗ₜ[ℂ] b₀)
+      (Multiplicative.ofAdd g.val) * ideleClassNormTwist χ 2 (QuotientGroup.mk g)
+  let K (n : ℕ) (g : IdeleGroup (𝓞 F) F) : ℝ :=
+    k n (InfiniteAdeleRing.ringEquiv_mixedSpace F g.val.1)
+  have hpt (n : ℕ) (g : IdeleGroup (𝓞 F) F) :
+      (adeleSchwartz_inductiveTensor_equiv F).choose (J (φ n) ⊗ₜ[ℂ] b₀)
+          (Multiplicative.ofAdd g.val) * ideleClassNormTwist χ 2 (QuotientGroup.mk g) =
+        (K n g : ℂ) * G g := by
+    have ha₀ : a₀ (Multiplicative.ofAdd g.val.1) =
+        h₀ (InfiniteAdeleRing.ringEquiv_mixedSpace F g.val.1) := by
+      rw [← hJ, J.apply_symm_apply]
+    change _ = (K n g : ℂ) * ((adeleSchwartz_inductiveTensor_equiv F).choose
+      (a₀ ⊗ₜ[ℂ] b₀) (Multiplicative.ofAdd g.val) *
+        ideleClassNormTwist χ 2 (QuotientGroup.mk g))
+    rw [(adeleSchwartz_inductiveTensor_equiv F).choose_spec,
+      (adeleSchwartz_inductiveTensor_equiv F).choose_spec, hJ, ha₀]
+    change ((k n _ : ℝ) : ℂ) * h₀ _ * _ * _ = (K n g : ℂ) * (_ * _ * _)
+    simp only [K, mul_assoc]
+  have hzero := archNuclearityDenominator_ne_bot_limit (multiplicativeTamagawaMeasure F) G
+    (globalIdelicZetaIntegral_integrable _ (ideleClassNormTwist χ 2) hc) K
+    (fun n g ↦ hk01 n _) (fun g ↦ hklim _ (hwall g))
+    (fun n ↦ (globalIdelicZetaIntegral_integrable ((adeleSchwartz_inductiveTensor_equiv F).choose
+      (J (φ n) ⊗ₜ[ℂ] b₀)) (ideleClassNormTwist χ 2) hc).congr (ae_of_all _ (hpt n)))
+    (fun n ↦ (integral_congr_ae (ae_of_all _ (hpt n))).symm.trans (h (J (φ n)) b₀ (hmem n)))
+  exact hab hzero
+
+/-- A polar test with flat archimedean factors whose homogeneous theta class is not zero:
+a flat pure tensor with nonzero zeta integral, corrected by a translate under an
+archimedean idele of norm two so that its Fourier value at the origin vanishes. -/
+private theorem archNuclearityDenominator_ne_bot_witness
+    (χ : PontryaginDual (IdeleClassGroup (𝓞 F) F)) :
+    ∃ f : P, f.val ∈ globalArchimedeanFlatTests F ∧ mkΘ(χ, f) ≠ 0 := by
+  obtain ⟨a, b, ha, hZ⟩ := archNuclearityDenominator_ne_bot_flat χ
+  obtain ⟨L, hL⟩ := archNuclearityDenominator_ne_bot_zeta_linear χ
+  obtain ⟨w⟩ := (inferInstance : Nonempty (InfinitePlace F))
+  let t : ℝ≥0ˣ := Units.mk0 2 two_ne_zero
+  let g := singlePlaceIdeleNormSection F w t
+  let u := Units.map (RingHom.fst (InfiniteAdeleRing F) (FiniteAdeleRing (𝓞 F) F)).toMonoidHom g
+  have hu : archNuclearity_archUnit u = g := Units.ext (Prod.ext rfl rfl)
+  have hnorm : ideleNorm F (archNuclearity_archUnit u) = t :=
+    hu ▸ singlePlaceIdeleNormSection_rightInverse F w t
+  have hval : ((((ideleNorm F (archNuclearity_archUnit u)).val : ℝ)) : ℂ) = 2 := by
+    rw [hnorm]
+    change (((2 : ℝ≥0) : ℝ) : ℂ) = 2
+    norm_num
+  let f₀ := (adeleSchwartz_inductiveTensor_equiv F).choose (a ⊗ₜ[ℂ] b)
+  let a' := schwartzBruhatUnitTranslate u a - (2 : ℂ) • a
+  have ha' : a' ∈ archNuclearity_flatFactors (F := F) :=
+    Submodule.sub_mem _ (archNuclearity_flatFactors_translate u a ha) (Submodule.smul_mem _ _ ha)
+  let f₁ := (adeleSchwartz_inductiveTensor_equiv F).choose (a' ⊗ₜ[ℂ] b)
+  have htA := archNuclearity_translate_pure u (1 : (FiniteAdeleRing (𝓞 F) F)ˣ) a b
+  rw [archNuclearity_translate_one,
+    show archNuclearity_finiteUnit (F := F) 1 = 1 from Units.ext rfl, mul_one] at htA
+  have hf₁ :
+      f₁ = schwartzBruhatUnitTranslate (archNuclearity_archUnit u) f₀ - (2 : ℂ) • f₀ := by
+    have h1 : a' ⊗ₜ[ℂ] b =
+        schwartzBruhatUnitTranslate u a ⊗ₜ[ℂ] b - (2 : ℂ) • (a ⊗ₜ[ℂ] b) :=
+      (TensorProduct.sub_tmul _ _ _).trans
+        (congrArg (schwartzBruhatUnitTranslate u a ⊗ₜ[ℂ] b - ·)
+          (TensorProduct.smul_tmul' _ _ _).symm)
+    exact (congrArg (adeleSchwartz_inductiveTensor_equiv F).choose h1).trans
+      ((map_sub (adeleSchwartz_inductiveTensor_equiv F).choose _ _).trans
+        (congrArg₂ (· - ·) htA.symm
+          (map_smul (adeleSchwartz_inductiveTensor_equiv F).choose _ _)))
+  have hflat : f₁ ∈ globalArchimedeanFlatTests F := by
+    obtain ⟨h, hh⟩ := ha'
+    exact Submodule.subset_span ⟨a', b, h, hh, fun hF ↦ hF.elim, rfl⟩
+  let H : ℬ(𝔸[F]) →L[ℂ] ℂ := (ContinuousLinearMap.snd ℂ ℂ ℂ).comp
+    (⟨(adelePolarValues_isLinear (F := F)).mk' adelePolarValues,
+      adelePolarValues_continuous⟩ : ℬ(𝔸[F]) →L[ℂ] ℂ × ℂ)
+  have hH : H f₁ = 0 := by
+    have h := archNuclearity_hatC_translate (archNuclearity_archUnit u) f₀
+    rw [hval] at h
+    rw [hf₁, map_sub, map_smul, smul_eq_mul]
+    exact sub_eq_zero.mpr h
+  have hP : f₁ ∈ P := (globalArchimedeanFlatTests_zero_moments f₁ hflat).2.mpr hH
+  refine ⟨⟨f₁, hP⟩, hflat, fun h0 ↦ ?_⟩
+  have hker : (⟨f₁, hP⟩ : P) ∈ Π(χ) := (Submodule.Quotient.mk_eq_zero _).mp h0
+  have hθ : homogeneousAdelicThetaLinearMap F (ω(χ)) f₁ = 0 := LinearMap.mem_ker.mp hker
+  have hZ1 := archNuclearityDenominator_ne_bot_zeta_of_theta χ f₁ hθ 2 (by norm_num)
+  have hZt := archNuclearityDenominator_ne_bot_zeta_translate (archNuclearity_archUnit u) f₀
+    (ideleClassNormTwist χ 2)
+  have hlin : L f₁ =
+      L (schwartzBruhatUnitTranslate (archNuclearity_archUnit u) f₀) - 2 * L f₀ := by
+    rw [hf₁, map_sub, map_smul, smul_eq_mul]
+  rw [hL, hL, hL, hZ1, hZt, ← sub_mul] at hlin
+  have hcU : ideleClassNormTwist χ 2 (QuotientGroup.mk (archNuclearity_archUnit u)) - 2 ≠ 0 := by
+    intro h2
+    have h3 : ((χ (QuotientGroup.mk (archNuclearity_archUnit u)) : Circle) : ℂ) *
+        (((ideleNorm F (archNuclearity_archUnit u)).val : ℝ) : ℂ) ^ (2 : ℂ) = 2 :=
+      sub_eq_zero.mp h2
+    rw [hval] at h3
+    have h4 := congrArg norm h3
+    rw [norm_mul, Circle.norm_coe, one_mul, Complex.cpow_ofNat, norm_pow, Complex.norm_ofNat] at h4
+    norm_num at h4
+  exact hZ ((mul_eq_zero.mp hlin.symm).resolve_left hcU)
+
 /-- Paper: Theorem 7.4.3.1(1), p. 368.
 The archimedean-flat theta image is nontrivial: some archimedean-flat test whose
 archimedean factors have zero additive integral has a nonzero class in the
@@ -4673,7 +9673,10 @@ generator has no nonzero Schwartz-Bergman multiple; on `1 < Re s` its value is a
 product of two nonzero factors by `archRegularizedFiniteHeckeL_apply` and
 `finiteHeckeL_ne_zero_of_one_lt_re`. -/
 private theorem archNuclearityDenominator_ne_bot :
-    archNuclearityDenominator χ ≠ ⊥ := by sorry
+    archNuclearityDenominator χ ≠ ⊥ := by
+  obtain ⟨f, hf, hne⟩ := archNuclearityDenominator_ne_bot_witness χ
+  exact (Submodule.ne_bot_iff _).mpr ⟨mkΘ(χ, f),
+    (mem_archNuclearityDenominator_iff_flatPolarImage χ _).mpr ⟨f, hf, rfl⟩, hne⟩
 
 /-- Paper: Theorem 7.4.3.1(1), p. 368.
 The zero-moment archimedean-flat theta image is nonzero and closed.
