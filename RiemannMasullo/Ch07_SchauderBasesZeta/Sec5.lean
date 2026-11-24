@@ -1,5 +1,6 @@
 module
 
+public import RiemannMasullo.Ch05_ThetaZSpaces.Sec2b
 public import RiemannMasullo.Ch07_SchauderBasesZeta.Sec4
 import RiemannMasullo.Ch04_PeriodicSchauderBases.Sec2
 import RiemannMasullo.Ch04_PeriodicSchauderBases.Sec4

@@ -1377,7 +1377,7 @@ theorem exists_sLocalThetaSobolevUnweightedAction {a α β s : ℝ} (ha : 0 < a)
         (existsUnique_sLocalThetaSobolevEmbedding (F := F) (S := S) a α β s ha hI hs hp).exists.choose_spec.2
         (existsUnique_sLocalThetaAction (F := F) (S := S)).exists.choose_spec.2
         (hardySobolevTranslation_apply μ m α β s hI hs)
-        (fun g f x ↦ sLocalTheta_translate_onClasses g f x)
+        (fun g f x ↦ sLocalAdelicThetaOnClasses_unitTranslate g f x)
         (fun g ↦ (measurePreserving_mul_left μ g⁻¹).quasiMeasurePreserving))
 
 /-- The modulation weight shifts the interval of the Sobolev density. -/
@@ -2036,7 +2036,7 @@ theorem exists_sLocalThetaSobolevAction {a α β s : ℝ} (ha : 0 < a)
         (existsUnique_sLocalThetaSobolevEmbedding (F := F) (S := S) a α β s ha hI hs hp).exists.choose_spec.2
         (existsUnique_sLocalThetaAction (F := F) (S := S)).exists.choose_spec.2
         (hardySobolevTranslation_apply μ m α β s hI hs)
-        (fun g f x ↦ sLocalTheta_translate_onClasses g f x)
+        (fun g f x ↦ sLocalAdelicThetaOnClasses_unitTranslate g f x)
         (fun g ↦ (measurePreserving_mul_left μ g⁻¹).quasiMeasurePreserving))
 
 local notation "Rₛ(" ha ", " hI ", " hs ", " hp ")" =>

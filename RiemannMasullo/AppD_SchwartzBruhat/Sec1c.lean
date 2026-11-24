@@ -7162,7 +7162,7 @@ variable {G : Type*} [CommGroup G] [TopologicalSpace G] [IsTopologicalGroup G] [
 
 omit [SecondCountableTopology G] in
 private theorem kernel_barrelled : BarrelledSpace ℂ (SchwartzBruhat G) := by
-  refine ⟨fun p hp ↦ schwartzBruhat_continuous_seminorm p ?_⟩
+  refine ⟨fun p hp ↦ continuous_seminorm_of_continuous_stages p ?_⟩
   intro a e
   let : BarrelledSpace ℂ (SchwartzBruhatStage e) := isFrechetTVS_barrelled elementarySchwartz_isFrechet
   exact (p.comp (schwartzBruhatStageInclusion a e)).continuous_of_lowerSemicontinuous
@@ -8193,14 +8193,6 @@ theorem schwartzBruhatTranslate_apply_mul (g x : G) (f : SchwartzBruhat G) :
     schwartzBruhatTranslate g f (g * x) = f x := by
   change f.val (g⁻¹ * (g * x)) = f.val x
   rw [inv_mul_cancel_left]
-
-omit hTop hT2 hLC in
-/-- The inclusion of a structural stage is continuous for the generating seminorms. -/
-private theorem continuous_schwartzBruhatStageInclusion (a : BruhatStructuralPair G)
-    (e : ElementaryLCAPresentation a.quotient) :
-    Continuous (show SchwartzBruhatStage e →ₗ[ℂ] SchwartzBruhat G from
-      schwartzBruhatStageInclusion a e) :=
-  (withGeneratingSeminorms_spec _ _).continuous_of_continuous_comp _ fun p ↦ p.property a e
 
 /-- The quotient action gives translation by elements of the stage's own open subgroup. -/
 private theorem continuous_schwartzBruhatTranslate_on_subgroup (b : BruhatStructuralPair G)

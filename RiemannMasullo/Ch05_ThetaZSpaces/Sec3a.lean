@@ -4,7 +4,7 @@ public import Mathlib.Analysis.Calculus.ContDiff.Bounds
 public import Mathlib.Analysis.Calculus.FDeriv.Symmetric
 public import Mathlib.Analysis.Distribution.SchwartzSpace.CompactSupport
 public import RiemannMasullo.ForMathlib.Analysis.Distribution.ContDiffMapSupportedIn
-public import RiemannMasullo.Ch05_ThetaZSpaces.Sec2b
+public import RiemannMasullo.Ch05_ThetaZSpaces.Sec2b_IsotypicAverages
 public import RiemannMasullo.Ch03_IdelicZeta.Sec4
 public import Mathlib.Analysis.Distribution.Support
 
