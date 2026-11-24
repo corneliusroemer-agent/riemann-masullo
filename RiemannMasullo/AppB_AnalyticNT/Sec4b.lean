@@ -15462,6 +15462,64 @@ theorem idelicExplicitFormula_infiniteMatching_realLocal (w : InfinitePlace F) (
   rw [hT, hI, hPV]
   linear_combination ha + c * hh'
 
+/-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (domination at a complex place `w`). For
+the radial profiles `Φ_χ` of a test `f` (as in `idelicExplicitFormula_finiteMatching`), each
+complex digamma kernel `t ↦ K_χ(t)` at `w` (with the radial exponent `a_χ` and angular weight
+`n_χ` of `χ` at `w`) is integrable on `(0, ∞)`, and `∑_χ ∫_0^∞ |K_χ(t)| dt < ∞`.
+
+Why it holds. As for `idelicExplicitFormula_infiniteMatching_realDomination`: with `k = 1` the
+kernel is bounded on `(0, ∞)` by a constant times `P_χ (1 + |a_χ|) e^{-t/2}` whenever
+`|Φ_χ|, |Φ_χ'| ≤ P_χ` (`Re z± ≥ 1/2`, and near `t = 0` the singular parts cancel by the mean
+value inequality); `a_χ` and `n_χ` are the frequencies of `χ` along the norm-one flows
+`t ↦ (eᵗ at w) · τ(e^{2t})⁻¹` and `θ ↦ e^{iθ}` at `w`, so integration by parts along these and
+the flows of `idelicExplicitFormula_normOneFourier_count` makes `P_χ (1 + |a_χ|)` decay like
+`(1 + m_χ)^{-(d+2)}`, and the count makes this summable. -/
+theorem idelicExplicitFormula_infiniteMatching_complexDomination (τ : ℝ≥0ˣ →ₜ* C[F])
+    (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F])) (w : InfinitePlace F)
+    (hw : w.IsComplex) (Φ : chartChars(τ) → 𝓢(ℝ, ℂ)) (_hΦ : ∀ χ, ExponentialDecay (Φ χ))
+    (_hM : ∀ χ s, (∫ g, classMellinIntegrand(f, ideleClassNormTwist χ.val s, -1 / 2) g
+      ∂classMeasure) / (classVolume : ℂ) = logMellin (Φ χ) (s - 1 / 2)) :
+    let K : chartChars(τ) → ℝ → ℂ := fun χ t ↦
+      let p := (complexHeckeCharacter_parameters χ.val w hw).exists.choose
+      heckeArchimedeanDigammaKernel 1 (1 / 2 + p.1 + (p.2.natAbs : ℂ) / 2)
+        (1 / 2 - p.1 + (p.2.natAbs : ℂ) / 2) (Φ χ) t
+    (∀ χ, IntegrableOn (K χ) (Ioi 0)) ∧
+      Summable (fun χ ↦ ∫ t in Ioi (0 : ℝ), ‖K χ t‖) := by
+  sorry
+
+/-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (pointwise character sum at a complex place
+`w`). For `t > 0` the complex digamma kernels `K_χ(t)` of the radial profiles of a test `f`
+(as in `idelicExplicitFormula_infiniteMatching_complexDomination`) sum, over the characters
+trivial on the image of the norm section, to `2 e^{-t} f(1) / t - A(t)`, with `g(z) = f(e^z)`
+and the Poisson average `A` of `idelicExplicitFormula_infiniteMatching_complexCharacterSum`.
+
+Computation. Write `χ_w(x) = (|x|²)^a (x/|x|)^n`. The `2 e^{-t} Φ_χ(0) / t` terms sum to
+`2 e^{-t} f(1) / t` (`idelicExplicitFormula_finiteMatching_inversion`). Fourier inversion on `C¹`
+translated to the norm shell `|·| = e^{±t}` gives
+`g(±t/2 + iφ) = ∑_χ Φ_χ(±t) e^{∓a t} e^{-inφ}`, absolutely and uniformly in `φ`
+(`explicitFormula_profile_summable`), so the angular integral may be taken termwise; and
+`r^{|n|} / (1 - r²) = (2π)⁻¹ ∫_0^{2π} e^{-inφ} / |1 - r e^{iφ}|² dφ` for `r = e^{-t/2}` (the
+Fourier coefficients of the Poisson kernel). With `1 - r² = 1 - e^{-t}` this turns `A(t)` into
+`∑_χ (Φ_χ(t) e^{-(1/2 + a + |n|/2) t} + Φ_χ(-t) e^{-(1/2 - a + |n|/2) t}) / (1 - e^{-t})`. -/
+theorem idelicExplicitFormula_infiniteMatching_complexKernelSum (τ : ℝ≥0ˣ →ₜ* C[F])
+    (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F])) (w : InfinitePlace F)
+    (hw : w.IsComplex) (Φ : chartChars(τ) → 𝓢(ℝ, ℂ)) (_hΦ : ∀ χ, ExponentialDecay (Φ χ))
+    (_hM : ∀ χ s, (∫ g, classMellinIntegrand(f, ideleClassNormTwist χ.val s, -1 / 2) g
+      ∂classMeasure) / (classVolume : ℂ) = logMellin (Φ χ) (s - 1 / 2)) :
+    let e : ℂˣ →* w.Completionˣ :=
+      Units.map (InfinitePlace.Completion.ringEquivComplexOfIsComplex hw).symm.toMonoidHom
+    let g : ℂ → ℂ := fun z ↦
+      f.val (infiniteClassMap(w) (e (Units.mk0 (Complex.exp z) (Complex.exp_ne_zero z))))
+    let A : ℝ → ℂ := fun t ↦ (2 * Real.pi : ℂ)⁻¹ * ∫ φ in (0 : ℝ)..2 * Real.pi,
+      (Real.exp (-(t / 2)) : ℂ) * (g (t / 2 + φ * Complex.I) + g (-(t / 2) + φ * Complex.I)) /
+        ((‖1 - Complex.exp (-(t / 2) + φ * Complex.I)‖ ^ 2 : ℝ) : ℂ)
+    let K : chartChars(τ) → ℝ → ℂ := fun χ t ↦
+      let p := (complexHeckeCharacter_parameters χ.val w hw).exists.choose
+      heckeArchimedeanDigammaKernel 1 (1 / 2 + p.1 + (p.2.natAbs : ℂ) / 2)
+        (1 / 2 - p.1 + (p.2.natAbs : ℂ) / 2) (Φ χ) t
+    ∀ t : ℝ, 0 < t → HasSum (fun χ ↦ K χ t) (2 * (Real.exp (-t) : ℂ) * f.val 1 / (t : ℂ) - A t) := by
+  sorry
+
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (character sum at a complex place `w`).
 Let `Φ_χ` be the radial profiles of a test `f`, as in `idelicExplicitFormula_finiteMatching`,
 and write `g(z) = f(e^z)` for the test in logarithmic coordinates on `F_w^× = ℂ^×` (so
@@ -15476,7 +15534,10 @@ norm shell) gives `∑_χ Φ_χ(t) χ(g)⁻¹ = f(g)` for `|g| = e^t`; `Φ_χ(±
 of the Poisson kernel `P_r(φ) = (1 - r²) / |1 - r e^{iφ}|²`, whose numerator cancels the
 denominator `1 - e^{-t}` of the digamma kernel. The sums commute with the integrals because the
 coefficients of `f` and of its derivatives along the archimedean flows are absolutely
-summable (`idelicExplicitFormula_normOneFourier_summable`). -/
+summable (`idelicExplicitFormula_normOneFourier_summable`). Proved from the domination
+`idelicExplicitFormula_infiniteMatching_complexDomination` and the pointwise sum
+`idelicExplicitFormula_infiniteMatching_complexKernelSum` by termwise integration over the
+countably many characters with a nonzero profile. -/
 theorem idelicExplicitFormula_infiniteMatching_complexCharacterSum (τ : ℝ≥0ˣ →ₜ* C[F])
     (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F])) (w : InfinitePlace F)
     (hw : w.IsComplex) (Φ : chartChars(τ) → 𝓢(ℝ, ℂ)) (_hΦ : ∀ χ, ExponentialDecay (Φ χ))
@@ -15492,7 +15553,60 @@ theorem idelicExplicitFormula_infiniteMatching_complexCharacterSum (τ : ℝ≥0
     HasSum (fun χ : chartChars(τ) ↦ explicitArchTerm(χ.val, w, Φ χ))
       ((∫ t in Ioi (0 : ℝ), (2 * (Real.exp (-t) : ℂ) * f.val 1 / (t : ℂ) - A t)) -
         2 * (Real.log (2 * Real.pi) : ℂ) * f.val 1) := by
-  sorry
+  intro e g A
+  have hdom := idelicExplicitFormula_infiniteMatching_complexDomination τ _hτ f w hw Φ _hΦ _hM
+  have hks := idelicExplicitFormula_infiniteMatching_complexKernelSum τ _hτ f w hw Φ _hΦ _hM
+  let K : chartChars(τ) → ℝ → ℂ := fun χ t ↦
+    let p := (complexHeckeCharacter_parameters χ.val w hw).exists.choose
+    heckeArchimedeanDigammaKernel 1 (1 / 2 + p.1 + (p.2.natAbs : ℂ) / 2)
+      (1 / 2 - p.1 + (p.2.natAbs : ℂ) / 2) (Φ χ) t
+  have hKi : ∀ χ, IntegrableOn (K χ) (Ioi 0) := hdom.1
+  have hKs : Summable (fun χ ↦ ∫ t in Ioi (0 : ℝ), ‖K χ t‖) := hdom.2
+  let S : ℝ → ℂ := fun t ↦ 2 * (Real.exp (-t) : ℂ) * f.val 1 / (t : ℂ) - A t
+  have hpt : ∀ t : ℝ, 0 < t → HasSum (fun χ ↦ K χ t) (S t) := hks
+  have h0 := idelicExplicitFormula_finiteMatching_inversion τ _hτ f Φ _hΦ _hM
+  -- Termwise integration over the countably many characters with nonzero profile.
+  have hzero (χ : chartChars(τ)) (hχ : ∀ q : ℚ, Φ χ q = 0) (t : ℝ) : K χ t = 0 := by
+    have hΦ0 : (Φ χ : ℝ → ℂ) = 0 :=
+      Continuous.ext_on Rat.denseRange_cast (Φ χ).continuous continuous_const
+        (by rintro _ ⟨q, rfl⟩; exact hχ q)
+    simp only [K, heckeArchimedeanDigammaKernel, hΦ0, Pi.zero_apply]
+    ring
+  let T : Set chartChars(τ) := ⋃ q : ℚ, Function.support (fun χ ↦ Φ χ q)
+  have hT : T.Countable := by
+    refine Set.countable_iUnion fun q ↦ ?_
+    refine (explicitFormula_profile_summable τ _hτ f Φ _hM (q : ℝ)).countable_support.mono
+      fun χ hχ ↦ ?_
+    simp only [Function.mem_support] at hχ ⊢
+    exact norm_ne_zero_iff.mpr hχ
+  have hoff (χ : chartChars(τ)) (hχ : χ ∉ T) (t : ℝ) : K χ t = 0 := by
+    refine hzero χ (fun q ↦ ?_) t
+    by_contra h
+    exact hχ (Set.mem_iUnion.mpr ⟨q, h⟩)
+  have hsuppI : Function.support (fun χ ↦ ∫ t in Ioi (0 : ℝ), K χ t) ⊆ T := by
+    intro χ hχ
+    by_contra h
+    apply hχ
+    simp only [hoff χ h, integral_zero]
+  have : Countable T := hT.to_subtype
+  have hI := hasSum_integral_of_summable_integral_norm (μ := volume.restrict (Ioi (0 : ℝ)))
+    (F := fun χ : T ↦ K χ.val) (fun χ ↦ hKi χ.val)
+    (hKs.comp_injective Subtype.val_injective)
+  have hI' : HasSum (fun χ ↦ ∫ t in Ioi (0 : ℝ), K χ t) (∫ t in Ioi (0 : ℝ), S t) := by
+    refine (hasSum_subtype_iff_of_support_subset hsuppI).mp ?_
+    have hS : (∫ t in Ioi (0 : ℝ), S t) = ∫ t in Ioi (0 : ℝ), ∑' χ : T, K χ.val t := by
+      refine setIntegral_congr_fun measurableSet_Ioi (fun t (ht : 0 < t) ↦ ?_)
+      have hsupp : Function.support (fun χ ↦ K χ t) ⊆ T := by
+        intro χ hχ
+        by_contra h
+        exact hχ (hoff χ h t)
+      exact ((hasSum_subtype_iff_of_support_subset hsupp).mpr (hpt t ht)).tsum_eq.symm
+    rw [hS]
+    exact hI
+  have htot := hI'.sub (h0.mul_left (2 * (Real.log (2 * Real.pi) : ℂ)))
+  convert htot using 1
+  funext χ
+  exact dite_eq_right (InfinitePlace.not_isReal_iff_isComplex.mpr hw)
 
 section ExplicitFormulaComplexLocalAverage
 
