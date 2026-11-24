@@ -13866,6 +13866,213 @@ theorem idelicExplicitFormula_infiniteMatching_realCharacterSum (τ : ℝ≥0ˣ 
   funext χ
   exact dite_eq_left hw
 
+section ExplicitFormulaRealLocalIntegrable
+
+/-- The flow `y ↦ eʸ` in the units of a real completion. -/
+private def explicitFormula_localRealFlow (w : InfinitePlace F) (hw : w.IsReal) :
+    Multiplicative ℝ →ₜ* w.Completionˣ :=
+  let P : Multiplicative ℝ →* ℝ≥0ˣ := positiveRealLogEquiv.symm.toMulEquiv.toMonoidHom
+  let U : ℝ≥0ˣ →* ℝˣ := Units.map NNReal.toRealHom.toMonoidHom
+  let E : ℝˣ →* w.Completionˣ :=
+    Units.map (InfinitePlace.Completion.ringEquivRealOfIsReal hw).symm.toMonoidHom
+  have hP : Continuous P := positiveRealLogEquiv.symm.continuous
+  have hU : Continuous U := Units.continuous_map NNReal.continuous_coe
+  have hE : Continuous E :=
+    Units.continuous_map (InfinitePlace.Completion.isometryEquivRealOfIsReal hw).symm.continuous
+  ⟨E.comp (U.comp P), hE.comp (hU.comp hP)⟩
+
+private theorem explicitFormula_localRealFlow_apply (w : InfinitePlace F) (hw : w.IsReal)
+    (y : ℝ) : explicitFormula_localRealFlow w hw (Multiplicative.ofAdd y) =
+      Units.map (InfinitePlace.Completion.ringEquivRealOfIsReal hw).symm.toMonoidHom
+        (Units.mk0 (Real.exp y) (Real.exp_pos y).ne') := by
+  have hU : Units.map NNReal.toRealHom.toMonoidHom
+      (positiveRealLogEquiv.symm (Multiplicative.ofAdd y)) =
+      Units.mk0 (Real.exp y) (Real.exp_pos y).ne' := by
+    ext
+    exact explicitFormula_positiveRealLog_symm_val y
+  change Units.map _ (Units.map NNReal.toRealHom.toMonoidHom
+    (positiveRealLogEquiv.symm (Multiplicative.ofAdd y))) = _
+  rw [hU]
+
+/-- Along a flow in the units of a real completion, a test is `C¹` in the flow parameter
+with a bounded derivative, and itself bounded. -/
+private theorem explicitFormula_localTest_flow (w : InfinitePlace F) (hw : w.IsReal)
+    (testI : 𝒟(w.Completionˣ)) :
+    ∃ P : ℝ, ∀ x : w.Completionˣ, ∀ y : ℝ,
+      HasDerivAt (fun y : ℝ ↦ testI.val (x * explicitFormula_localRealFlow w hw
+          (Multiplicative.ofAdd y)))
+        (bruhatDirectionalDeriv (explicitFormula_localRealFlow w hw) testI.val
+          (x * explicitFormula_localRealFlow w hw (Multiplicative.ofAdd y))) y ∧
+      ‖testI.val x‖ ≤ P ∧
+      ‖bruhatDirectionalDeriv (explicitFormula_localRealFlow w hw) testI.val x‖ ≤ P := by
+  let β := explicitFormula_localRealFlow w hw
+  have hf1 : IsBruhatContDiff 1 testI.val :=
+    (mem_bruhatSmoothSubmodule_iff _).mp testI.property.1 1
+  have hfc : Continuous testI.val := by
+    obtain ⟨a, e, s, hs⟩ := (mem_schwartzBruhatSubmodule_iff _).mp
+      (explicitFormula_copy_bruhatCompactSupport_mem_schwartz testI.property)
+    exact hs ▸ continuous_stage_realization a e s
+  have hDc : Continuous (bruhatDirectionalDeriv β testI.val) :=
+    bruhatDirectionalDeriv_continuous β hf1
+  have hDs : HasCompactSupport (bruhatDirectionalDeriv β testI.val) := by
+    refine HasCompactSupport.intro testI.property.2 fun x hx ↦ ?_
+    have hev : (fun t : ℝ ↦ testI.val (x * β (Multiplicative.ofAdd t))) =ᶠ[𝓝 0] fun _ ↦ 0 := by
+      have ht : Tendsto (fun t : ℝ ↦ x * β (Multiplicative.ofAdd t)) (𝓝 0) (𝓝 x) := by
+        have hc : Continuous (fun t : ℝ ↦ x * β (Multiplicative.ofAdd t)) :=
+          continuous_const.mul (β.continuous.comp continuous_ofAdd)
+        simpa using hc.tendsto 0
+      exact ht.eventually (notMem_tsupport_iff_eventuallyEq.mp hx)
+    change deriv _ 0 = 0
+    rw [hev.deriv_eq, deriv_const]
+  obtain ⟨C1, hC1⟩ := hfc.bounded_above_of_compact_support testI.property.2
+  obtain ⟨C2, hC2⟩ := hDc.bounded_above_of_compact_support hDs
+  refine ⟨max C1 C2, fun x y ↦ ⟨?_, (hC1 x).trans (le_max_left _ _),
+    (hC2 x).trans (le_max_right _ _)⟩⟩
+  have h0 : HasDerivAt (fun t : ℝ ↦ testI.val (x * β (Multiplicative.ofAdd y) *
+      β (Multiplicative.ofAdd t))) (bruhatDirectionalDeriv β testI.val
+        (x * β (Multiplicative.ofAdd y))) (y - y) := by
+    rw [sub_self]
+    exact hasDerivAt_bruhatDirectionalDeriv β hf1 _
+  refine (h0.comp_sub_const y y).congr_of_eventuallyEq (.of_forall fun t ↦ ?_)
+  change testI.val (x * β (Multiplicative.ofAdd t)) =
+    testI.val (x * β (Multiplicative.ofAdd y) * β (Multiplicative.ofAdd (t - y)))
+  rw [mul_assoc, ← map_mul, ← ofAdd_add, add_sub_cancel]
+
+/-- The integrand of the real local identity is integrable on `(0, ∞)` for every test: it is
+the sum of the real digamma kernels (parities `0` and `1`) of the even and odd parts of the
+test in logarithmic coordinates. -/
+private theorem explicitFormula_realLocal_integrable (w : InfinitePlace F) (hw : w.IsReal)
+    (testI : 𝒟(w.Completionˣ)) :
+    let e : ℝˣ →* w.Completionˣ :=
+      Units.map (InfinitePlace.Completion.ringEquivRealOfIsReal hw).symm.toMonoidHom
+    let gp : ℝ → ℂ := fun y ↦ testI.val (e (Units.mk0 (Real.exp y) (Real.exp_pos y).ne'))
+    let gm : ℝ → ℂ := fun y ↦ testI.val (e (-Units.mk0 (Real.exp y) (Real.exp_pos y).ne'))
+    let Q : ℝ → ℝ → ℂ := fun t y ↦
+      (gp y + gm y) / 2 + (Real.exp (-(t / 2)) : ℂ) * (gp y - gm y) / 2
+    IntegrableOn (fun t : ℝ ↦ (1 / 2 : ℂ) * (2 * (Real.exp (-t) : ℂ) * testI.val 1 / (t : ℂ) -
+          (Real.exp (-(t / 4)) : ℂ) * (Q t (t / 2) + Q t (-(t / 2))) /
+            (1 - (Real.exp (-t) : ℂ)))) (Ioi 0) := by
+  intro e gp gm Q
+  let β := explicitFormula_localRealFlow w hw
+  obtain ⟨P, hP⟩ := explicitFormula_localTest_flow w hw testI
+  let m1 : w.Completionˣ := e (-1)
+  have hgp (y : ℝ) : gp y = testI.val (1 * β (Multiplicative.ofAdd y)) := by
+    rw [one_mul, explicitFormula_localRealFlow_apply]
+  have hgm (y : ℝ) : gm y = testI.val (m1 * β (Multiplicative.ofAdd y)) := by
+    rw [explicitFormula_localRealFlow_apply, ← map_mul, neg_one_mul]
+  let D := bruhatDirectionalDeriv β testI.val
+  let A : ℝ → ℂ := fun y ↦ (gp y + gm y) / 2
+  let A' : ℝ → ℂ := fun y ↦ (D (1 * β (Multiplicative.ofAdd y)) +
+    D (m1 * β (Multiplicative.ofAdd y))) / 2
+  let B : ℝ → ℂ := fun y ↦ (gp y - gm y) / 2
+  let B' : ℝ → ℂ := fun y ↦ (D (1 * β (Multiplicative.ofAdd y)) -
+    D (m1 * β (Multiplicative.ofAdd y))) / 2
+  have hA (y : ℝ) : HasDerivAt A (A' y) y := by
+    have h := ((hP 1 y).1.add (hP m1 y).1).div_const 2
+    refine h.congr_of_eventuallyEq (.of_forall fun z ↦ ?_)
+    simp only [A, hgp, hgm, Pi.add_apply, β]
+  have hB (y : ℝ) : HasDerivAt B (B' y) y := by
+    have h := ((hP 1 y).1.sub (hP m1 y).1).div_const 2
+    refine h.congr_of_eventuallyEq (.of_forall fun z ↦ ?_)
+    simp only [B, hgp, hgm, Pi.sub_apply, β]
+  have h2 : ‖(2 : ℂ)‖ = 2 := Complex.norm_ofNat 2
+  have hAb (y : ℝ) : ‖A y‖ ≤ P := by
+    simp only [A, hgp, hgm, norm_div, h2]
+    linarith [norm_add_le (testI.val (1 * β (Multiplicative.ofAdd y)))
+      (testI.val (m1 * β (Multiplicative.ofAdd y))), (hP (1 * β (Multiplicative.ofAdd y)) 0).2.1,
+      (hP (m1 * β (Multiplicative.ofAdd y)) 0).2.1]
+  have hBb (y : ℝ) : ‖B y‖ ≤ P := by
+    simp only [B, hgp, hgm, norm_div, h2]
+    linarith [norm_sub_le (testI.val (1 * β (Multiplicative.ofAdd y)))
+      (testI.val (m1 * β (Multiplicative.ofAdd y))), (hP (1 * β (Multiplicative.ofAdd y)) 0).2.1,
+      (hP (m1 * β (Multiplicative.ofAdd y)) 0).2.1]
+  have hA'b (y : ℝ) : ‖A' y‖ ≤ P := by
+    simp only [A', norm_div, h2]
+    linarith [norm_add_le (D (1 * β (Multiplicative.ofAdd y))) (D (m1 * β (Multiplicative.ofAdd y))),
+      (hP (1 * β (Multiplicative.ofAdd y)) 0).2.2, (hP (m1 * β (Multiplicative.ofAdd y)) 0).2.2]
+  have hB'b (y : ℝ) : ‖B' y‖ ≤ P := by
+    simp only [B', norm_div, h2]
+    linarith [norm_sub_le (D (1 * β (Multiplicative.ofAdd y))) (D (m1 * β (Multiplicative.ofAdd y))),
+      (hP (1 * β (Multiplicative.ofAdd y)) 0).2.2, (hP (m1 * β (Multiplicative.ofAdd y)) 0).2.2]
+  have hz1 : (1 / 4 : ℝ) ≤ (1 / 4 : ℂ).re := by norm_num
+  have hz3 : (1 / 4 : ℝ) ≤ (3 / 4 : ℂ).re := by norm_num
+  have hn1 : ‖(1 / 4 : ℂ)‖ ≤ 1 + 0 := by norm_num
+  have hn3 : ‖(3 / 4 : ℂ)‖ ≤ 1 + 0 := by norm_num
+  have iA := explicitFormula_realKernel_integrable A
+    (continuous_iff_continuousAt.mpr fun y ↦ (hA y).continuousAt) (1 / 4) (1 / 4) _
+    (fun t ht ↦ explicitFormula_realKernel_bound A A' hA P 0 hAb hA'b le_rfl _ _ hz1 hz1 hn1 hn1 ht)
+  have iB := explicitFormula_realKernel_integrable B
+    (continuous_iff_continuousAt.mpr fun y ↦ (hB y).continuousAt) (3 / 4) (3 / 4) _
+    (fun t ht ↦ explicitFormula_realKernel_bound B B' hB P 0 hBb hB'b le_rfl _ _ hz3 hz3 hn3 hn3 ht)
+  refine (iA.1.add iB.1).congr_fun (fun t _ ↦ ?_) measurableSet_Ioi
+  have hg0 : gp 0 = testI.val 1 := by
+    simp only [gp, Real.exp_zero]
+    rw [show Units.mk0 (1 : ℝ) one_ne_zero = 1 from Units.ext rfl, map_one]
+  have e1 : Complex.exp (-(1 / 4 : ℂ) * (t : ℂ)) = (Real.exp (-(t / 4)) : ℂ) := by
+    rw [Complex.ofReal_exp]; congr 1; push_cast; ring
+  have e3 : Complex.exp (-(3 / 4 : ℂ) * (t : ℂ)) =
+      (Real.exp (-(t / 4)) : ℂ) * (Real.exp (-(t / 2)) : ℂ) := by
+    rw [Complex.ofReal_exp, Complex.ofReal_exp, ← Complex.exp_add]; congr 1; push_cast; ring
+  simp only [Pi.add_apply, heckeArchimedeanDigammaKernel, e1, e3, A, B, Q]
+  rw [show (1 / 2 : ℝ) * t = t / 2 by ring, show (0 : ℝ) = 0 from rfl]
+  rw [← hg0]
+  push_cast
+  ring
+
+end ExplicitFormulaRealLocalIntegrable
+
+/-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a real place `w`, tests
+vanishing at `1`). The identity of `idelicExplicitFormula_infiniteMatching_realLocal` for a
+test `f` on `F_w^× = ℝ^×` with `f(1) = 0`.
+
+Computation. With `f(1) = 0` the `e^{-t}/t` term and the `log π` term vanish. The rest of the
+integrand is `-½ e^{-t/4} (Q(t/2) + Q(-t/2)) / (1 - e^{-t})`, and
+`e^{-t/4} (1 ± e^{-t/2}) / (2 (1 - e^{-t})) = e^{-t/4} / (2 (1 ∓ e^{-t/2}))`, which is
+`½ |u|^{1/2} / |1 - u|` at `u = ±e^{t/2}` and at `u = ±e^{-t/2}`. With `y = ±t/2` and
+`d^×u = dy` on each half-line, the left side is `-½ ∫ f(u) |u|^{1/2} / |1 - u| d^×u`, which is
+`-infiniteConnesWeilPrincipalValue w f` by `realConnesWeilPrincipalValue_of_apply_one_zero`. -/
+theorem idelicExplicitFormula_infiniteMatching_realLocal_vanishing (w : InfinitePlace F)
+    (hw : w.IsReal) (testI : 𝒟(w.Completionˣ)) (_h1 : testI.val 1 = 0) :
+    let e : ℝˣ →* w.Completionˣ :=
+      Units.map (InfinitePlace.Completion.ringEquivRealOfIsReal hw).symm.toMonoidHom
+    let gp : ℝ → ℂ := fun y ↦ testI.val (e (Units.mk0 (Real.exp y) (Real.exp_pos y).ne'))
+    let gm : ℝ → ℂ := fun y ↦ testI.val (e (-Units.mk0 (Real.exp y) (Real.exp_pos y).ne'))
+    let Q : ℝ → ℝ → ℂ := fun t y ↦
+      (gp y + gm y) / 2 + (Real.exp (-(t / 2)) : ℂ) * (gp y - gm y) / 2
+    (∫ t in Ioi (0 : ℝ), (1 / 2 : ℂ) * (2 * (Real.exp (-t) : ℂ) * testI.val 1 / (t : ℂ) -
+          (Real.exp (-(t / 4)) : ℂ) * (Q t (t / 2) + Q t (-(t / 2))) /
+            (1 - (Real.exp (-t) : ℂ)))) -
+        (Real.log Real.pi : ℂ) * testI.val 1 =
+      -infiniteConnesWeilPrincipalValue w testI := by
+  sorry
+
+/-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a real place `w`, one
+reference test). Some test `h` on `F_w^× = ℝ^×` with `h(1) = 1` satisfies the identity of
+`idelicExplicitFormula_infiniteMatching_realLocal`.
+
+Computation. The principal value is `-∫ log|y| F̂(y) dy` with `F(x) = h(1 + x) / |1 + x|^{1/2}`,
+and `realLogFourier_finitePart` (`𝓕 log|x| = -½ Pf(1/|x|) - (γ + log 2π) δ`) turns it into
+`½ Pf∫ F(x) / |x| dx + (γ + log 2π) F(0)`, the integral of
+`idelicExplicitFormula_infiniteMatching_realLocal_vanishing` regularized by `2 F(0) log ε` at
+`x = 0`; the left side is the same integral regularized by `e^{-t}/t`. The two
+regularizations differ by `(γ + log 2π - log π) F(0)` and the constants cancel (checked
+numerically to 30 digits on four tests with `h(1) ≠ 0`, ninth round). -/
+theorem idelicExplicitFormula_infiniteMatching_realLocal_reference (w : InfinitePlace F)
+    (hw : w.IsReal) :
+    ∃ h : 𝒟(w.Completionˣ), h.val 1 = 1 ∧
+      let e : ℝˣ →* w.Completionˣ :=
+        Units.map (InfinitePlace.Completion.ringEquivRealOfIsReal hw).symm.toMonoidHom
+      let gp : ℝ → ℂ := fun y ↦ h.val (e (Units.mk0 (Real.exp y) (Real.exp_pos y).ne'))
+      let gm : ℝ → ℂ := fun y ↦ h.val (e (-Units.mk0 (Real.exp y) (Real.exp_pos y).ne'))
+      let Q : ℝ → ℝ → ℂ := fun t y ↦
+        (gp y + gm y) / 2 + (Real.exp (-(t / 2)) : ℂ) * (gp y - gm y) / 2
+      (∫ t in Ioi (0 : ℝ), (1 / 2 : ℂ) * (2 * (Real.exp (-t) : ℂ) * h.val 1 / (t : ℂ) -
+            (Real.exp (-(t / 4)) : ℂ) * (Q t (t / 2) + Q t (-(t / 2))) /
+              (1 - (Real.exp (-t) : ℂ)))) -
+          (Real.log Real.pi : ℂ) * h.val 1 =
+        -infiniteConnesWeilPrincipalValue w h := by
+  sorry
+
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a real place `w`).
 For a test `f` on `F_w^× = ℝ^×`, with `g₊(y) = f(e^y)`, `g₋(y) = f(-e^y)` and `Q` as in
 `idelicExplicitFormula_infiniteMatching_realCharacterSum`,
@@ -13879,7 +14086,12 @@ The principal value is `-∫ log|y| F̂(y) dy` with `F(x) = f(1 + x) / |1 + x|^{
 `realLogFourier_finitePart` (`𝓕 log|x| = -½ Pf(1/|x|) - (γ + log 2π) δ`) turns it into
 `½ Pf∫ F(x) / |x| dx + (γ + log 2π) F(0)`, the same integral regularized by `2 F(0) log ε`.
 The difference of the two regularizations cancels the constants exactly, so the sum is
-zero (checked numerically to 30 digits on four tests with `f(1) ≠ 0`). -/
+zero (checked numerically to 30 digits on four tests with `f(1) ≠ 0`).
+
+Both sides are linear in `f` (the integrand is integrable for every test), so the identity
+follows from the case `f(1) = 0` (`idelicExplicitFormula_infiniteMatching_realLocal_vanishing`)
+and one reference test with `h(1) = 1`
+(`idelicExplicitFormula_infiniteMatching_realLocal_reference`), applied to `f - f(1) h`. -/
 theorem idelicExplicitFormula_infiniteMatching_realLocal (w : InfinitePlace F) (hw : w.IsReal)
     (testI : 𝒟(w.Completionˣ)) :
     let e : ℝˣ →* w.Completionˣ :=
@@ -13893,7 +14105,51 @@ theorem idelicExplicitFormula_infiniteMatching_realLocal (w : InfinitePlace F) (
             (1 - (Real.exp (-t) : ℂ)))) -
         (Real.log Real.pi : ℂ) * testI.val 1 =
       -infiniteConnesWeilPrincipalValue w testI := by
-  sorry
+  intro e gp gm Q
+  obtain ⟨h, h1, hh⟩ := idelicExplicitFormula_infiniteMatching_realLocal_reference w hw
+  set c := testI.val 1 with hc
+  let f0 : 𝒟(w.Completionˣ) := testI - c • h
+  have hf0 (x : w.Completionˣ) : f0.val x = testI.val x - c * h.val x := rfl
+  have hf01 : f0.val 1 = 0 := by rw [hf0, h1, mul_one, hc, sub_self]
+  let J : 𝒟(w.Completionˣ) → ℝ → ℂ := fun g t ↦
+    (1 / 2 : ℂ) * (2 * (Real.exp (-t) : ℂ) * g.val 1 / (t : ℂ) -
+      (Real.exp (-(t / 4)) : ℂ) *
+        (((g.val (e (Units.mk0 (Real.exp (t / 2)) (Real.exp_pos _).ne')) +
+              g.val (e (-Units.mk0 (Real.exp (t / 2)) (Real.exp_pos _).ne'))) / 2 +
+            (Real.exp (-(t / 2)) : ℂ) *
+              (g.val (e (Units.mk0 (Real.exp (t / 2)) (Real.exp_pos _).ne')) -
+                g.val (e (-Units.mk0 (Real.exp (t / 2)) (Real.exp_pos _).ne'))) / 2) +
+          ((g.val (e (Units.mk0 (Real.exp (-(t / 2))) (Real.exp_pos _).ne')) +
+              g.val (e (-Units.mk0 (Real.exp (-(t / 2))) (Real.exp_pos _).ne'))) / 2 +
+            (Real.exp (-(t / 2)) : ℂ) *
+              (g.val (e (Units.mk0 (Real.exp (-(t / 2))) (Real.exp_pos _).ne')) -
+                g.val (e (-Units.mk0 (Real.exp (-(t / 2))) (Real.exp_pos _).ne'))) / 2)) /
+        (1 - (Real.exp (-t) : ℂ)))
+  have ha : (∫ t in Ioi (0 : ℝ), J f0 t) - (Real.log Real.pi : ℂ) * f0.val 1 =
+      -infiniteConnesWeilPrincipalValue w f0 :=
+    idelicExplicitFormula_infiniteMatching_realLocal_vanishing w hw f0 hf01
+  have hh' : (∫ t in Ioi (0 : ℝ), J h t) - (Real.log Real.pi : ℂ) * h.val 1 =
+      -infiniteConnesWeilPrincipalValue w h := hh
+  have i0 : IntegrableOn (J f0) (Ioi 0) := explicitFormula_realLocal_integrable w hw f0
+  have ih : IntegrableOn (J h) (Ioi 0) := explicitFormula_realLocal_integrable w hw h
+  have hT : (∫ t in Ioi (0 : ℝ), (1 / 2 : ℂ) * (2 * (Real.exp (-t) : ℂ) * testI.val 1 / (t : ℂ) -
+      (Real.exp (-(t / 4)) : ℂ) * (Q t (t / 2) + Q t (-(t / 2))) /
+        (1 - (Real.exp (-t) : ℂ)))) = ∫ t in Ioi (0 : ℝ), J testI t := rfl
+  have hI : (∫ t in Ioi (0 : ℝ), J testI t) =
+      (∫ t in Ioi (0 : ℝ), J f0 t) + c * ∫ t in Ioi (0 : ℝ), J h t := by
+    rw [← integral_const_mul, ← integral_add i0 (ih.const_mul c)]
+    refine integral_congr_ae (.of_forall fun t ↦ ?_)
+    simp only [J, hf0, h1]
+    ring
+  have hsplit : testI = f0 + c • h := by rw [sub_add_cancel]
+  have hPV : infiniteConnesWeilPrincipalValue w testI =
+      infiniteConnesWeilPrincipalValue w f0 + c * infiniteConnesWeilPrincipalValue w h := by
+    conv_lhs => rw [hsplit]
+    rw [map_add, map_smul, smul_eq_mul]
+  rw [hf01, mul_zero, sub_zero] at ha
+  rw [h1, mul_one] at hh'
+  rw [hT, hI, hPV]
+  linear_combination ha + c * hh'
 
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (character sum at a complex place `w`).
 Let `Φ_χ` be the radial profiles of a test `f`, as in `idelicExplicitFormula_finiteMatching`,
