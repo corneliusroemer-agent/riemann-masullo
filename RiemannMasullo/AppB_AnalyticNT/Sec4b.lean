@@ -10574,14 +10574,121 @@ theorem idelicExplicitFormula_finiteMatching_primePowersLocal (τ : ℝ≥0ˣ �
           (testF v).val u * (Real.sqrt ‖u.val‖ : ℂ) / ((‖1 - u.val‖ : ℝ) : ℂ) ∂μ𝔭(v)) := by
   sorry
 
+section ExplicitFormulaConductorLocal
+
+/-- A test is invariant under a congruence subgroup of the units at each finite place. -/
+private theorem explicitFormula_test_congruence_invariant (f : 𝒟(C[F])) (v : Primes(F)) :
+    ∃ n : ℕ, ∀ u : (v.adicCompletion F)ˣ, ‖u.val - 1‖ ≤ q(v) ^ (-(n : ℤ)) →
+      ∀ g : C[F], f.val (g * finiteClassMap(v) u) = f.val g := by
+  obtain ⟨k, hk, hinv, _⟩ := (mem_bruhatSmoothSubmodule_iff _).mp f.property.1 0
+  obtain ⟨V, hVo, -, hVk⟩ := explicitFormula_finiteUnits_good v (G := C[F]) finiteClassMap(v)
+    (continuous_ideleClass_ofAdicCompletion F v) k hk
+  have hV : (V : Set (v.adicCompletion F)ˣ) ∈ 𝓝 1 := hVo.mem_nhds V.one_mem
+  rw [(Units.isEmbedding_val₀ (G₀ := v.adicCompletion F)).isInducing.nhds_eq_comap,
+    Units.val_one] at hV
+  obtain ⟨S, hS, hSV⟩ := mem_comap.mp hV
+  obtain ⟨ε, hε, hball⟩ := Metric.mem_nhds_iff.mp hS
+  have hq : (1 : ℝ) < q(v) := by exact_mod_cast HeightOneSpectrum.one_lt_absNorm v
+  obtain ⟨n, hn⟩ := exists_pow_lt_of_lt_one hε (inv_lt_one_of_one_lt₀ hq)
+  refine ⟨n, fun u hu g ↦ ?_⟩
+  have huV : u ∈ V := hSV (hball (by
+    rw [Metric.mem_ball, dist_eq_norm]
+    refine hu.trans_lt ?_
+    rwa [zpow_neg, zpow_natCast, ← inv_pow]))
+  rw [mul_comm]
+  exact hinv ⟨_, hVk u huV⟩ g
+
+/-- The Fourier coefficient on `C¹` of a test invariant under a norm-one class `w` vanishes
+at every character nontrivial at `w`. -/
+private theorem explicitFormula_coeff_eq_zero_of_invariant (f : 𝒟(C[F])) (χ : U[F])
+    (w : (ideleClassNorm F).ker) (hw : ∀ g : C[F], f.val (g * w) = f.val g)
+    (hχ : χ (w : C[F]) ≠ 1) :
+    ∫ u, f.val (u : C[F]) * (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F = 0 := by
+  let mK : MeasurableSpace (ideleClassNorm F).ker := Subtype.instMeasurableSpace
+  let : (normOneIdeleClassTamagawaMeasure F).IsHaarMeasure :=
+    (multiplicativeTamagawaMeasures_existsUnique F).exists.choose_spec.2.2.2.1
+  let : BorelSpace C[F] := ⟨rfl⟩
+  have hB : @BorelSpace (ideleClassNorm F).ker _ mK := Subtype.borelSpace _
+  have : @MeasurableMul (ideleClassNorm F).ker mK _ := @ContinuousMul.measurableMul _ _ mK hB _ _
+  set I := ∫ u, f.val (u : C[F]) * (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F
+    with hIdef
+  have hI : I = (χ (w : C[F]) : ℂ) * I := by
+    rw [← integral_const_mul]
+    refine (integral_mul_left_eq_self (μ := normOneIdeleClassTamagawaMeasure F)
+      (fun u : (ideleClassNorm F).ker ↦ f.val (u : C[F]) * (χ (u : C[F]) : ℂ)) w).symm.trans ?_
+    refine integral_congr_ae (.of_forall fun u ↦ ?_)
+    simp only [Subgroup.coe_mul, map_mul, Circle.coe_mul]
+    rw [mul_comm (w : C[F]) (u : C[F]), hw]
+    ring
+  have hχw : (χ (w : C[F]) : ℂ) ≠ 1 := fun h ↦ hχ (Circle.ext h)
+  have : (1 - (χ (w : C[F]) : ℂ)) * I = 0 := by rw [sub_mul, one_mul, ← hI, sub_self]
+  exact (mul_eq_zero.mp this).resolve_left (sub_ne_zero.mpr hχw.symm)
+
+/-- Termwise integration of an absolutely summable family of uniformly bounded functions
+against a finite measure, without a countability assumption on the index type (the terms
+with nonzero coefficient form a countable family). -/
+private theorem explicitFormula_hasSum_integral {ι X : Type*} {mX : MeasurableSpace X}
+    (ν : Measure X) [IsFiniteMeasure ν] (c : ι → ℂ) (hc : Summable (fun i ↦ ‖c i‖))
+    (φ : ι → X → ℂ) (hφ : ∀ i, AEStronglyMeasurable (φ i) ν) (B : ℝ)
+    (hB : ∀ i, c i ≠ 0 → ∀ᵐ x ∂ν, ‖φ i x‖ ≤ B) (g : X → ℂ)
+    (hg : ∀ᵐ x ∂ν, HasSum (fun i ↦ c i * φ i x) (g x)) :
+    HasSum (fun i ↦ ∫ x, c i * φ i x ∂ν) (∫ x, g x ∂ν) := by
+  let s := Function.support c
+  have hs : s.Countable := by
+    have := hc.countable_support
+    simpa [s, Function.support, norm_eq_zero] using this
+  have : Countable s := hs.to_subtype
+  have hsupp : Function.support (fun i ↦ ∫ x, c i * φ i x ∂ν) ⊆ s := by
+    intro i hi
+    by_contra h
+    simp only [s, Function.mem_support, not_not] at h
+    simp [h] at hi
+  refine (hasSum_subtype_iff_of_support_subset hsupp).mp ?_
+  refine hasSum_integral_of_dominated_convergence (fun i _ ↦ ‖c i‖ * B)
+    (fun i ↦ (hφ i).const_mul _) (fun i ↦ ?_) (.of_forall fun _ ↦ ?_) (integrable_const _) ?_
+  · filter_upwards [hB i i.property] with x hx
+    rw [norm_mul]
+    exact mul_le_mul_of_nonneg_left hx (norm_nonneg _)
+  · exact (hc.comp_injective Subtype.val_injective).mul_right B
+  · filter_upwards [hg] with x hx
+    have hsx : Function.support (fun i ↦ c i * φ i x) ⊆ s := by
+      intro i hi
+      by_contra h
+      simp only [s, Function.mem_support, not_not] at h
+      simp [h] at hi
+    exact (hasSum_subtype_iff_of_support_subset hsx).mpr hx
+
+end ExplicitFormulaConductorLocal
+
+/-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (conductor integral of one character).
+For a character `χ` of the idele classes and a finite place `v` where its conductor exponent is
+`a` (the least `n` with `χ` trivial on the image of `1 + 𝔭_v^n` in the norm-one units),
+`∫_{O_v^×} (χ(u)⁻¹ - 1) |u|^{1/2} / |1 - u| d^×u = -a · vol O_v^×`.
+
+Computation. The integrand vanishes on `U_a = 1 + 𝔭_v^a` (all of `O_v^×` if `a = 0`). Write
+`η` for `u ↦ χ(u)⁻¹` on `O_v^×` and `U_0 = O_v^×`. On `U_j \ U_{j+1}` the weight is `q_v^j`,
+and `∫_{U_j} η` is `0` for `j < a` and `vol U_j` for `j ≥ a`. With `vol U_j =
+vol O_v^× / ((q_v - 1) q_v^{j-1})` for `j ≥ 1`, the shells `j = 0`, `1 ≤ j ≤ a - 2` and
+`j = a - 1` give `-(q_v - 2)/(q_v - 1)`, `-1` each, and `-q_v/(q_v - 1)` times `vol O_v^×`
+(for `a = 1`, only `j = 0`, giving `-1`), in total `-a · vol O_v^×`. -/
+theorem idelicExplicitFormula_conductorLocal_character (v : Primes(F)) (χ : U[F]) :
+    ∫ u in ((O(v)).units : Set (v.adicCompletion F)ˣ),
+        ((((χ (finiteClassMap(v) u))⁻¹ : Circle) : ℂ) - 1) *
+          ((Real.sqrt ‖u.val‖ : ℂ) / ((‖1 - u.val‖ : ℝ) : ℂ)) ∂μ𝔭(v) =
+      -(((sInf (conductorExponents(χ, v)) : ℕ) : ℂ) * (V𝔭(v) : ℂ)) := by
+  sorry
+
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (conductor terms at one place). Summed
 over the characters trivial on the image of the norm section, `log q_v` times the conductor
 exponent at `v` times `Φ_χ(0)` gives minus
 `(log q_v / vol O_v^×) ∫_{O_v^×} (f_v(u) - f_v(1)) |u|^{1/2} / |1 - u| d^×u`.
 
-Computation. The sum over `χ` groups by the restriction `η` of `χ` to `O_v^×`; for `η` of
-conductor exponent `a`, `∫_{O_v^×} (η(u) - 1) / |1 - u| du = -a · vol O_v^×` (summing over the
-filtration `U_n`), and Fourier inversion on `C¹` recombines the terms. -/
+Proof. `Φ_χ(0)` is the Fourier coefficient `c_χ` of `f` on `C¹`, and Fourier inversion on `C¹`
+at `u` and at `1` gives `f_v(u) - f_v(1) = ∑_χ c_χ (χ(u)⁻¹ - 1)` for `u ∈ O_v^×`. `f` is
+invariant under some `1 + 𝔭_v^n`, so `c_χ = 0` unless `χ` is trivial there; the remaining terms
+vanish on `1 + 𝔭_v^n` and are bounded by `2 q_v^n |c_χ|` elsewhere, and the coefficients are
+absolutely summable, so the series may be integrated termwise. Each term is
+`-a_v(χ) vol O_v^× · c_χ` (`idelicExplicitFormula_conductorLocal_character`). -/
 theorem idelicExplicitFormula_finiteMatching_conductorLocal (τ : ℝ≥0ˣ →ₜ* C[F])
     (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F]))
     (testF : ∀ v : Primes(F), 𝒟((v.adicCompletion F)ˣ))
@@ -10595,7 +10702,108 @@ theorem idelicExplicitFormula_finiteMatching_conductorLocal (τ : ℝ≥0ˣ →�
         ∫ u in ((O(v)).units : Set (v.adicCompletion F)ˣ),
           ((testF v).val u - (testF v).val 1) * (Real.sqrt ‖u.val‖ : ℂ) /
             ((‖1 - u.val‖ : ℝ) : ℂ) ∂μ𝔭(v))) := by
-  sorry
+  let O := ((O(v)).units : Set (v.adicCompletion F)ˣ)
+  have hq : (1 : ℝ) < q(v) := by exact_mod_cast HeightOneSpectrum.one_lt_absNorm v
+  have hV : V𝔭(v) ≠ 0 := by
+    rw [finiteLocalMultiplicativeTamagawaMeasure_integerUnits, ENNReal.toReal_ne_zero]
+    refine ⟨ENNReal.inv_ne_zero.mpr ENNReal.ofReal_ne_top, ENNReal.inv_ne_top.mpr ?_⟩
+    refine (ENNReal.ofReal_pos.mpr (Real.sqrt_pos.mpr (pow_pos ?_ _))).ne'
+    exact_mod_cast (NumberField.HeightOneSpectrum.one_lt_absNorm v).trans' zero_lt_one
+  have hfin : μ𝔭(v) O ≠ ⊤ := (ENNReal.toReal_ne_zero.mp hV).2
+  have : IsFiniteMeasure (μ𝔭(v).restrict O) := isFiniteMeasure_restrict.mpr hfin
+  let : BorelSpace (v.adicCompletion F)ˣ := ⟨rfl⟩
+  have hOm : MeasurableSet O :=
+    (Submonoid.isOpen_units (Valued.isOpen_valuationSubring _)).measurableSet
+  have hker (u : (v.adicCompletion F)ˣ) (hu : ‖u.val‖ = 1) : finiteClassMap(v) u ∈ (ideleClassNorm F).ker := by
+    rw [MonoidHom.mem_ker, ideleClassNorm_ofAdicCompletion]
+    ext
+    change ‖u.val‖ = 1
+    exact hu
+  have hO1 (u : (v.adicCompletion F)ˣ) (hu : u ∈ O) : ‖u.val‖ = 1 := by
+    have hmem : u ∈ (O(v)).units ↔ ‖u.val‖ = 1 := by
+      rw [HeightOneSpectrum.adicCompletionIntegers.mem_units_iff_valued_eq_one,
+        Valued.toNormedField.norm_eq_one_iff]
+    exact hmem.mp hu
+  -- The coefficients.
+  let c : chartChars(τ) → ℂ := fun χ ↦ (classVolume : ℂ)⁻¹ *
+    ∫ u, f.val (u : C[F]) * (χ.val (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F
+  have hΦc (χ : chartChars(τ)) : Φ χ 0 = c χ := by
+    have h0 : radialFlow(τ, (0 : ℝ)) = 1 := by
+      rw [ofAdd_zero, map_one, map_one]
+    rw [explicitFormula_profile_eq τ _hτ f Φ _hM χ 0, h0]
+    simp only [one_mul]
+    rfl
+  have hc : Summable (fun χ ↦ ‖c χ‖) := by
+    refine ((idelicExplicitFormula_normOneFourier_summable τ _hτ f).mul_left
+      ‖(classVolume : ℂ)⁻¹‖).congr fun χ ↦ ?_
+    simp only [c, norm_mul]
+  obtain ⟨n, hn⟩ := explicitFormula_test_congruence_invariant f v
+  have hcz (χ : chartChars(τ)) (hχ : c χ ≠ 0) (u : (v.adicCompletion F)ˣ) (hu1 : ‖u.val‖ = 1)
+      (hu : ‖u.val - 1‖ ≤ q(v) ^ (-(n : ℤ))) : χ.val (finiteClassMap(v) u) = 1 := by
+    by_contra h
+    refine hχ ?_
+    simp only [c]
+    rw [explicitFormula_coeff_eq_zero_of_invariant f χ.val ⟨finiteClassMap(v) u, hker u hu1⟩ (hn u hu) h,
+      mul_zero]
+  -- The weight and the expansion on the integer units.
+  let w : (v.adicCompletion F)ˣ → ℂ :=
+    fun u ↦ (Real.sqrt ‖u.val‖ : ℂ) / ((‖1 - u.val‖ : ℝ) : ℂ)
+  let φ : chartChars(τ) → (v.adicCompletion F)ˣ → ℂ :=
+    fun χ u ↦ ((((χ.val (finiteClassMap(v) u))⁻¹ : Circle) : ℂ) - 1) * w u
+  have hexp (u : (v.adicCompletion F)ˣ) (hu : u ∈ O) :
+      HasSum (fun χ ↦ c χ * φ χ u) ((f.val (finiteClassMap(v) u) - f.val 1) * w u) := by
+    have h1 := idelicExplicitFormula_normOneFourierInversion τ _hτ f ⟨finiteClassMap(v) u, hker u (hO1 u hu)⟩
+    have h2 := idelicExplicitFormula_normOneFourierInversion τ _hτ f 1
+    refine ((h1.sub h2).mul_right (w u)).congr_fun fun χ ↦ ?_
+    simp only [φ, c, OneMemClass.coe_one, map_one, inv_one, Circle.coe_one]
+    ring
+  have hφm (χ : chartChars(τ)) : AEStronglyMeasurable (φ χ) (μ𝔭(v).restrict O) := by
+    have h1 : Continuous (fun u : (v.adicCompletion F)ˣ ↦
+        ((((χ.val (finiteClassMap(v) u))⁻¹ : Circle) : ℂ) - 1)) :=
+      (continuous_subtype_val.comp ((χ.val.continuous.comp
+        (continuous_ideleClass_ofAdicCompletion F v)).inv)).sub continuous_const
+    have h2 : Continuous (fun u : (v.adicCompletion F)ˣ ↦ (Real.sqrt ‖u.val‖ : ℂ)) :=
+      Complex.continuous_ofReal.comp (Real.continuous_sqrt.comp
+        (continuous_norm.comp Units.continuous_val))
+    have h3 : Continuous (fun u : (v.adicCompletion F)ˣ ↦ ((‖1 - u.val‖ : ℝ) : ℂ)) :=
+      Complex.continuous_ofReal.comp (continuous_norm.comp
+        (continuous_const.sub Units.continuous_val))
+    exact (h1.measurable.mul (h2.measurable.div h3.measurable)).aestronglyMeasurable
+  have hB (χ : chartChars(τ)) (hχ : c χ ≠ 0) :
+      ∀ᵐ u ∂μ𝔭(v).restrict O, ‖φ χ u‖ ≤ 2 * q(v) ^ n := by
+    filter_upwards [ae_restrict_mem hOm] with u hu
+    have hu1 := hO1 u hu
+    by_cases hs : ‖u.val - 1‖ ≤ q(v) ^ (-(n : ℤ))
+    · simp only [φ, hcz χ hχ u hu1 hs, inv_one, Circle.coe_one, sub_self, zero_mul, norm_zero]
+      positivity
+    · push Not at hs
+      have hpos : 0 < q(v) ^ (-(n : ℤ)) := zpow_pos (by linarith) _
+      have ha : ‖((((χ.val (finiteClassMap(v) u))⁻¹ : Circle) : ℂ) - 1)‖ ≤ 2 :=
+        (norm_sub_le _ _).trans (by rw [Circle.norm_coe, norm_one]; norm_num)
+      have hb : ‖(Real.sqrt ‖u.val‖ : ℂ) / ((‖1 - u.val‖ : ℝ) : ℂ)‖ ≤ q(v) ^ n := by
+        rw [norm_div, Complex.norm_real, Complex.norm_real, norm_norm, hu1, Real.sqrt_one,
+          norm_one, norm_sub_rev, div_le_iff₀ (hpos.trans hs)]
+        calc (1 : ℝ) = q(v) ^ n * q(v) ^ (-(n : ℤ)) := by
+              rw [zpow_neg, zpow_natCast, mul_inv_cancel₀ (pow_pos (by linarith) _).ne']
+          _ ≤ q(v) ^ n * ‖u.val - 1‖ := mul_le_mul_of_nonneg_left hs.le (by positivity)
+      simp only [φ, norm_mul]
+      exact mul_le_mul ha hb (norm_nonneg _) (by norm_num)
+  have hsum := explicitFormula_hasSum_integral (μ𝔭(v).restrict O) c hc φ hφm _ hB
+    (fun u ↦ (f.val (finiteClassMap(v) u) - f.val 1) * w u)
+    ((ae_restrict_iff' hOm).mpr (.of_forall hexp))
+  have hVc : (V𝔭(v) : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr hV
+  convert hsum.mul_left (-finiteWeilScale(v)) using 1
+  · funext χ
+    rw [hΦc χ, integral_const_mul]
+    simp only [φ, w]
+    rw [idelicExplicitFormula_conductorLocal_character v χ.val]
+    push_cast
+    field_simp
+  · rw [neg_mul]
+    congr 2
+    refine integral_congr_ae (.of_forall fun u ↦ ?_)
+    simp only [_hF, w, map_one]
+    ring
 
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (prime-power terms). Summed over the
 characters trivial on the image of the norm section, the prime-power terms of the explicit
