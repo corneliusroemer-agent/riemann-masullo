@@ -5,7 +5,7 @@ import RiemannMasullo.Ch03_IdelicZeta.RatEmptyFourier
 import RiemannMasullo.Ch10_TraceSpectral.Sec1
 import RiemannMasullo.Ch11_ShellStructure.Sec2a_PrimePVRefutation
 import RiemannMasullo.Ch06_LocalGlobal.Sec2
-import all RiemannMasullo.Ch03_IdelicZeta.Sec3
+import RiemannMasullo.Ch03_IdelicZeta.Sec3
 import Mathlib.Analysis.Calculus.BumpFunction.Normed
 import Mathlib.Analysis.Calculus.BumpFunction.FiniteDimension
 import Mathlib.Analysis.Distribution.SchwartzSpace.Fourier
