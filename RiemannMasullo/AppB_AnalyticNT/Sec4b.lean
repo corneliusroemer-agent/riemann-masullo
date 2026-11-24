@@ -10078,6 +10078,112 @@ theorem idelicExplicitFormula_trivial_poles :
     MeromorphicOn.divisor_apply hL.meromorphicOn (mem_univ _), h0, h1]
   exact ⟨rfl, rfl⟩
 
+section ExplicitFormulaFiniteMatching
+
+/-- The logarithm of the absolute discriminant is the sum over the finite places of the
+different exponents weighted by the log prime norms; only finitely many terms are nonzero. -/
+private theorem explicitFormula_log_discr_eq_tsum :
+    Summable (fun v : Primes(F) ↦
+      ((multiplicity v.asIdeal (differentIdeal ℤ (𝓞 F)) : ℝ) * Real.log q(v))) ∧
+    ∑' v : Primes(F), (multiplicity v.asIdeal (differentIdeal ℤ (𝓞 F)) : ℝ) * Real.log q(v) =
+      Real.log (Int.natAbs (NumberField.discr F)) := by
+  classical
+  let J := differentIdeal ℤ (𝓞 F)
+  have hJ : J ≠ ⊥ := differentIdeal_ne_bot
+  let T := (Ideal.finite_factors hJ).toFinset
+  let e : Primes(F) → ℕ := fun v ↦ multiplicity v.asIdeal J
+  have hout (v : Primes(F)) (hv : v ∉ T) : e v = 0 := by
+    apply multiplicity_eq_zero_of_not_dvd
+    simpa [T, J] using hv
+  have hfactor : ∏ v ∈ T, v.asIdeal ^ e v = J := by
+    rw [← finprod_eq_finsetProd_of_mulSupport_subset
+      (f := fun v : Primes(F) ↦ v.asIdeal ^ e v)]
+    · exact Ideal.finprod_heightOneSpectrum_pow_multiplicity hJ
+    · intro v hv
+      by_contra hn
+      exact hv (by simp [hout v hn])
+  have hnorm : (∏ v ∈ T, (↑(Ideal.absNorm v.asIdeal) : ℝ) ^ e v) =
+      (↑(NumberField.discr F).natAbs : ℝ) := by
+    exact_mod_cast (by
+      simpa only [map_prod, map_pow, J, NumberField.absNorm_differentIdeal F (𝓞 F)] using
+        congrArg (fun I : Ideal (𝓞 F) ↦ Ideal.absNorm I) hfactor :
+      (∏ v ∈ T, Ideal.absNorm v.asIdeal ^ e v) = (NumberField.discr F).natAbs)
+  have hzero (v : Primes(F)) (hv : v ∉ T) : (e v : ℝ) * Real.log q(v) = 0 := by
+    rw [hout v hv, Nat.cast_zero, zero_mul]
+  refine ⟨summable_of_ne_finset_zero hzero, ?_⟩
+  change ∑' v : Primes(F), (e v : ℝ) * Real.log q(v) = _
+  rw [tsum_eq_sum hzero, ← hnorm, Real.log_prod (fun v _ ↦ pow_ne_zero _ (by
+    exact_mod_cast (zero_lt_one.trans (HeightOneSpectrum.one_lt_absNorm v)).ne'))]
+  exact Finset.sum_congr rfl fun v _ ↦ (Real.log_pow _ _).symm
+
+end ExplicitFormulaFiniteMatching
+
+/-- Paper: Theorem B.4.4.7, pp. 625–626 (Fourier inversion on `C¹` at the identity). The
+values at `0` of the radial profiles `Φ_χ` of a test `f` (fixed by their Mellin transforms
+as in `idelicExplicitFormula_finiteMatching`) sum over the characters trivial on the image
+of the norm section to `f(1)`.
+
+Computation. `Φ_χ(0) = vol(C¹)⁻¹ ∫_{C¹} f(u) χ(u) du`, the characters trivial on `τ` are the
+characters of `C¹`, and `f` restricted to `C¹` is smooth on a Lie quotient, so its Fourier
+series converges absolutely to `f(1)` at the identity. -/
+theorem idelicExplicitFormula_finiteMatching_inversion (τ : ℝ≥0ˣ →ₜ* C[F])
+    (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F]))
+    (Φ : chartChars(τ) → 𝓢(ℝ, ℂ)) (_hΦ : ∀ χ, ExponentialDecay (Φ χ))
+    (_hM : ∀ χ s, (∫ g, classMellinIntegrand(f, ideleClassNormTwist χ.val s, -1 / 2) g
+      ∂classMeasure) / (classVolume : ℂ) = logMellin (Φ χ) (s - 1 / 2)) :
+    HasSum (fun χ : chartChars(τ) ↦ Φ χ 0) (f.val 1) := by
+  sorry
+
+/-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (prime-power terms). Summed over the
+characters trivial on the image of the norm section, the prime-power terms of the explicit
+formula of Theorem B.4.2.2 for the radial profiles `Φ_χ` of `f` give the sum over the finite
+places of `(log q_v / vol O_v^×) ∫_{|u| ≠ 1} f_v(u) |u|^{1/2} / |1 - u| d^×u`, a sum with only
+finitely many nonzero terms.
+
+Computation. Only the characters unramified at `v` contribute at `v`; for those,
+`χ(π_v)^m Φ_χ(m log q_v)` is the Fourier coefficient of `f(π_v^{-m} ·)` on `C¹`, and Fourier
+inversion over the characters unramified at `v` averages `f(π_v^{∓m} ·)` over `O_v^×`. -/
+theorem idelicExplicitFormula_finiteMatching_primePowers (τ : ℝ≥0ˣ →ₜ* C[F])
+    (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F]))
+    (testF : ∀ v : Primes(F), 𝒟((v.adicCompletion F)ˣ))
+    (_hF : ∀ v u, (testF v).val u = f.val (finiteClassMap(v) u))
+    (Φ : chartChars(τ) → 𝓢(ℝ, ℂ)) (_hΦ : ∀ χ, ExponentialDecay (Φ χ))
+    (_hM : ∀ χ s, (∫ g, classMellinIntegrand(f, ideleClassNormTwist χ.val s, -1 / 2) g
+      ∂classMeasure) / (classVolume : ℂ) = logMellin (Φ χ) (s - 1 / 2)) :
+    let outside := fun v : Primes(F) ↦ finiteWeilScale(v) *
+      ∫ u in ((O(v)).units : Set (v.adicCompletion F)ˣ)ᶜ,
+        (testF v).val u * (Real.sqrt ‖u.val‖ : ℂ) / ((‖1 - u.val‖ : ℝ) : ℂ) ∂μ𝔭(v)
+    Summable outside ∧
+      HasSum (fun χ : chartChars(τ) ↦ ∑' j, explicitPrimeTerm(χ.val, Φ χ) j) (∑' v, outside v) := by
+  sorry
+
+/-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (conductor terms). Summed over the
+characters trivial on the image of the norm section, the conductor part of the
+discriminant–conductor term (Equation (B.4.2.3)) times `Φ_χ(0)` gives minus the sum over the
+finite places of `(log q_v / vol O_v^×) ∫_{O_v^×} (f_v(u) - f_v(1)) |u|^{1/2} / |1 - u| d^×u`,
+a sum with only finitely many nonzero terms.
+
+Computation. At each `v` the sum over `χ` groups by the restriction `η` of `χ` to `O_v^×`;
+for `η` of conductor exponent `a`, `∫_{O_v^×} (η(u) - 1) / |1 - u| du = -a · vol O_v^×`
+(summing over the filtration `U_n`), and Fourier inversion on `C¹` recombines the terms. At
+the places where `f` is invariant under `O_v^×` both sides vanish. -/
+theorem idelicExplicitFormula_finiteMatching_conductor (τ : ℝ≥0ˣ →ₜ* C[F])
+    (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F]))
+    (testF : ∀ v : Primes(F), 𝒟((v.adicCompletion F)ˣ))
+    (_hF : ∀ v u, (testF v).val u = f.val (finiteClassMap(v) u))
+    (Φ : chartChars(τ) → 𝓢(ℝ, ℂ)) (_hΦ : ∀ χ, ExponentialDecay (Φ χ))
+    (_hM : ∀ χ s, (∫ g, classMellinIntegrand(f, ideleClassNormTwist χ.val s, -1 / 2) g
+      ∂classMeasure) / (classVolume : ℂ) = logMellin (Φ χ) (s - 1 / 2)) :
+    let inside := fun v : Primes(F) ↦ finiteWeilScale(v) *
+      ∫ u in ((O(v)).units : Set (v.adicCompletion F)ˣ),
+        ((testF v).val u - (testF v).val 1) * (Real.sqrt ‖u.val‖ : ℂ) /
+          ((‖1 - u.val‖ : ℝ) : ℂ) ∂μ𝔭(v)
+    Summable inside ∧
+      HasSum (fun χ : chartChars(τ) ↦
+        ((heckeLogDiscriminantConductor χ.val - Real.log (Int.natAbs (NumberField.discr F)) :
+          ℝ) : ℂ) * Φ χ 0) (-∑' v, inside v) := by
+  sorry
+
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (finite places). Let `Φ_χ` be the
 radial profiles of a test `f` (Mellin transforms matching the idelic Mellin integrals, as in
 `idelicExplicitFormula_mellinMatching`). Summed over the characters trivial on the image of
@@ -10105,7 +10211,37 @@ theorem idelicExplicitFormula_finiteMatching (τ : ℝ≥0ˣ →ₜ* C[F])
     HasSum (fun χ : chartChars(τ) ↦ (heckeLogDiscriminantConductor χ.val : ℂ) * Φ χ 0 -
         ∑' j, explicitPrimeTerm(χ.val, Φ χ) j)
       (-∑' v, finiteWeilScale(v) * finiteConnesWeilPrincipalValue v 1 (testF v)) := by
-  sorry
+  obtain ⟨hOutS, hB⟩ :=
+    idelicExplicitFormula_finiteMatching_primePowers τ _hτ f testF _hF Φ _hΦ _hM
+  obtain ⟨hInS, hC⟩ :=
+    idelicExplicitFormula_finiteMatching_conductor τ _hτ f testF _hF Φ _hΦ _hM
+  have hA := idelicExplicitFormula_finiteMatching_inversion τ _hτ f Φ _hΦ _hM
+  obtain ⟨hDS, hD⟩ := explicitFormula_log_discr_eq_tsum (F := F)
+  set Out := fun v : Primes(F) ↦ finiteWeilScale(v) *
+      ∫ u in ((O(v)).units : Set (v.adicCompletion F)ˣ)ᶜ,
+        (testF v).val u * (Real.sqrt ‖u.val‖ : ℂ) / ((‖1 - u.val‖ : ℝ) : ℂ) ∂μ𝔭(v) with hOut
+  set In := fun v : Primes(F) ↦ finiteWeilScale(v) *
+      ∫ u in ((O(v)).units : Set (v.adicCompletion F)ˣ),
+        ((testF v).val u - (testF v).val 1) * (Real.sqrt ‖u.val‖ : ℂ) /
+          ((‖1 - u.val‖ : ℝ) : ℂ) ∂μ𝔭(v) with hIn
+  set Dv := fun v : Primes(F) ↦
+    (multiplicity v.asIdeal (differentIdeal ℤ (𝓞 F)) : ℝ) * Real.log q(v) with hDv
+  have h1 (v : Primes(F)) : (testF v).val 1 = f.val 1 := by rw [_hF, map_one]
+  -- Each principal value is the finite part minus the different contribution.
+  have hPV (v : Primes(F)) : finiteWeilScale(v) * finiteConnesWeilPrincipalValue v 1 (testF v) =
+      Out v + In v - ((Dv v : ℝ) : ℂ) * f.val 1 := by
+    rw [(finiteConnesWeilPrincipalValue_eq_finitePart v (testF v)).2.2, mul_add]
+    simp only [Out, In, Dv, h1]
+  have hDc : Summable (fun v ↦ ((Dv v : ℝ) : ℂ) * f.val 1) :=
+    (Complex.ofRealCLM.summable hDS).mul_right _
+  have htot := ((hA.mul_left ((Real.log (Int.natAbs (NumberField.discr F)) : ℝ) : ℂ)).add hC).sub hB
+  convert htot using 1
+  · funext χ
+    push_cast
+    ring
+  · rw [tsum_congr hPV, Summable.tsum_sub (hOutS.add hInS) hDc, Summable.tsum_add hOutS hInS,
+      tsum_mul_right, ← Complex.ofReal_tsum, hD]
+    ring
 
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (one infinite place `w`). Let `Φ_χ` be
 the radial profiles of a test `f`, as in `idelicExplicitFormula_finiteMatching`. Summed over
