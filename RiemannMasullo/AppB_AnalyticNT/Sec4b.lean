@@ -14021,6 +14021,307 @@ private theorem explicitFormula_realLocal_integrable (w : InfinitePlace F) (hw :
 
 end ExplicitFormulaRealLocalIntegrable
 
+section ExplicitFormulaRealTamagawaIntegral
+
+/-- At a real place, an integral against the multiplicative Tamagawa measure is the Lebesgue
+integral of `|x|⁻¹ φ(x)` in the real coordinate. -/
+private theorem explicitFormula_realTamagawa_integral (w : InfinitePlace F) (hw : w.IsReal)
+    (φ : w.Completionˣ → ℂ) :
+    ∫ u, φ u ∂(infiniteLocalMultiplicativeTamagawaMeasure F w) =
+      ∫ x : ℝ, if hx : x = 0 then 0 else
+        (|x|⁻¹ : ℝ) • φ (Units.map (InfinitePlace.Completion.ringEquivRealOfIsReal hw).symm.toMonoidHom
+          (Units.mk0 x hx)) := by
+  let : BorelSpace w.Completion := ⟨rfl⟩
+  let : BorelSpace w.Completionˣ := borelSpace_units_of_continuousInv₀ _
+  let r := InfinitePlace.Completion.ringEquivRealOfIsReal hw
+  let j := InfinitePlace.Completion.isometryEquivRealOfIsReal hw
+  let m := j.symm.toHomeomorph.toMeasurableEquiv
+  have hval := (IsOpenUnits.isOpenEmbedding_unitsVal (M := w.Completion)).measurableEmbedding
+  have hmult : w.mult = 1 := by simp [InfinitePlace.mult, hw]
+  have hnorm (t : ℝ) : ‖m t‖ = |t| := by
+    change ‖j.symm t‖ = ‖t‖
+    rw [← dist_zero_right, ← dist_zero_right t, ← j.symm.dist_eq t 0,
+      show j.symm 0 = 0 from map_zero r.symm]
+  let Fz : w.Completion → ℂ := Function.extend Units.val φ (fun _ ↦ 0)
+  have hFu (u : w.Completionˣ) : Fz u.val = φ u := Units.val_injective.extend_apply _ _ u
+  have hFz (y : w.Completion) (hy : y ∉ range (Units.val : w.Completionˣ → w.Completion)) :
+      Fz y = 0 := by
+    simp only [Fz, Function.extend_apply' _ _ _ (fun ⟨u, hu⟩ ↦ hy ⟨u, hu⟩)]
+  let d : w.Completion → ENNReal := fun x ↦ (↑(‖x‖₊ ^ w.mult) : ENNReal)⁻¹
+  have hd : Measurable d := by fun_prop
+  simp only [← hFu]
+  change ∫ u, Fz u.val ∂(((infiniteLocalAdditiveTamagawaMeasure F w).withDensity d).comap
+    Units.val) = _
+  rw [← hval.integral_map (g := Fz), hval.map_comap,
+    setIntegral_withDensity_eq_setIntegral_toReal_smul hd ?_ _ hval.measurableSet_range,
+    setIntegral_eq_integral_of_forall_compl_eq_zero (s := range Units.val)
+      (fun y hy ↦ by simp only [hFz y hy, smul_zero])]
+  · rw [infiniteLocalAdditiveTamagawaMeasure, dite_eq_left hw,
+      show (r.symm : ℝ → w.Completion) = m from rfl, integral_map_equiv]
+    congr 1
+    funext x
+    by_cases hx : x = 0
+    · rw [dite_eq_left hx, hx]
+      have h0 : m 0 = 0 := map_zero r.symm
+      rw [h0, hFz 0 (fun ⟨u, hu⟩ ↦ u.ne_zero hu), smul_zero]
+    · rw [dite_eq_right hx]
+      have hu : m x = (Units.map r.symm.toMonoidHom (Units.mk0 x hx)).val := rfl
+      simp only [d, hmult, pow_one]
+      rw [ENNReal.toReal_inv, ENNReal.coe_toReal, coe_nnNorm, hnorm, hu, hFu]
+  · refine ae_restrict_of_forall_mem hval.measurableSet_range fun y ⟨u, hu⟩ ↦ ?_
+    simp only [d, hmult, pow_one]
+    exact ENNReal.inv_lt_top.mpr (by simp [← hu])
+
+end ExplicitFormulaRealTamagawaIntegral
+
+section ExplicitFormulaRealFourPieces
+
+private theorem explicitFormula_hasDerivAt_halfExp (s σ t : ℝ) :
+    HasDerivAt (fun t : ℝ ↦ s * Real.exp (σ * (t / 2))) (s * (Real.exp (σ * (t / 2)) * (σ / 2))) t := by
+  have h : HasDerivAt (fun t : ℝ ↦ σ * (t / 2)) (σ / 2) t := by
+    have h0 := ((hasDerivAt_id t).div_const 2).const_mul σ
+    simp only [id] at h0
+    convert h0 using 1
+    ring
+  exact ((Real.hasDerivAt_exp _).comp t h).const_mul s
+
+private theorem explicitFormula_injOn_halfExp (s σ : ℝ) (hs : s ≠ 0) (hσ : σ ≠ 0) :
+    InjOn (fun t : ℝ ↦ s * Real.exp (σ * (t / 2))) (Ioi 0) := by
+  intro a _ b _ hab
+  have h := Real.exp_injective (mul_left_cancel₀ hs hab)
+  have := mul_left_cancel₀ hσ h
+  linarith
+
+private theorem explicitFormula_image_halfExp_pos :
+    (fun t : ℝ ↦ 1 * Real.exp (1 * (t / 2))) '' Ioi 0 = Ioi 1 := by
+  ext x
+  simp only [mem_image, mem_Ioi, one_mul]
+  constructor
+  · rintro ⟨t, ht, rfl⟩
+    exact Real.one_lt_exp_iff.mpr (by linarith)
+  · intro hx
+    refine ⟨2 * Real.log x, by linarith [Real.log_pos hx], ?_⟩
+    rw [show 2 * Real.log x / 2 = Real.log x by ring, Real.exp_log (by linarith)]
+
+private theorem explicitFormula_image_halfExp_neg :
+    (fun t : ℝ ↦ 1 * Real.exp (-1 * (t / 2))) '' Ioi 0 = Ioo 0 1 := by
+  ext x
+  simp only [mem_image, mem_Ioi, mem_Ioo, one_mul]
+  constructor
+  · rintro ⟨t, ht, rfl⟩
+    exact ⟨Real.exp_pos _, Real.exp_lt_one_iff.mpr (by linarith)⟩
+  · rintro ⟨hx0, hx1⟩
+    refine ⟨-2 * Real.log x, by linarith [Real.log_neg hx0 hx1], ?_⟩
+    rw [show -1 * (-2 * Real.log x / 2) = Real.log x by ring, Real.exp_log hx0]
+
+private theorem explicitFormula_image_neg_halfExp_pos :
+    (fun t : ℝ ↦ -1 * Real.exp (1 * (t / 2))) '' Ioi 0 = Iio (-1) := by
+  have h := explicitFormula_image_halfExp_pos
+  ext x
+  constructor
+  · rintro ⟨t, ht, rfl⟩
+    have : 1 * Real.exp (1 * (t / 2)) ∈ Ioi (1 : ℝ) := h ▸ ⟨t, ht, rfl⟩
+    simp only [mem_Ioi, mem_Iio] at this ⊢
+    linarith
+  · intro hx
+    obtain ⟨t, ht, he⟩ : -x ∈ (fun t : ℝ ↦ 1 * Real.exp (1 * (t / 2))) '' Ioi 0 := by
+      rw [h]; simp only [mem_Ioi, mem_Iio] at hx ⊢; linarith
+    refine ⟨t, ht, ?_⟩
+    simp only at he ⊢
+    linarith
+
+private theorem explicitFormula_image_neg_halfExp_neg :
+    (fun t : ℝ ↦ -1 * Real.exp (-1 * (t / 2))) '' Ioi 0 = Ioo (-1) 0 := by
+  have h := explicitFormula_image_halfExp_neg
+  ext x
+  constructor
+  · rintro ⟨t, ht, rfl⟩
+    have : 1 * Real.exp (-1 * (t / 2)) ∈ Ioo (0 : ℝ) 1 := h ▸ ⟨t, ht, rfl⟩
+    simp only [mem_Ioo] at this ⊢
+    constructor <;> linarith
+  · intro hx
+    obtain ⟨t, ht, he⟩ : -x ∈ (fun t : ℝ ↦ 1 * Real.exp (-1 * (t / 2))) '' Ioi 0 := by
+      rw [h]; simp only [mem_Ioo] at hx ⊢; constructor <;> linarith
+    refine ⟨t, ht, ?_⟩
+    simp only at he ⊢
+    linarith
+
+/-- One of the four substitutions: integral and integrability. -/
+private theorem explicitFormula_halfExp_subst (H : ℝ → ℂ) (s σ : ℝ) (hs : s ≠ 0) (hσ : σ ≠ 0) :
+    (IntegrableOn H ((fun t : ℝ ↦ s * Real.exp (σ * (t / 2))) '' Ioi 0) ↔
+      IntegrableOn (fun t ↦ |s * (Real.exp (σ * (t / 2)) * (σ / 2))| •
+        H (s * Real.exp (σ * (t / 2)))) (Ioi 0)) ∧
+    ∫ x in (fun t : ℝ ↦ s * Real.exp (σ * (t / 2))) '' Ioi 0, H x =
+      ∫ t in Ioi 0, |s * (Real.exp (σ * (t / 2)) * (σ / 2))| • H (s * Real.exp (σ * (t / 2))) :=
+  ⟨integrableOn_image_iff_integrableOn_abs_deriv_smul measurableSet_Ioi
+      (fun t _ ↦ (explicitFormula_hasDerivAt_halfExp s σ t).hasDerivWithinAt)
+      (explicitFormula_injOn_halfExp s σ hs hσ) H,
+    integral_image_eq_integral_abs_deriv_smul measurableSet_Ioi
+      (fun t _ ↦ (explicitFormula_hasDerivAt_halfExp s σ t).hasDerivWithinAt)
+      (explicitFormula_injOn_halfExp s σ hs hσ) H⟩
+
+/-- A Lebesgue integral over `ℝ` as the sum of the four substitutions `x = ±e^{±t/2}`,
+`t > 0`. -/
+private theorem explicitFormula_integral_four_halfExp (H : ℝ → ℂ)
+    (h1 : IntegrableOn (fun t ↦ (Real.exp (t / 2) / 2) • H (Real.exp (t / 2))) (Ioi 0))
+    (h2 : IntegrableOn (fun t ↦ (Real.exp (-(t / 2)) / 2) • H (Real.exp (-(t / 2)))) (Ioi 0))
+    (h3 : IntegrableOn (fun t ↦ (Real.exp (t / 2) / 2) • H (-Real.exp (t / 2))) (Ioi 0))
+    (h4 : IntegrableOn (fun t ↦ (Real.exp (-(t / 2)) / 2) • H (-Real.exp (-(t / 2)))) (Ioi 0)) :
+    ∫ x, H x =
+      ((∫ t in Ioi 0, (Real.exp (t / 2) / 2) • H (Real.exp (t / 2))) +
+        ∫ t in Ioi 0, (Real.exp (-(t / 2)) / 2) • H (Real.exp (-(t / 2)))) +
+      ((∫ t in Ioi 0, (Real.exp (t / 2) / 2) • H (-Real.exp (t / 2))) +
+        ∫ t in Ioi 0, (Real.exp (-(t / 2)) / 2) • H (-Real.exp (-(t / 2)))) := by
+  have e1 := explicitFormula_halfExp_subst H 1 1 one_ne_zero one_ne_zero
+  have e2 := explicitFormula_halfExp_subst H 1 (-1) one_ne_zero (by norm_num)
+  have e3 := explicitFormula_halfExp_subst H (-1) 1 (by norm_num) one_ne_zero
+  have e4 := explicitFormula_halfExp_subst H (-1) (-1) (by norm_num) (by norm_num)
+  rw [explicitFormula_image_halfExp_pos] at e1
+  rw [explicitFormula_image_halfExp_neg] at e2
+  rw [explicitFormula_image_neg_halfExp_pos] at e3
+  rw [explicitFormula_image_neg_halfExp_neg] at e4
+  have c1 : (fun t : ℝ ↦ |1 * (Real.exp (1 * (t / 2)) * (1 / 2))| • H (1 * Real.exp (1 * (t / 2))))
+      = fun t ↦ (Real.exp (t / 2) / 2) • H (Real.exp (t / 2)) := by
+    funext t
+    rw [abs_of_pos (by positivity)]
+    simp only [one_mul, mul_one_div]
+  have c2 : (fun t : ℝ ↦ |1 * (Real.exp (-1 * (t / 2)) * (-1 / 2))| •
+      H (1 * Real.exp (-1 * (t / 2)))) =
+      fun t ↦ (Real.exp (-(t / 2)) / 2) • H (Real.exp (-(t / 2))) := by
+    funext t
+    rw [abs_of_neg (by have := Real.exp_pos (-1 * (t / 2)); nlinarith)]
+    simp only [one_mul, neg_one_mul]
+    congr 1
+    ring
+  have c3 : (fun t : ℝ ↦ |-1 * (Real.exp (1 * (t / 2)) * (1 / 2))| •
+      H (-1 * Real.exp (1 * (t / 2)))) =
+      fun t ↦ (Real.exp (t / 2) / 2) • H (-Real.exp (t / 2)) := by
+    funext t
+    rw [abs_of_neg (by have := Real.exp_pos (1 * (t / 2)); nlinarith)]
+    simp only [one_mul, neg_one_mul]
+    congr 1
+    ring
+  have c4 : (fun t : ℝ ↦ |-1 * (Real.exp (-1 * (t / 2)) * (-1 / 2))| •
+      H (-1 * Real.exp (-1 * (t / 2)))) =
+      fun t ↦ (Real.exp (-(t / 2)) / 2) • H (-Real.exp (-(t / 2))) := by
+    funext t
+    rw [abs_of_pos (by have := Real.exp_pos (-1 * (t / 2)); nlinarith)]
+    simp only [neg_one_mul]
+    congr 1
+    ring
+  rw [c1] at e1
+  rw [c2] at e2
+  rw [c3] at e3
+  rw [c4] at e4
+  rw [← e1.2, ← e2.2, ← e3.2, ← e4.2]
+  have i1 := e1.1.mpr h1
+  have i2 := e2.1.mpr h2
+  have i3 := e3.1.mpr h3
+  have i4 := e4.1.mpr h4
+  rw [← setIntegral_union (by
+      rw [Set.disjoint_iff]; rintro x ⟨hx, hx'⟩; simp only [mem_Ioi, mem_Ioo] at hx hx'; linarith)
+      measurableSet_Ioo i1 i2,
+    ← setIntegral_union (by
+      rw [Set.disjoint_iff]; rintro x ⟨hx, hx'⟩; simp only [mem_Iio, mem_Ioo] at hx hx'; linarith)
+      measurableSet_Ioo i3 i4,
+    ← setIntegral_union (by
+      rw [Set.disjoint_iff]; rintro x ⟨hx, hx'⟩
+      simp only [mem_union, mem_Ioi, mem_Ioo, mem_Iio] at hx hx'
+      rcases hx with hx | hx <;> rcases hx' with hx' | hx' <;> linarith)
+      (measurableSet_Iio.union measurableSet_Ioo) (i1.union i2) (i3.union i4)]
+  refine (setIntegral_eq_integral_of_ae_compl_eq_zero ?_).symm
+  have hnull : volume ({-1, 0, 1} : Set ℝ) = 0 := (Set.toFinite _).measure_zero _
+  filter_upwards [measure_eq_zero_iff_ae_notMem.mp hnull] with x hx hxS
+  exfalso
+  apply hxS
+  simp only [mem_insert_iff, mem_singleton_iff, not_or] at hx
+  obtain ⟨hm, h0, hp⟩ := hx
+  simp only [mem_union, mem_Ioi, mem_Ioo, mem_Iio]
+  rcases lt_trichotomy x 0 with h | h | h
+  · rcases lt_trichotomy x (-1) with h' | h' | h'
+    · exact Or.inr (Or.inl h')
+    · exact absurd h' hm
+    · exact Or.inr (Or.inr ⟨h', h⟩)
+  · exact absurd h h0
+  · rcases lt_trichotomy x 1 with h' | h' | h'
+    · exact Or.inl (Or.inr ⟨h, h'⟩)
+    · exact absurd h' hp
+    · exact Or.inl (Or.inl h')
+
+end ExplicitFormulaRealFourPieces
+
+section ExplicitFormulaRealVanishingIntegrable
+
+/-- `g(σ t) e^{-t/4} / (2 (1 - e^{-t/2}))` is integrable on `(0, ∞)` when `g(0) = 0`, `g` has a
+bounded derivative and `|σ| ≤ 1/2`. -/
+private theorem explicitFormula_vanishing_minus_integrable (g g' : ℝ → ℂ) (P σ : ℝ)
+    (hg : ∀ y, HasDerivAt g (g' y) y) (hg' : ∀ y, ‖g' y‖ ≤ P) (hg0 : g 0 = 0)
+    (hσ : |σ| ≤ 1 / 2) :
+    IntegrableOn (fun t : ℝ ↦ g (σ * t) *
+      ((Real.exp (-(t / 4)) / (2 * (1 - Real.exp (-(t / 2)))) : ℝ) : ℂ)) (Ioi 0) := by
+  have hgc : Continuous g := continuous_iff_continuousAt.mpr fun y ↦ (hg y).continuousAt
+  have hmeas : Measurable (fun t : ℝ ↦ g (σ * t) *
+      ((Real.exp (-(t / 4)) / (2 * (1 - Real.exp (-(t / 2)))) : ℝ) : ℂ)) := by
+    have : Measurable (fun t : ℝ ↦ (Real.exp (-(t / 4)) / (2 * (1 - Real.exp (-(t / 2)))))) := by
+      fun_prop
+    exact (hgc.measurable.comp (measurable_const_mul σ)).mul
+      (Complex.measurable_ofReal.comp this)
+  refine Integrable.mono' ((exp_neg_integrableOn_Ioi 0 (by norm_num : (0 : ℝ) < 1 / 8)).const_mul
+    (2 * P)) hmeas.aestronglyMeasurable (ae_restrict_of_forall_mem measurableSet_Ioi fun t ht ↦ ?_)
+  have ht : 0 < t := ht
+  have hP : 0 ≤ P := (norm_nonneg _).trans (hg' 0)
+  have hmv : ‖g (σ * t)‖ ≤ P * (t / 2) := by
+    have h := Convex.norm_image_sub_le_of_norm_hasDerivWithin_le (f := g) (s := univ) (x := 0)
+      (y := σ * t) (fun y _ ↦ (hg y).hasDerivWithinAt) (fun y _ ↦ hg' y) convex_univ trivial trivial
+    rw [hg0, sub_zero, sub_zero, Real.norm_eq_abs, abs_mul, abs_of_pos ht] at h
+    exact h.trans (mul_le_mul_of_nonneg_left (by nlinarith [abs_nonneg σ]) hP)
+  have he2 : 0 < 1 - Real.exp (-(t / 2)) := by
+    rw [sub_pos, Real.exp_lt_one_iff]; linarith
+  -- `1 - e^{-s} ≥ s / (1 + s)` and `1 + t/2 ≤ 4 e^{t/8}`.
+  have hlow : (t / 2) / (1 + t / 2) ≤ 1 - Real.exp (-(t / 2)) := by
+    have h1 : 1 + t / 2 ≤ Real.exp (t / 2) := by linarith [Real.add_one_le_exp (t / 2)]
+    have h2 : Real.exp (-(t / 2)) * Real.exp (t / 2) = 1 := by
+      rw [← Real.exp_add]; simp
+    rw [div_le_iff₀ (by linarith)]
+    nlinarith [Real.exp_pos (-(t / 2))]
+  have hgrow : 1 + t / 2 ≤ 4 * Real.exp (t / 8) := by
+    linarith [Real.add_one_le_exp (t / 8)]
+  have hk : 0 ≤ Real.exp (-(t / 4)) / (2 * (1 - Real.exp (-(t / 2)))) := by positivity
+  rw [norm_mul, Complex.norm_real, Real.norm_of_nonneg hk]
+  have hexp : Real.exp (-(t / 4)) * Real.exp (t / 8) = Real.exp (-(1 / 8) * t) := by
+    rw [← Real.exp_add]; ring_nf
+  calc ‖g (σ * t)‖ * (Real.exp (-(t / 4)) / (2 * (1 - Real.exp (-(t / 2)))))
+      ≤ P * (t / 2) * (Real.exp (-(t / 4)) / (2 * ((t / 2) / (1 + t / 2)))) := by
+        gcongr
+    _ = P / 2 * Real.exp (-(t / 4)) * (1 + t / 2) := by
+        field_simp
+    _ ≤ P / 2 * Real.exp (-(t / 4)) * (4 * Real.exp (t / 8)) := by gcongr
+    _ = 2 * P * Real.exp (-(1 / 8) * t) := by rw [← hexp]; ring
+
+/-- `g(σ t) e^{-t/4} / (2 (1 + e^{-t/2}))` is integrable on `(0, ∞)` for bounded continuous `g`. -/
+private theorem explicitFormula_vanishing_plus_integrable (g : ℝ → ℂ) (P σ : ℝ)
+    (hgc : Continuous g) (hgb : ∀ y, ‖g y‖ ≤ P) :
+    IntegrableOn (fun t : ℝ ↦ g (σ * t) *
+      ((Real.exp (-(t / 4)) / (2 * (1 + Real.exp (-(t / 2)))) : ℝ) : ℂ)) (Ioi 0) := by
+  have hmeas : Measurable (fun t : ℝ ↦ g (σ * t) *
+      ((Real.exp (-(t / 4)) / (2 * (1 + Real.exp (-(t / 2)))) : ℝ) : ℂ)) := by
+    have : Measurable (fun t : ℝ ↦ (Real.exp (-(t / 4)) / (2 * (1 + Real.exp (-(t / 2)))))) := by
+      fun_prop
+    exact (hgc.measurable.comp (measurable_const_mul σ)).mul
+      (Complex.measurable_ofReal.comp this)
+  refine Integrable.mono' ((exp_neg_integrableOn_Ioi 0 (by norm_num : (0 : ℝ) < 1 / 4)).const_mul
+    P) hmeas.aestronglyMeasurable (ae_restrict_of_forall_mem measurableSet_Ioi fun t _ ↦ ?_)
+  have hP : 0 ≤ P := (norm_nonneg _).trans (hgb 0)
+  have hk : 0 ≤ Real.exp (-(t / 4)) / (2 * (1 + Real.exp (-(t / 2)))) := by positivity
+  rw [norm_mul, Complex.norm_real, Real.norm_of_nonneg hk]
+  have hk1 : Real.exp (-(t / 4)) / (2 * (1 + Real.exp (-(t / 2)))) ≤ Real.exp (-(1 / 4) * t) := by
+    rw [div_le_iff₀ (by positivity), show -(1 / 4) * t = -(t / 4) by ring]
+    nlinarith [Real.exp_pos (-(t / 4)), Real.exp_pos (-(t / 2))]
+  calc ‖g (σ * t)‖ * (Real.exp (-(t / 4)) / (2 * (1 + Real.exp (-(t / 2)))))
+      ≤ P * Real.exp (-(1 / 4) * t) := mul_le_mul (hgb _) hk1 hk hP
+
+end ExplicitFormulaRealVanishingIntegrable
+
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a real place `w`, tests
 vanishing at `1`). The identity of `idelicExplicitFormula_infiniteMatching_realLocal` for a
 test `f` on `F_w^× = ℝ^×` with `f(1) = 0`.
@@ -14044,7 +14345,153 @@ theorem idelicExplicitFormula_infiniteMatching_realLocal_vanishing (w : Infinite
             (1 - (Real.exp (-t) : ℂ)))) -
         (Real.log Real.pi : ℂ) * testI.val 1 =
       -infiniteConnesWeilPrincipalValue w testI := by
-  sorry
+  intro e gp gm Q
+  let r := InfinitePlace.Completion.ringEquivRealOfIsReal hw
+  let j := InfinitePlace.Completion.isometryEquivRealOfIsReal hw
+  have hnorm (x : ℝ) : ‖r.symm x‖ = |x| := by
+    change ‖j.symm x‖ = ‖x‖
+    rw [← dist_zero_right, ← dist_zero_right x, ← j.symm.dist_eq x 0,
+      show j.symm 0 = 0 from map_zero r.symm]
+  have hval (u : ℝˣ) : (e u).val = r.symm u.val := rfl
+  have hnorm1 (u : ℝˣ) : ‖(e u).val‖ = |u.val| := by rw [hval, hnorm]
+  have hnorm2 (u : ℝˣ) : ‖1 - (e u).val‖ = |1 - u.val| := by
+    rw [hval, ← hnorm, map_sub, map_one]
+  -- The Lebesgue form of the principal value.
+  let φ : w.Completionˣ → ℂ := fun u ↦
+    testI.val u * (Real.sqrt ‖u.val‖ : ℂ) / ((‖1 - u.val‖ : ℝ) : ℂ)
+  let H : ℝ → ℂ := fun x ↦ if hx : x = 0 then 0 else (|x|⁻¹ : ℝ) • φ (e (Units.mk0 x hx))
+  have hPV : infiniteConnesWeilPrincipalValue w testI = (1 / 2 : ℂ) * ∫ x, H x := by
+    rw [realConnesWeilPrincipalValue_of_apply_one_zero w hw testI _h1]
+    congr 1
+    exact explicitFormula_realTamagawa_integral w hw φ
+  have hHp (y : ℝ) : H (Real.exp y) = (|Real.exp y|⁻¹ : ℝ) •
+      (gp y * (Real.sqrt |Real.exp y| : ℂ) / ((|1 - Real.exp y| : ℝ) : ℂ)) := by
+    simp only [H, dite_eq_right (Real.exp_pos y).ne', φ, hnorm1, hnorm2, Units.val_mk0]
+    rfl
+  have hHm (y : ℝ) : H (-Real.exp y) = (|Real.exp y|⁻¹ : ℝ) •
+      (gm y * (Real.sqrt |Real.exp y| : ℂ) / ((|1 + Real.exp y| : ℝ) : ℂ)) := by
+    have hne : -Real.exp y ≠ 0 := neg_ne_zero.mpr (Real.exp_pos y).ne'
+    have hu : Units.mk0 (-Real.exp y) hne = -Units.mk0 (Real.exp y) (Real.exp_pos y).ne' :=
+      Units.ext (by simp)
+    simp only [H, dite_eq_right hne, φ, hnorm1, hnorm2, Units.val_mk0, abs_neg, sub_neg_eq_add]
+    rw [hu]
+  let km : ℝ → ℝ := fun t ↦ Real.exp (-(t / 4)) / (2 * (1 - Real.exp (-(t / 2))))
+  let kp : ℝ → ℝ := fun t ↦ Real.exp (-(t / 4)) / (2 * (1 + Real.exp (-(t / 2))))
+  have key (G : ℂ) (c a d k : ℝ) (h : c * (a⁻¹ * (Real.sqrt a / d)) = k) :
+      c • ((a⁻¹ : ℝ) • (G * (Real.sqrt a : ℂ) / (d : ℂ))) = G * (k : ℂ) := by
+    rw [← h]; simp only [Complex.real_smul]; push_cast; ring
+  have hx2 (t : ℝ) : Real.exp (t / 2) = Real.exp (t / 4) * Real.exp (t / 4) := by
+    rw [← Real.exp_add]; ring_nf
+  have hxm2 (t : ℝ) : Real.exp (-(t / 2)) = (Real.exp (t / 4) * Real.exp (t / 4))⁻¹ := by
+    rw [← Real.exp_add, ← Real.exp_neg]; ring_nf
+  have hxm4 (t : ℝ) : Real.exp (-(t / 4)) = (Real.exp (t / 4))⁻¹ := Real.exp_neg _
+  have hb1 (t : ℝ) (ht : 0 < t) : 1 < Real.exp (t / 4) := Real.one_lt_exp_iff.mpr (by linarith)
+  have q1 (t : ℝ) (ht : 0 < t) : (Real.exp (t / 2) / 2) • H (Real.exp (t / 2)) =
+      gp (t / 2) * (km t : ℂ) := by
+    rw [hHp]
+    apply key
+    have hb := hb1 t ht
+    have hne : Real.exp (t / 4) * Real.exp (t / 4) - 1 ≠ 0 := by nlinarith
+    rw [abs_of_pos (Real.exp_pos _), abs_sub_comm, abs_of_pos (by rw [sub_pos, hx2]; nlinarith)]
+    simp only [km]
+    rw [hx2, hxm2, hxm4, Real.sqrt_mul_self (by positivity)]
+    field_simp
+  have q2 (t : ℝ) (ht : 0 < t) : (Real.exp (-(t / 2)) / 2) • H (Real.exp (-(t / 2))) =
+      gp (-(t / 2)) * (km t : ℂ) := by
+    rw [hHp]
+    apply key
+    have hb := hb1 t ht
+    have hne : Real.exp (t / 4) * Real.exp (t / 4) - 1 ≠ 0 := by nlinarith
+    have hlt : Real.exp (-(t / 2)) < 1 := Real.exp_lt_one_iff.mpr (by linarith)
+    rw [abs_of_pos (Real.exp_pos _), abs_of_pos (by linarith)]
+    simp only [km]
+    rw [hxm2, hxm4, Real.sqrt_inv, Real.sqrt_mul_self (by positivity)]
+    field_simp
+  have q3 (t : ℝ) (ht : 0 < t) : (Real.exp (t / 2) / 2) • H (-Real.exp (t / 2)) =
+      gm (t / 2) * (kp t : ℂ) := by
+    rw [hHm]
+    apply key
+    have hb := hb1 t ht
+    rw [abs_of_pos (Real.exp_pos _), abs_of_pos (by positivity)]
+    simp only [kp]
+    rw [hx2, hxm2, hxm4, Real.sqrt_mul_self (by positivity)]
+    field_simp
+    ring
+  have q4 (t : ℝ) (ht : 0 < t) : (Real.exp (-(t / 2)) / 2) • H (-Real.exp (-(t / 2))) =
+      gm (-(t / 2)) * (kp t : ℂ) := by
+    rw [hHm]
+    apply key
+    have hb := hb1 t ht
+    rw [abs_of_pos (Real.exp_pos _), abs_of_pos (by positivity)]
+    simp only [kp]
+    rw [hxm2, hxm4, Real.sqrt_inv, Real.sqrt_mul_self (by positivity)]
+    field_simp
+  -- Integrability of the four pieces.
+  let β := explicitFormula_localRealFlow w hw
+  obtain ⟨P, hP⟩ := explicitFormula_localTest_flow w hw testI
+  let m1 : w.Completionˣ := e (-1)
+  have hgp (y : ℝ) : gp y = testI.val (1 * β (Multiplicative.ofAdd y)) := by
+    rw [one_mul, explicitFormula_localRealFlow_apply]
+  have hgm (y : ℝ) : gm y = testI.val (m1 * β (Multiplicative.ofAdd y)) := by
+    rw [explicitFormula_localRealFlow_apply, ← map_mul, neg_one_mul]
+  let D := bruhatDirectionalDeriv β testI.val
+  have dgp (y : ℝ) : HasDerivAt gp (D (1 * β (Multiplicative.ofAdd y))) y :=
+    (hP 1 y).1.congr_of_eventuallyEq (.of_forall fun z ↦ hgp z)
+  have dgm (y : ℝ) : HasDerivAt gm (D (m1 * β (Multiplicative.ofAdd y))) y :=
+    (hP m1 y).1.congr_of_eventuallyEq (.of_forall fun z ↦ hgm z)
+  have hgp0 : gp 0 = 0 := by
+    simp only [gp, Real.exp_zero]
+    rw [show Units.mk0 (1 : ℝ) one_ne_zero = 1 from Units.ext rfl, map_one, _h1]
+  have hgmc : Continuous gm := continuous_iff_continuousAt.mpr fun y ↦ (dgm y).continuousAt
+  have hgmb (y : ℝ) : ‖gm y‖ ≤ P := by rw [hgm]; exact (hP _ 0).2.1
+  have i1 : IntegrableOn (fun t ↦ gp (t / 2) * (km t : ℂ)) (Ioi 0) :=
+    (explicitFormula_vanishing_minus_integrable gp _ P (1 / 2) dgp (fun y ↦ (hP _ 0).2.2) hgp0
+      (by norm_num [abs_of_pos])).congr_fun
+      (fun t _ ↦ by simp only [km]; rw [show 1 / 2 * t = t / 2 by ring]) measurableSet_Ioi
+  have i2 : IntegrableOn (fun t ↦ gp (-(t / 2)) * (km t : ℂ)) (Ioi 0) :=
+    (explicitFormula_vanishing_minus_integrable gp _ P (-1 / 2) dgp (fun y ↦ (hP _ 0).2.2) hgp0
+      (by norm_num [abs_of_pos])).congr_fun
+      (fun t _ ↦ by simp only [km]; rw [show -1 / 2 * t = -(t / 2) by ring]) measurableSet_Ioi
+  have i3 : IntegrableOn (fun t ↦ gm (t / 2) * (kp t : ℂ)) (Ioi 0) :=
+    (explicitFormula_vanishing_plus_integrable gm P (1 / 2) hgmc hgmb).congr_fun
+      (fun t _ ↦ by simp only [kp]; rw [show 1 / 2 * t = t / 2 by ring]) measurableSet_Ioi
+  have i4 : IntegrableOn (fun t ↦ gm (-(t / 2)) * (kp t : ℂ)) (Ioi 0) :=
+    (explicitFormula_vanishing_plus_integrable gm P (-1 / 2) hgmc hgmb).congr_fun
+      (fun t _ ↦ by simp only [kp]; rw [show -1 / 2 * t = -(t / 2) by ring]) measurableSet_Ioi
+  have hsym {f g : ℝ → ℂ} (h : ∀ t, 0 < t → f t = g t) : EqOn g f (Ioi 0) :=
+    fun t ht ↦ (h t ht).symm
+  have hH := explicitFormula_integral_four_halfExp H
+    (i1.congr_fun (hsym q1) measurableSet_Ioi) (i2.congr_fun (hsym q2) measurableSet_Ioi)
+    (i3.congr_fun (hsym q3) measurableSet_Ioi) (i4.congr_fun (hsym q4) measurableSet_Ioi)
+  rw [setIntegral_congr_fun measurableSet_Ioi (fun t ht ↦ q1 t ht),
+    setIntegral_congr_fun measurableSet_Ioi (fun t ht ↦ q2 t ht),
+    setIntegral_congr_fun measurableSet_Ioi (fun t ht ↦ q3 t ht),
+    setIntegral_congr_fun measurableSet_Ioi (fun t ht ↦ q4 t ht)] at hH
+  have hsum := integral_add (i1.add i2) (i3.add i4)
+  simp only [Pi.add_apply] at hsum
+  rw [hPV, hH, ← integral_add i1 i2, ← integral_add i3 i4, ← hsum, ← integral_const_mul,
+    ← integral_neg, _h1, mul_zero, sub_zero]
+  refine setIntegral_congr_fun measurableSet_Ioi fun t ht ↦ ?_
+  have ht : 0 < t := ht
+  have hr0 : 0 < Real.exp (-(t / 2)) := Real.exp_pos _
+  have hr1 : Real.exp (-(t / 2)) < 1 := Real.exp_lt_one_iff.mpr (by linarith)
+  have hE1 : Real.exp (-t) = Real.exp (-(t / 2)) * Real.exp (-(t / 2)) := by
+    rw [← Real.exp_add]; ring_nf
+  simp only [Q, km, kp]
+  rw [hE1]
+  generalize Real.exp (-(t / 2)) = r at hr0 hr1 ⊢
+  generalize Real.exp (-(t / 4)) = q
+  have n1 : (1 - (r : ℂ)) ≠ 0 := by
+    rw [← Complex.ofReal_one, ← Complex.ofReal_sub, Complex.ofReal_ne_zero]; linarith
+  have n2 : (1 + (r : ℂ)) ≠ 0 := by
+    rw [← Complex.ofReal_one, ← Complex.ofReal_add, Complex.ofReal_ne_zero]; linarith
+  have n3 : (1 - (r : ℂ) * (r : ℂ)) ≠ 0 := by
+    rw [show (1 - (r : ℂ) * (r : ℂ)) = (1 - (r : ℂ)) * (1 + (r : ℂ)) by ring]
+    exact mul_ne_zero n1 n2
+  have n4 : (1 - (r : ℂ) ^ 2) ≠ 0 := by rw [sq]; exact n3
+  push_cast
+  field_simp
+  ring
 
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a real place `w`, one
 reference test). Some test `h` on `F_w^× = ℝ^×` with `h(1) = 1` satisfies the identity of
