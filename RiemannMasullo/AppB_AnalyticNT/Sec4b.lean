@@ -15494,6 +15494,131 @@ theorem idelicExplicitFormula_infiniteMatching_complexCharacterSum (τ : ℝ≥0
         2 * (Real.log (2 * Real.pi) : ℂ) * f.val 1) := by
   sorry
 
+section ExplicitFormulaComplexLocalAverage
+
+/-- At a complex place, for `t > 0` the integrand of the Poisson average `A(t)` of a test is
+continuous in the angle, hence interval integrable on `[0, 2π]`. -/
+private theorem explicitFormula_complexLocal_intervalIntegrable (w : InfinitePlace F)
+    (hw : w.IsComplex) (f : 𝒟(w.Completionˣ)) {t : ℝ} (ht : 0 < t) :
+    let e : ℂˣ →* w.Completionˣ :=
+      Units.map (InfinitePlace.Completion.ringEquivComplexOfIsComplex hw).symm.toMonoidHom
+    IntervalIntegrable (fun φ : ℝ ↦ (Real.exp (-(t / 2)) : ℂ) *
+        (f.val (e (Units.mk0 (Complex.exp (t / 2 + φ * Complex.I)) (Complex.exp_ne_zero _))) +
+          f.val (e (Units.mk0 (Complex.exp (-(t / 2) + φ * Complex.I))
+            (Complex.exp_ne_zero _)))) /
+        ((‖1 - Complex.exp (-(t / 2) + φ * Complex.I)‖ ^ 2 : ℝ) : ℂ)) volume 0 (2 * Real.pi) := by
+  intro e
+  have hfc : Continuous f.val := by
+    obtain ⟨a, e', s, hs⟩ := (mem_schwartzBruhatSubmodule_iff _).mp
+      (explicitFormula_copy_bruhatCompactSupport_mem_schwartz f.property)
+    exact hs ▸ continuous_stage_realization a e' s
+  have hE : Continuous e := Units.continuous_map
+    (InfinitePlace.Completion.isometryEquivComplexOfIsComplex hw).symm.continuous
+  have hU : Continuous (fun z : ℂ ↦ Units.mk0 (Complex.exp z) (Complex.exp_ne_zero z)) := by
+    refine Units.continuous_iff.mpr ⟨?_, ?_⟩
+    · simpa [Function.comp_def] using Complex.continuous_exp
+    · simp only [Units.val_inv_eq_inv_val, Units.val_mk0]
+      exact Continuous.inv₀ (by fun_prop) fun z ↦ Complex.exp_ne_zero z
+  have hg : Continuous (fun z : ℂ ↦ f.val (e (Units.mk0 (Complex.exp z) (Complex.exp_ne_zero z)))) :=
+    hfc.comp (hE.comp hU)
+  have hd (φ : ℝ) : ((‖1 - Complex.exp (-(t / 2) + φ * Complex.I)‖ ^ 2 : ℝ) : ℂ) ≠ 0 := by
+    have hne : Complex.exp (-(t / 2) + φ * Complex.I) ≠ 1 := by
+      intro h1
+      have h2 := congrArg (‖·‖) h1
+      simp only [Complex.norm_exp, norm_one, Complex.add_re, Complex.neg_re, Complex.div_re,
+        Complex.ofReal_re, Complex.mul_re, Complex.I_re, Complex.I_im, Complex.ofReal_im,
+        Real.exp_eq_one_iff] at h2
+      norm_num at h2
+      linarith
+    rw [Complex.ofReal_ne_zero]
+    exact pow_ne_zero 2 (norm_ne_zero_iff.mpr (sub_ne_zero.mpr hne.symm))
+  have h1 : Continuous (fun φ : ℝ ↦
+      f.val (e (Units.mk0 (Complex.exp (t / 2 + φ * Complex.I)) (Complex.exp_ne_zero _)))) :=
+    hg.comp (f := fun φ : ℝ ↦ (t / 2 + φ * Complex.I : ℂ)) (by fun_prop)
+  have h2 : Continuous (fun φ : ℝ ↦
+      f.val (e (Units.mk0 (Complex.exp (-(t / 2) + φ * Complex.I)) (Complex.exp_ne_zero _)))) :=
+    hg.comp (f := fun φ : ℝ ↦ (-(t / 2) + φ * Complex.I : ℂ)) (by fun_prop)
+  refine Continuous.intervalIntegrable ?_ _ _
+  exact (continuous_const.mul (h1.add h2)).div (by fun_prop) hd
+
+end ExplicitFormulaComplexLocalAverage
+
+/-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a complex place `w`,
+integrability). For a test `f` on `F_w^× = ℂ^×`, with `g(z) = f(e^z)` and the Poisson average `A`
+as in `idelicExplicitFormula_infiniteMatching_complexCharacterSum`, the integrand
+`2 e^{-t} f(1) / t - A(t)` is integrable on `(0, ∞)`.
+
+Why it holds. With `r = e^{-t/2}`, `(2π)⁻¹ ∫_0^{2π} dφ / |1 - r e^{iφ}|² = 1 / (1 - r²)` (Poisson
+kernel), so `A(t) - 2 f(1) e^{-t/2} / (1 - e^{-t})` is the average of
+`e^{-t/2} (g(±t/2 + iφ) - f(1)) / |1 - e^{∓t/2 + iφ}|²`; `|g(z) - f(1)| ≤ C |1 - e^z|` and
+`∫ dφ / |1 - r e^{iφ}| = O(log(1/(1 - r)))` make it `O(1 + log(1/t))` near `t = 0`, and
+`2 e^{-t}/t - 2 e^{-t/2}/(1 - e^{-t}) = O(1)` there. For large `t` everything is `O(e^{-t/2})`. -/
+theorem idelicExplicitFormula_infiniteMatching_complexLocal_integrable (w : InfinitePlace F)
+    (hw : w.IsComplex) (testI : 𝒟(w.Completionˣ)) :
+    let e : ℂˣ →* w.Completionˣ :=
+      Units.map (InfinitePlace.Completion.ringEquivComplexOfIsComplex hw).symm.toMonoidHom
+    let g : ℂ → ℂ := fun z ↦
+      testI.val (e (Units.mk0 (Complex.exp z) (Complex.exp_ne_zero z)))
+    let A : ℝ → ℂ := fun t ↦ (2 * Real.pi : ℂ)⁻¹ * ∫ φ in (0 : ℝ)..2 * Real.pi,
+      (Real.exp (-(t / 2)) : ℂ) * (g (t / 2 + φ * Complex.I) + g (-(t / 2) + φ * Complex.I)) /
+        ((‖1 - Complex.exp (-(t / 2) + φ * Complex.I)‖ ^ 2 : ℝ) : ℂ)
+    IntegrableOn (fun t : ℝ ↦ 2 * (Real.exp (-t) : ℂ) * testI.val 1 / (t : ℂ) - A t) (Ioi 0) := by
+  sorry
+
+/-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a complex place `w`,
+tests vanishing at `1`). The identity of `idelicExplicitFormula_infiniteMatching_complexLocal`
+for a test `f` on `F_w^× = ℂ^×` with `f(1) = 0`.
+
+Computation. With `f(1) = 0` the `e^{-t}/t` and `log 2π` terms vanish, and the left side is
+`-∫_0^∞ A(t) dt`. Putting `u = e^{±t/2 + iφ}` (`|u|_w = |u|²`, `dt dφ = 2 dA / |u|²` on each of
+`|u| > 1`, `|u| < 1`), `e^{-t/2} / |1 - e^{-t/2 + iφ}|² = |u|_w^{1/2} / |1 - u|_w` at both points,
+so the left side is `-(2π)⁻¹ ∫ f(u) |u|_w^{1/2} / |1 - u|_w d^×u` (absolutely convergent since
+`f(1) = 0`). By `complexLogFourier_finitePart` with `F(x) = f(1 + x) / |1 + x|_w^{1/2}`,
+`F(0) = 0`, the principal value is `(2π)⁻¹ ∫ F(x) / |x|_w dν(x)`, and translating by `1` and
+passing to `d^×u` (as in `realConnesWeilPrincipalValue_of_apply_one_zero`, which has no complex
+counterpart yet) gives the same integral. -/
+theorem idelicExplicitFormula_infiniteMatching_complexLocal_vanishing (w : InfinitePlace F)
+    (hw : w.IsComplex) (testI : 𝒟(w.Completionˣ)) (_h1 : testI.val 1 = 0) :
+    let e : ℂˣ →* w.Completionˣ :=
+      Units.map (InfinitePlace.Completion.ringEquivComplexOfIsComplex hw).symm.toMonoidHom
+    let g : ℂ → ℂ := fun z ↦
+      testI.val (e (Units.mk0 (Complex.exp z) (Complex.exp_ne_zero z)))
+    let A : ℝ → ℂ := fun t ↦ (2 * Real.pi : ℂ)⁻¹ * ∫ φ in (0 : ℝ)..2 * Real.pi,
+      (Real.exp (-(t / 2)) : ℂ) * (g (t / 2 + φ * Complex.I) + g (-(t / 2) + φ * Complex.I)) /
+        ((‖1 - Complex.exp (-(t / 2) + φ * Complex.I)‖ ^ 2 : ℝ) : ℂ)
+    (∫ t in Ioi (0 : ℝ), (2 * (Real.exp (-t) : ℂ) * testI.val 1 / (t : ℂ) - A t)) -
+        2 * (Real.log (2 * Real.pi) : ℂ) * testI.val 1 =
+      -infiniteConnesWeilPrincipalValue w testI := by
+  sorry
+
+/-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a complex place `w`,
+one reference test). Some test `h` on `F_w^× = ℂ^×` with `h(1) = 1` satisfies the identity of
+`idelicExplicitFormula_infiniteMatching_complexLocal`.
+
+Computation. The principal value is `-∫ log|y|_w F̂(y) dν(y)` with
+`F(x) = h(1 + x) / |1 + x|_w^{1/2}`, and `complexLogFourier_finitePart` turns it into
+`(2π)⁻¹ Pf∫ F(x) / |x|_w dν(x) + 2 (γ + log 2π) F(0)` (the cutoff `|x|_w ≥ ε` regularized by
+`2π F(0) log ε`); the left side is the integral of
+`idelicExplicitFormula_infiniteMatching_complexLocal_vanishing` regularized by `e^{-t}/t`
+instead. The two regularizations differ by the strip-minus-disc integral
+`∫ dA / r² = 2π log(δ/ε)` near `u = 1`, and the constants cancel (checked numerically to 20
+digits on radial tests). A radial `h(u) = B(log |u|)` with a bump `B`, `B(0) = 1`, as for the real
+place, reduces the angular average to the Poisson kernel. -/
+theorem idelicExplicitFormula_infiniteMatching_complexLocal_reference (w : InfinitePlace F)
+    (hw : w.IsComplex) :
+    ∃ h : 𝒟(w.Completionˣ), h.val 1 = 1 ∧
+      let e : ℂˣ →* w.Completionˣ :=
+        Units.map (InfinitePlace.Completion.ringEquivComplexOfIsComplex hw).symm.toMonoidHom
+      let g : ℂ → ℂ := fun z ↦
+        h.val (e (Units.mk0 (Complex.exp z) (Complex.exp_ne_zero z)))
+      let A : ℝ → ℂ := fun t ↦ (2 * Real.pi : ℂ)⁻¹ * ∫ φ in (0 : ℝ)..2 * Real.pi,
+        (Real.exp (-(t / 2)) : ℂ) * (g (t / 2 + φ * Complex.I) + g (-(t / 2) + φ * Complex.I)) /
+          ((‖1 - Complex.exp (-(t / 2) + φ * Complex.I)‖ ^ 2 : ℝ) : ℂ)
+      (∫ t in Ioi (0 : ℝ), (2 * (Real.exp (-t) : ℂ) * h.val 1 / (t : ℂ) - A t)) -
+          2 * (Real.log (2 * Real.pi) : ℂ) * h.val 1 =
+        -infiniteConnesWeilPrincipalValue w h := by
+  sorry
+
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a complex place `w`).
 For a test `f` on `F_w^× = ℂ^×`, with `g(z) = f(e^z)` and the Poisson average `A` as in
 `idelicExplicitFormula_infiniteMatching_complexCharacterSum`,
@@ -15508,7 +15633,9 @@ against `d^×u = 2 dA / |u|²` (`|u|_w = |u|²`), so the left side is
 (`𝓕 log|x|² = -(1/π) Pf(1/|x|²) - 2(γ + log π) δ` for the self-dual measure `2 dA`) turns it
 into `(2π)⁻¹ Pf∫ F(x) / |x|_w dν(x) + 2 (γ + log 2π) F(0)`. The two regularizations differ
 exactly by the constants (the strip-minus-disc integral `∫ dA / r² = 2π log(δ/ε)` near
-`u = 1`); checked numerically to 20 digits. -/
+`u = 1`); checked numerically to 20 digits. The proof writes `f = (f - f(1) h) + f(1) h` with the
+reference test `h` of `idelicExplicitFormula_infiniteMatching_complexLocal_reference` and uses
+`_complexLocal_vanishing` and `_complexLocal_integrable`. -/
 theorem idelicExplicitFormula_infiniteMatching_complexLocal (w : InfinitePlace F)
     (hw : w.IsComplex) (testI : 𝒟(w.Completionˣ)) :
     let e : ℂˣ →* w.Completionˣ :=
@@ -15521,7 +15648,53 @@ theorem idelicExplicitFormula_infiniteMatching_complexLocal (w : InfinitePlace F
     (∫ t in Ioi (0 : ℝ), (2 * (Real.exp (-t) : ℂ) * testI.val 1 / (t : ℂ) - A t)) -
         2 * (Real.log (2 * Real.pi) : ℂ) * testI.val 1 =
       -infiniteConnesWeilPrincipalValue w testI := by
-  sorry
+  intro e g A
+  obtain ⟨h, h1, hh⟩ := idelicExplicitFormula_infiniteMatching_complexLocal_reference w hw
+  set c := testI.val 1 with hc
+  let f0 : 𝒟(w.Completionˣ) := testI - c • h
+  have hf0 (x : w.Completionˣ) : f0.val x = testI.val x - c * h.val x := rfl
+  have hf01 : f0.val 1 = 0 := by rw [hf0, h1, mul_one, hc, sub_self]
+  let G : 𝒟(w.Completionˣ) → ℝ → ℝ → ℂ := fun f t φ ↦ (Real.exp (-(t / 2)) : ℂ) *
+      (f.val (e (Units.mk0 (Complex.exp (t / 2 + φ * Complex.I)) (Complex.exp_ne_zero _))) +
+        f.val (e (Units.mk0 (Complex.exp (-(t / 2) + φ * Complex.I)) (Complex.exp_ne_zero _)))) /
+      ((‖1 - Complex.exp (-(t / 2) + φ * Complex.I)‖ ^ 2 : ℝ) : ℂ)
+  let J : 𝒟(w.Completionˣ) → ℝ → ℂ := fun f t ↦ 2 * (Real.exp (-t) : ℂ) * f.val 1 / (t : ℂ) -
+      (2 * Real.pi : ℂ)⁻¹ * ∫ φ in (0 : ℝ)..2 * Real.pi, G f t φ
+  have ha : (∫ t in Ioi (0 : ℝ), J f0 t) - 2 * (Real.log (2 * Real.pi) : ℂ) * f0.val 1 =
+      -infiniteConnesWeilPrincipalValue w f0 :=
+    idelicExplicitFormula_infiniteMatching_complexLocal_vanishing w hw f0 hf01
+  have hh' : (∫ t in Ioi (0 : ℝ), J h t) - 2 * (Real.log (2 * Real.pi) : ℂ) * h.val 1 =
+      -infiniteConnesWeilPrincipalValue w h := hh
+  have i0 : IntegrableOn (J f0) (Ioi 0) :=
+    idelicExplicitFormula_infiniteMatching_complexLocal_integrable w hw f0
+  have ih : IntegrableOn (J h) (Ioi 0) :=
+    idelicExplicitFormula_infiniteMatching_complexLocal_integrable w hw h
+  have hT : (∫ t in Ioi (0 : ℝ), (2 * (Real.exp (-t) : ℂ) * testI.val 1 / (t : ℂ) - A t)) =
+      ∫ t in Ioi (0 : ℝ), J testI t := rfl
+  have hI : (∫ t in Ioi (0 : ℝ), J testI t) =
+      (∫ t in Ioi (0 : ℝ), J f0 t) + c * ∫ t in Ioi (0 : ℝ), J h t := by
+    rw [← integral_const_mul, ← integral_add i0 (ih.const_mul c)]
+    refine setIntegral_congr_fun measurableSet_Ioi fun t (ht : 0 < t) ↦ ?_
+    have hG (φ : ℝ) : G f0 t φ = G testI t φ - c * G h t φ := by
+      simp only [G, hf0]; ring
+    have hi : (∫ φ in (0 : ℝ)..2 * Real.pi, G f0 t φ) =
+        (∫ φ in (0 : ℝ)..2 * Real.pi, G testI t φ) - c * ∫ φ in (0 : ℝ)..2 * Real.pi, G h t φ := by
+      simp_rw [hG]
+      rw [intervalIntegral.integral_sub
+        (explicitFormula_complexLocal_intervalIntegrable w hw testI ht)
+        ((explicitFormula_complexLocal_intervalIntegrable w hw h ht).const_mul c),
+        intervalIntegral.integral_const_mul]
+    simp only [J, hi, hf0, h1]
+    ring
+  have hsplit : testI = f0 + c • h := by rw [sub_add_cancel]
+  have hPV : infiniteConnesWeilPrincipalValue w testI =
+      infiniteConnesWeilPrincipalValue w f0 + c * infiniteConnesWeilPrincipalValue w h := by
+    conv_lhs => rw [hsplit]
+    rw [map_add, map_smul, smul_eq_mul]
+  rw [hf01, mul_zero, sub_zero] at ha
+  rw [h1, mul_one] at hh'
+  rw [hT, hI, hPV]
+  linear_combination ha + c * hh'
 
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (one infinite place `w`). Let `Φ_χ` be
 the radial profiles of a test `f`, as in `idelicExplicitFormula_finiteMatching`. Summed over
