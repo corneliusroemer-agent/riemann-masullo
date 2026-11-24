@@ -53,6 +53,16 @@ The fix is the same for all three: name the repeated term with an `abbrev`, and 
 
 Naming pays when it removes copies of a large term from statements whose copies are counted in the millions. It pays little when the count stays and only each copy shrinks. Naming the continuous idele norm `⟨ideleClassNorm F, (isProperMap_ideleClassNorm F).continuous⟩` (11 `m𝔽` notations, 69 spellings in 30 files) made the largest statements on top of #6995 three times smaller, but saved only 1.9% of build time, nearly all of it in `Ch11_ShellStructure/Sec2b`. Measure before opening such a change: the copy counts come from instances nested over `abbrev` quotient types, and only turning those into `def`s (#5398) reduces them.
 
+## Critical path: what sets the wall clock
+
+A build waits on its longest chain of imports, not on the sum of module times. `python3 scripts/critical_path.py <repo> build.log` (a `lake build -v` log) prints that chain and how much it shrinks if one module took no time. Extra arguments `A>B` drop the import of B by A, to test a change first. On `main` at e8922e1 the chain was 776 s of 1,702 s of module time, and `Ch11` waited for the whole of `Ch07 Sec3b` and `Sec4` while using only their first parts: [#7045](https://github.com/mccorvie/riemann-masullo/pull/7045) splits them (−75 s).
+
+To split a file without trial builds:
+
+1. `python3 scripts/split_module.py <file> <line of a top-level end X> <new module> <title>` moves the first part to a new file. The original keeps its name and the rest, and imports the new file publicly. The second part repeats the header directives in force at the cut.
+2. `lake env lean --run lean/SplitDeps.lean <split modules, comma-separated> <all modules>` on a build of the same commit dumps every constant each part uses. It reads the compiled library, private bodies included.
+3. `python3 scripts/split_check.py deps.tsv <repo> Mod:cut:NewMod ...` lists what still breaks: private helpers to publish (the new file may not use `import all`), imports to add, uses of a second part, and modules that lose an import. Entries for second parts that keep their `import all`, and `_simp_`/`eq_` lemmas, can be ignored.
+
 ## Files
 
 - `scripts/profile.sh`: profile one module with the package options, parallel elaboration off.
@@ -60,6 +70,7 @@ Naming pays when it removes copies of a large term from statements whose copies 
 - `scripts/self_time.py`: self-time of the trace nodes under one declaration.
 - `scripts/scratch_copy.py`: truncated copy of a module plus appended variants or probes.
 - `scripts/compare_builds.py`: per-module comparison of two `lake build -v` logs.
+- `scripts/critical_path.py`, `scripts/split_module.py`, `scripts/split_check.py`, `lean/SplitDeps.lean`: see "Critical path" above.
 - `lean/Probes.lean`: `probe_size`, `probe_gen`, `probe_blowup`. Scratch copies only: the library forbids new elaborators.
 - `scripts/scan_statements.sh`: runs a statement scan over the whole built library, generating the imports.
 - `lean/StatementSizes.lean`: every public statement's size, and the recurring subterm heads.
