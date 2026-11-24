@@ -716,7 +716,7 @@ section
 omit [NumberField F] in
 /-- The archimedean factors are additive Haar measures by transport from the real and
 complex lines. -/
-private theorem infiniteLocalAdditiveTamagawaMeasure_haar (v : InfinitePlace F) :
+theorem infiniteLocalAdditiveTamagawaMeasure_haar (v : InfinitePlace F) :
     (infiniteLocalAdditiveTamagawaMeasure F v).IsAddHaarMeasure := by
   let : BorelSpace v.Completion := ⟨rfl⟩
   by_cases h : v.IsReal
@@ -7464,7 +7464,8 @@ ideles by the global multiplicative Tamagawa measure and `dt/t`. -/
 def normOneIdeleTamagawaMeasure : Measure N[F] :=
   (normOneIdeleTamagawaMeasure_existsUnique F).exists.choose
 
-private theorem idele_secondCountable : SecondCountableTopology 𝕀[F] := by
+/-- The idele group of a number field is second countable. -/
+theorem idele_secondCountable : SecondCountableTopology 𝕀[F] := by
   let := ratAdele_secondCountable
   obtain ⟨u, _, _⟩ := exists_adeleTrace_dualCoordinates F
   let : SecondCountableTopology 𝔸[F] := u.symm.toHomeomorph.isEmbedding.secondCountableTopology
