@@ -1159,9 +1159,9 @@ section GlobalDiagonal
 By (12.5.1.4) the trace of convolution on the strip spectral quotient is the sum over the zeros
 in the strip (`spectralStripConvolution_trace`), and by Theorem B.4.4.7 the local terms are the
 sum over all zeros. The gap `spectralStripTrace_eq_localTerms` equates the trace with the local
-terms; with these two facts it gives `traceFormula_exteriorZeros`. At a width whose edges carry
-no zeros the gap is equivalent to the absence of zeros outside the strip
-(`spectralStripTrace_eq_localTerms_iff`). -/
+terms; with these two facts and the projective kernel of `exists_stripTensor` it gives
+`traceFormula_exteriorZeros`. Given nuclearity, at a width whose edges carry no zeros, the gap is
+equivalent to the absence of zeros outside the strip (`spectralStripTrace_eq_localTerms_iff`). -/
 
 attribute [local instance] instSpectralQuotientPolynormableSec3
 
@@ -1170,6 +1170,10 @@ local notation "stripQuot(" hα ", " hs ")" =>
   spectralSobolevQuotient F (1 / 2) (hStrip(hα)) (le_of_lt (zero_lt_one.trans hs))
 local notation "stripConv(" hα ", " hs ", " φ ")" =>
   spectralConvolution (F := F) (1 / 2) (hStrip(hα)) (le_of_lt (zero_lt_one.trans hs)) φ
+local notation "stripTensorExists(" hα ", " hs ", " φ ")" =>
+  (∃ K, sobolevProjectiveKernelOperator (F := F) hα (zero_le_one.trans (le_of_lt hs)) K =
+    (hardySobolevTestAction μ𝔽 m𝔽 _ _ _ (neg_le_self hα) (zero_le_one.trans (le_of_lt hs)) φ).comp
+      (spectralProjection (F := F) (1 / 2) hα (zero_le_one.trans (le_of_lt hs))))
 local notation "localTerms(" φ ", " a ", " b ")" =>
   (M(φ, twist(1, 1 / 2)) + M(φ, twist(1, -1 / 2)) -
     classVolume * ((∑ w : InfinitePlace F, infiniteConnesWeilPrincipalValue w (a w)) +
@@ -1191,25 +1195,79 @@ local notation "order(" χ ", " z ")" => meromorphicOrderAt (continuedCompletedH
 -- Section 12.3 lacks the comparison of this local limit with the global Haar
 -- diagonal and the two polar Mellin terms (ERRATA M25).
 
+/-- Paper: Theorem 10.4.3.5(3), (10.4.3.45), p. 473. For every half-width α ≥ 0, every Sobolev
+order s > 1 and every test, convolution after spectral projection at center one half on the strip
+Sobolev space has a projective tensor kernel: the kernel `hK` of (12.5.1.4). With it the strip
+convolution is nuclear (`spectralStripConvolution_nuclear_of_stripTensor`).
+The statement is that of `exists_numberField_projectiveKernel_comp_spectralProjection`, reported
+proved on sergmister's research fork, commit 394da1b3caac72bb160db3ee4007b320426a7556,
+`RiemannMasullo/Research/StripNuclearity/NumberFieldDiagonal.lean`, line 64
+(https://github.com/sergmister/riemann-masullo); its axioms have not been checked here.
+Porting that proof is the task. -/
+theorem exists_stripTensor {α s : ℝ} (hα : 0 ≤ α) (hs : 1 < s) (φ : BruhatCompactSupport C𝔽) :
+    stripTensorExists(hα, hs, φ) := by
+  sorry
+
+/-- Paper: Theorem 10.3.2.1(2), p. 454, from (10.4.3.45), p. 473. Convolution on the spectral
+quotient of the strip [1/2 − α, 1/2 + α] is nuclear for every half-width α ≥ 0 and Sobolev order
+s > 1: it is the compression, along the quotient map and its orthogonal section, of the nuclear
+operator given by the projective kernel of `exists_stripTensor`. -/
+theorem spectralStripConvolution_nuclear_of_stripTensor {α s : ℝ} (hα : 0 ≤ α) (hs : 1 < s)
+    (φ : BruhatCompactSupport C𝔽) : IsNuclearOperator stripConv(hα, hs, φ) := by
+  let W := CompactIntervalSobolev μ𝔽 (logIdeleClassNorm F) (-α) α s
+  let A : W →L[ℂ] W :=
+    hardySobolevTestAction μ𝔽 m𝔽 (-α) α s (hStrip(hα)) (zero_le_one.trans hs.le) φ
+  let P : W →L[ℂ] W := spectralProjection (F := F) (1 / 2) hα (zero_le_one.trans hs.le)
+  let theta := globalThetaSobolev F (1 / 2) (hStrip(hα)) (zero_le_one.trans hs.le)
+  let q := theta.mkQL
+  let j := theta.orthogonal.subtypeL.comp
+    theta.quotientEquivOrthogonal.toContinuousLinearEquiv.toContinuousLinearMap
+  let B := stripConv(hα, hs, φ)
+  have hK := exists_stripTensor hα hs φ
+  have hap : IsNuclearOperator (A * P) :=
+    (congrArg (fun L : W →L[ℂ] W ↦ IsNuclearOperator L) hK.choose_spec).mp
+      (stripDiagonal_projective_nuclear (F := F) hα (zero_le_one.trans hs.le) hK.choose)
+  have hqj : q.comp j = ContinuousLinearMap.id ℂ _ := by
+    ext x
+    exact theta.quotientEquivOrthogonal.symm_apply_apply x
+  have hjq : j.comp q = P := by
+    apply ContinuousLinearMap.ext
+    intro x
+    exact (spectralQuotient_orthogonalRepresentative (F := F) (1 / 2) hα
+      (zero_le_one.trans hs.le) (by norm_num) x).1
+  have hqA : q.comp A = B.comp q := by
+    apply ContinuousLinearMap.ext
+    intro x
+    exact (spectralConvolution_mkQ (F := F) (1 / 2) (hStrip(hα)) (zero_le_one.trans hs.le)
+      φ x).symm
+  exact (stripDiagonal_quotientAction q j P A B hqj hjq hqA hap).choose
+
+local notation "three" => (show (1 : ℝ) < 3 by norm_num)
+
 /-- Paper: Theorem 12.5.1.1, p. 520 (with (12.5.1.4) and §12.3, p. 514). For a test vanishing
-on the norm-one classes, a half-width α > 0 and a Sobolev order s > 1, convolution on the spectral
-quotient of the strip [1/2 − α, 1/2 + α] is nuclear, and its trace equals the two polar Mellin
-terms minus the global norm-one volume times the local principal values at all places, whose
-local tests are the restrictions of the test. This is the trace formula on the strip quotient.
-It mentions no zeros, but by (12.5.1.4) and Theorem B.4.4.7 it is equivalent, at a width whose
-edges carry no zeros, to the absence of zeros with |Re s − 1/2| ≥ α
-(`spectralStripTrace_eq_localTerms_iff`; compare #5853 and #7211). For α ≥ 1/2 the trace
-identity is proved (`spectralStripTrace_eq_localTerms_of_half_le`). Nuclearity is Theorem
-10.3.2.1(2), p. 454 (`spectralStripConvolution_nuclear`, whose proof rests on Theorem
-10.3.2.1(1)); it is part of this statement so that the trace is defined.
+on the norm-one classes and a half-width α > 0, the trace of convolution on the Sobolev order 3
+spectral quotient of the strip [1/2 − α, 1/2 + α], for any nuclear representative, equals the
+two polar Mellin terms minus the global norm-one volume times the local principal values at all
+places, whose local tests are the restrictions of the test. This is the trace identity on the
+strip quotient. It mentions no zeros. Given nuclearity, by (12.5.1.4) and Theorem B.4.4.7 it is
+equivalent, at a width whose edges carry no zeros, to the absence of zeros with
+|Re s − 1/2| ≥ α (`spectralStripTrace_eq_localTerms_iff`; compare #5853 and #7211). For
+α ≥ 1/2 it is proved (`spectralStripTrace_eq_localTerms_of_half_le`).
 Gap: Page 520 obtains the trace from the geometric side: the decomposition (11.3.1.4), the shell
 vanishing of Theorem 11.3.2.1, the S-local trace of Theorem 12.4.1.1 and the global to S-local
-comparison that §12.3 announces and does not contain (ERRATA M25, I292, I341, I351, I369). -/
+comparison that §12.3 announces and does not contain (ERRATA M25, I292, I341, I351, I369).
+Deviation: The local terms run over all places. For S as on p. 520 the finite local terms off S
+vanish, since the test vanishes on C¹ and on norms outside (1/T, T), so they equal the S-local
+terms.
+Deviation: The Sobolev order is fixed at s = 3, the least order at which (12.5.1.4) is stated on
+p. 520 through Definition 10.4.3.7; the trace does not depend on it at a width with zero-free
+edges. -/
 theorem spectralStripTrace_eq_localTerms (φ : BruhatCompactSupport C𝔽)
-    (hφ : ∀ g : C₁, φ.val g = 0) {α s : ℝ} (hα : 0 < α) (hs : 1 < s)
-    (a : archTest) (b : finiteTest) (ha : archRestricts(φ, a)) (hb : finiteRestricts(φ, b)) :
-    ∃ T : nuclearEndomorphisms stripQuot(hα.le, hs),
-      T.val = stripConv(hα.le, hs, φ) ∧ hilbertTrace T = localTerms(φ, a, b) := by
+    (hφ : ∀ g : C₁, φ.val g = 0) {α : ℝ} (hα : 0 < α)
+    (a : archTest) (b : finiteTest) (ha : archRestricts(φ, a)) (hb : finiteRestricts(φ, b))
+    (T : nuclearEndomorphisms stripQuot(hα.le, three))
+    (hT : T.val = stripConv(hα.le, three, φ)) :
+    hilbertTrace T = localTerms(φ, a, b) := by
   sorry
 
 /-- A norm section gives a basepoint choice whose lifts are trivial on the section, and every
@@ -1425,21 +1483,20 @@ private theorem exteriorZeros_hasSum_of_iff {X : Type*} (G : X → ℂ) (A B : S
   obtain rfl : A = B := Set.ext h
   exact hA
 
-/-- If the strip action of a test is nuclear with trace its local terms, at a width whose edges
-carry no zeros, then the exterior zero terms of the test sum to zero. -/
+/-- If the trace of the strip action of a test is its local terms, at a width whose edges carry
+no zeros, then the exterior zero terms of the test sum to zero. -/
 private theorem exteriorZeros_hasSum_of_width (τ : ℝ≥0ˣ →ₜ* C𝔽)
     (hτ : RightInverse τ (ideleClassNorm F)) {β s : ℝ} (hβ : 0 < β) (hs : 1 < s)
     (hedge : ∀ χ : PontryaginDual C𝔽, (∀ t, χ (τ t) = 1) →
       ∀ z : ℂ, 0 < ord(χ, z) → |z.re - 1 / 2| ≠ β)
     (φ : BruhatCompactSupport C𝔽)
+    (T : nuclearEndomorphisms stripQuot(hβ.le, hs)) (hT : T.val = stripConv(hβ.le, hs, φ))
     (htr : ∀ (a : archTest) (b : finiteTest), archRestricts(φ, a) → finiteRestricts(φ, b) →
-      ∃ T : nuclearEndomorphisms stripQuot(hβ.le, hs),
-        T.val = stripConv(hβ.le, hs, φ) ∧ hilbertTrace T = localTerms(φ, a, b)) :
+      hilbertTrace T = localTerms(φ, a, b)) :
     HasSum (fun z : exteriorZeros(τ, β) ↦ zeroTerm(φ, z)) 0 := by
   obtain ⟨a, b, ha, hb, -, hall⟩ := traceFormula_of_half_le τ hτ φ (le_refl (1 / 2 : ℝ))
-  obtain ⟨T, hT, htrT⟩ := htr a b ha hb
   have hint := exteriorZeros_hasSum_stripTrace τ hτ hβ hs hedge φ T hT
-  rw [htrT] at hint
+  rw [htr a b ha hb] at hint
   have hempty : IsEmpty exteriorZeros(τ, 1 / 2) :=
     exteriorZeros_isEmpty_of_half_le τ (le_refl (1 / 2 : ℝ))
   have hhalf (p : {χ : PontryaginDual C𝔽 // ∀ t : ℝ≥0ˣ, χ (τ t) = 1} × ℂ)
@@ -1484,29 +1541,29 @@ private theorem exteriorZeros_stripTrace_of_isEmpty (τ : ℝ≥0ˣ →ₜ* C�
 /-- Paper: Theorem 12.5.1.1, p. 520, with (12.5.1.4) and Theorem B.4.4.7, p. 623. Fix a norm
 section τ and a half-width β > 0 such that no completed Hecke L-function of a character trivial on
 τ vanishes on the edges |Re s − 1/2| = β. Then `spectralStripTrace_eq_localTerms` holds at β for
-every test vanishing on the norm-one classes exactly when the strip actions of these tests are
-nuclear and none of these L-functions has a zero with |Re s − 1/2| ≥ β. -/
+every test vanishing on the norm-one classes, whose strip actions are assumed nuclear, exactly when
+none of these L-functions has a zero with |Re s − 1/2| ≥ β. The identity is stated at any Sobolev
+order s > 1. -/
 theorem spectralStripTrace_eq_localTerms_iff (τ : ℝ≥0ˣ →ₜ* C𝔽)
     (hτ : RightInverse τ (ideleClassNorm F)) {β s : ℝ} (hβ : 0 < β) (hs : 1 < s)
     (hedge : ∀ χ : PontryaginDual C𝔽, (∀ t, χ (τ t) = 1) →
-      ∀ z : ℂ, 0 < ord(χ, z) → |z.re - 1 / 2| ≠ β) :
+      ∀ z : ℂ, 0 < ord(χ, z) → |z.re - 1 / 2| ≠ β)
+    (hN : ∀ φ : BruhatCompactSupport C𝔽, (∀ g : C₁, φ.val g = 0) →
+      IsNuclearOperator stripConv(hβ.le, hs, φ)) :
     (∀ φ : BruhatCompactSupport C𝔽, (∀ g : C₁, φ.val g = 0) →
       ∀ (a : archTest) (b : finiteTest), archRestricts(φ, a) → finiteRestricts(φ, b) →
-        ∃ T : nuclearEndomorphisms stripQuot(hβ.le, hs),
-          T.val = stripConv(hβ.le, hs, φ) ∧ hilbertTrace T = localTerms(φ, a, b)) ↔
-      (∀ φ : BruhatCompactSupport C𝔽, (∀ g : C₁, φ.val g = 0) →
-        IsNuclearOperator stripConv(hβ.le, hs, φ)) ∧ IsEmpty exteriorZeros(τ, β) := by
-  refine ⟨fun h ↦ ⟨fun φ hφ ↦ ?_, isEmpty_exteriorZeros_of_hasSum τ hτ β fun φ hφ ↦
-      exteriorZeros_hasSum_of_width τ hτ hβ hs hedge φ (h φ hφ)⟩, fun ⟨hN, hE⟩ φ hφ a b ha hb ↦
-    ⟨⟨_, hN φ hφ⟩, rfl, exteriorZeros_stripTrace_of_isEmpty τ hτ hβ hs hE φ a b ha hb _ rfl⟩⟩
-  obtain ⟨a, b, ha, hb, -⟩ := traceFormula_of_half_le τ hτ φ (le_refl (1 / 2 : ℝ))
-  obtain ⟨T, hT, -⟩ := h φ hφ a b ha hb
-  exact hT ▸ T.property
+        ∀ T : nuclearEndomorphisms stripQuot(hβ.le, hs), T.val = stripConv(hβ.le, hs, φ) →
+          hilbertTrace T = localTerms(φ, a, b)) ↔
+      IsEmpty exteriorZeros(τ, β) :=
+  ⟨fun h ↦ isEmpty_exteriorZeros_of_hasSum τ hτ β fun φ hφ ↦
+      exteriorZeros_hasSum_of_width τ hτ hβ hs hedge φ ⟨_, hN φ hφ⟩ rfl
+        (fun a b ha hb ↦ h φ hφ a b ha hb _ rfl),
+    fun hE φ _ a b ha hb T hT ↦ exteriorZeros_stripTrace_of_isEmpty τ hτ hβ hs hE φ a b ha hb T hT⟩
 
 /-- Paper: Theorem 12.5.1.1, p. 520, with Proposition 3.2.1.3(3)–(4), p. 123, and Theorem
 B.4.4.7, p. 623. For every half-width at least one half and every test, the trace of the strip
-action, when it is nuclear, equals the local terms: the trace identity of
-`spectralStripTrace_eq_localTerms`.
+action, for any nuclear representative, equals the local terms: the identity of
+`spectralStripTrace_eq_localTerms`, without its nuclearity input.
 Deviation: The test need not vanish on the norm-one classes. -/
 theorem spectralStripTrace_eq_localTerms_of_half_le (φ : BruhatCompactSupport C𝔽)
     {α s : ℝ} (hα : 1 / 2 ≤ α) (hs : 1 < s)
@@ -1525,21 +1582,24 @@ end GlobalDiagonal
 
 /-- Paper: Theorem 12.5.1.1, pp. 519–520. For a test vanishing on the norm-one
 classes, the zero terms omitted by a positive-width open strip sum to zero.
-The proof follows p. 520. At a width β ≤ α whose two edges carry no zeros, (12.5.1.4) gives the
-strip trace as the sum over the zeros inside the strip, the gap `spectralStripTrace_eq_localTerms`
-gives it as the local terms, and Theorem B.4.4.7 gives the local terms as the sum over all zeros.
-So the zeros outside cancel for every test, and by `isEmpty_exteriorZeros_of_hasSum` there are
-none. -/
+At a width β ≤ α whose two edges carry no zeros, (12.5.1.4) in the form
+`spectralStripConvolution_trace` gives the strip trace as the sum over the zeros inside the strip,
+the gap `spectralStripTrace_eq_localTerms` gives it as the local terms, and Theorem B.4.4.7 gives
+the local terms as the sum over all zeros. So the zeros outside cancel for every test, and by
+`isEmpty_exteriorZeros_of_hasSum` there are none.
+Deviation: The proof uses Theorem B.4.4.7 and `isEmpty_exteriorZeros_of_hasSum`, which p. 520
+does not; §11.3, §12.3 and §12.4, which p. 520 uses, stay off this route. -/
 theorem traceFormula_exteriorZeros (τ : ℝ≥0ˣ →ₜ* C𝔽) (_hτ : RightInverse τ (ideleClassNorm F))
     (φ : BruhatCompactSupport C𝔽) (_hφ : ∀ g : C₁, φ.val g = 0) {α : ℝ} (_hα : 0 < α) :
     HasSum (fun z : exteriorZeros(τ, α) ↦ zeroTerm(φ, z)) 0 := by
   obtain ⟨χ, -, -, hlift⟩ := exteriorZeros_basepoint τ _hτ
   obtain ⟨β, hβ, hβα, hedge⟩ := exteriorZeros_exists_width χ _hα
   have hE := isEmpty_exteriorZeros_of_hasSum τ _hτ β fun φ' hφ' ↦
-    exteriorZeros_hasSum_of_width τ _hτ hβ one_lt_two
+    exteriorZeros_hasSum_of_width τ _hτ hβ (show (1 : ℝ) < 3 by norm_num)
       (fun ψ hψ z hz ↦ hedge (ψ.comp ⟨(ideleClassNorm F).ker.subtype, continuous_subtype_val⟩) z
         (by rw [hlift ψ hψ]; exact (exteriorZeros_ord_pos_iff _ _).mp hz)) φ'
-      (spectralStripTrace_eq_localTerms φ' hφ' hβ one_lt_two)
+      ⟨_, spectralStripConvolution_nuclear_of_stripTensor hβ.le (by norm_num) φ'⟩ rfl
+      (fun a b ha hb ↦ spectralStripTrace_eq_localTerms φ' hφ' hβ a b ha hb _ rfl)
   have : IsEmpty exteriorZeros(τ, α) :=
     ⟨fun z ↦ hE.false ⟨z.val, z.property.1, hβα.trans z.property.2⟩⟩
   exact hasSum_empty
