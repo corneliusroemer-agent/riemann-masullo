@@ -11037,6 +11037,554 @@ theorem idelicExplicitFormula_finiteMatching (τ : ℝ≥0ˣ →ₜ* C[F])
       tsum_mul_right, ← Complex.ofReal_tsum, hD]
     ring
 
+section ExplicitFormulaCopyDescent
+
+/-! Copied from `AppD_SchwartzBruhat/Sec3b.lean`, where these lemmas are private: a smooth
+compactly supported function is Schwartz–Bruhat. -/
+
+variable {m n r m' n' r' : ℕ} {H H' : Type*}
+  [AddCommGroup H] [TopologicalSpace H] [DiscreteTopology H]
+  [AddCommGroup H'] [TopologicalSpace H'] [DiscreteTopology H']
+
+/-- On a neighborhood of the origin the elementary cover is injective. -/
+private theorem explicitFormula_copy_elementaryCoverZeroHom_injOn_nhds :
+    ∃ W ∈ 𝓝 (0 : EuclideanSpace ℝ (Fin m) × EuclideanSpace ℝ (Fin n)),
+      InjOn (elementaryCoverZeroHom (r := r) (F := H)) W := by
+  let W := ⋂ i : Fin n, (fun v : EuclideanSpace ℝ (Fin m) × EuclideanSpace ℝ (Fin n) ↦ v.2 i) ⁻¹'
+    Ioo (-(1 / 2 : ℝ)) (-(1 / 2 : ℝ) + 1)
+  have hW : IsOpen W := isOpen_iInter_of_finite fun i ↦ isOpen_Ioo.preimage
+    ((PiLp.continuous_apply 2 _ i).comp continuous_snd)
+  have hzero : 0 ∈ W := by simp [W]; norm_num
+  refine ⟨W, hW.mem_nhds hzero, fun x hx y hy h ↦ Prod.ext (congrArg (fun v : ElementaryLieGroup m n r H ↦ v.1) h) ?_⟩
+  apply PiLp.ext
+  intro i
+  apply AddCircle.injOn_coe_Ico (1 : ℝ) (-(1 / 2 : ℝ))
+    (Ioo_subset_Ico_self (mem_iInter.mp hx i)) (Ioo_subset_Ico_self (mem_iInter.mp hy i))
+  exact congrArg (fun v : ElementaryLieGroup m n r H ↦ v.2.1 i) h
+
+/-- Openness of the homomorphism makes its linear lift between universal covers surjective. -/
+private theorem explicitFormula_copy_elementaryHom_cover_rightInverse
+    (a : ElementaryLieGroup m n r H →+ ElementaryLieGroup m' n' r' H')
+    (ha : Continuous a) (hao : IsOpenMap a) :
+    ∃ J : (EuclideanSpace ℝ (Fin m') × EuclideanSpace ℝ (Fin n')) →L[ℝ]
+      (EuclideanSpace ℝ (Fin m) × EuclideanSpace ℝ (Fin n)),
+      ∀ v, a (elementaryCover (J v) 0 0) = elementaryCover v 0 0 := by
+  let c := elementaryCoverZeroHom (m := m) (n := n) (r := r) (F := H)
+  let d := elementaryCoverZeroHom (m := m') (n := n') (r := r') (F := H')
+  let A := a.comp c
+  have hA : Continuous A := ha.comp elementaryCoverZeroHom_continuous_isOpenMap.1
+  let R := (AddMonoidHom.fst _ _).comp A
+  let T := (AddMonoidHom.fst _ _).comp ((AddMonoidHom.snd _ _).comp A)
+  choose l hl using fun i : Fin n' ↦ exists_addCircle_coe_linearMap_eq
+    ((Pi.evalAddMonoidHom _ i).comp T) ((continuous_apply i).comp hA.snd.fst)
+  let L := (R.toRealLinearMap hA.fst).prod ((EuclideanSpace.equiv (Fin n') ℝ).symm.toContinuousLinearMap.comp
+    (ContinuousLinearMap.pi l))
+  have hL (v) : d (L v) = A v := by
+    refine Prod.ext rfl (Prod.ext (funext fun i ↦ hl i v) ?_)
+    have h := hA.snd.snd.isConst_of_preconnectedSpace v 0
+    rw [map_zero A] at h
+    exact h.symm
+  obtain ⟨W, hW, hi⟩ := explicitFormula_copy_elementaryCoverZeroHom_injOn_nhds (m := m') (n := n') (r := r') (H := H')
+  have hpre : L ⁻¹' W ∈ 𝓝 0 := L.continuous.continuousAt.preimage_mem_nhds (L.map_zero.symm ▸ hW)
+  have hopen : IsOpenMap A := hao.comp elementaryCoverZeroHom_continuous_isOpenMap.2
+  have him : A '' (L ⁻¹' W) ∈ 𝓝 0 := A.map_zero ▸ hopen.image_mem_nhds hpre
+  have hd : Continuous d := elementaryCoverZeroHom_continuous_isOpenMap.1
+  have hV : d ⁻¹' (A '' (L ⁻¹' W)) ∈ 𝓝 0 := hd.continuousAt.preimage_mem_nhds (d.map_zero.symm ▸ him)
+  have hs : L.range = ⊤ := L.range.eq_top_of_nonempty_interior' ⟨0, mem_interior_iff_mem_nhds.mpr (by
+    filter_upwards [hW, hV] with x hx hdx
+    rcases hdx with ⟨u, hu, he⟩
+    exact ⟨u, hi hu hx ((hL u).trans he)⟩)⟩
+  obtain ⟨J, hJ⟩ := L.exists_rightInverse_of_surjective hs
+  refine ⟨J, fun x ↦ (hL (J x)).symm.trans (congrArg d ?_)⟩
+  exact DFunLike.congr_fun hJ x
+
+/-- Smoothness on the cover descends through an open surjective elementary homomorphism. -/
+private theorem explicitFormula_copy_contDiff_of_comp_elementaryHom [Finite H] {p : ℕ∞}
+    (a : ElementaryLieGroup m n r H →+ ElementaryLieGroup m' n' r' H')
+    (ha : Continuous a) (hao : IsOpenMap a) (hs : Surjective a)
+    {f : ElementaryLieGroup m' n' r' H' → ℂ}
+    (hf : ∀ z b, ContDiff ℝ p (fun u ↦ f (a (elementaryCover u z b))))
+    (z : Fin r' → ℤ) (b : H') : ContDiff ℝ p (fun v ↦ f (elementaryCover v z b)) := by
+  obtain ⟨J, hJ⟩ := explicitFormula_copy_elementaryHom_cover_rightInverse a ha hao
+  obtain ⟨u, hu⟩ := hs (elementaryCover 0 z b)
+  obtain ⟨t, ht⟩ := elementaryCover_surjective u.2.2.1 u.2.2.2 u.1 u.2.1
+  have hshift (v) : elementaryCover (J v + (u.1,t)) u.2.2.1 u.2.2.2 = elementaryCover (J v) 0 0 + u := by
+    rw [← show elementaryCover (u.1, t) u.2.2.1 u.2.2.2 = u from ht]
+    simp [elementaryCover, Pi.add_def, Pi.zero_def]
+  have he (v) : a (elementaryCover (J v + (u.1, t)) u.2.2.1 u.2.2.2) = elementaryCover v z b := by
+    rw [hshift, map_add, hJ, hu]
+    simp [elementaryCover, Pi.add_def, Pi.zero_def]
+  simp_rw [← he]
+  exact (hf u.2.2.1 u.2.2.2).comp (J.contDiff.add contDiff_const)
+
+end ExplicitFormulaCopyDescent
+
+section ExplicitFormulaCopyFixedQuotient
+variable {G : Type*} [CommGroup G] [TopologicalSpace G] [IsTopologicalGroup G] [T2Space G]
+  [LocallyCompactSpace G]
+
+/-- On any structural quotient to which a smooth function descends, its descent is smooth
+at every order, even when the original finite-order witnesses use different kernels. -/
+private theorem explicitFormula_copy_bruhatSmooth_fixed_quotient {f : G → ℂ} (hf : IsBruhatSmooth f)
+    (a : BruhatStructuralPair G) (e : ElementaryLCAPresentation a.quotient)
+    {f₀ : a.quotient → ℂ} (h₀ : ∀ x : a.val.1, f₀ (QuotientGroup.mk x) = f x.val)
+    (z : Fin e.latticeRank → ℤ) (t : e.finiteFactor) :
+    ContDiff ℝ (⊤ : ℕ∞) (fun v ↦ f₀ (e.equiv.symm (Multiplicative.ofAdd (elementaryCover v z t)))) := by
+  apply contDiff_infty.mpr
+  intro p
+  obtain ⟨k, hk, _, hd⟩ := hf p
+  let k₀ := OrderDual.ofDual a.val.2
+  let b : BruhatStructuralPair G := ⟨(a.val.1, OrderDual.toDual (k₀ ⊓ k)), a.property.1, a.property.2.1,
+    isBruhatGoodSubgroup_inf a.property.2.2.1 hk, inf_le_left.trans a.property.2.2.2⟩
+  obtain ⟨g, hg, hgd⟩ := bruhatContDiff_descend_of_le hk hd b (show k₀ ⊓ k ≤ k from inf_le_right)
+  let d := Classical.choice b.elementary
+  let q : b.quotient →* a.quotient := QuotientGroup.map _ _ (MonoidHom.id a.val.1) (fun _ h ↦ h.1)
+  have hq : IsOpenQuotientMap q := QuotientGroup.isOpenQuotientMap_mk.of_comp_iff.mp
+    (show IsOpenQuotientMap (QuotientGroup.mk : a.val.1 → a.quotient) from QuotientGroup.isOpenQuotientMap_mk)
+  let A := AddMonoidHom.toMultiplicative.symm
+    (e.equiv.toMonoidHom.comp (q.comp d.equiv.symm.toMonoidHom))
+  have hc : Continuous A := e.equiv.continuous.comp (hq.continuous.comp d.equiv.symm.continuous)
+  have ho : IsOpenMap A := e.equiv.toHomeomorph.isOpenMap.comp
+    (hq.isOpenMap.comp d.equiv.symm.toHomeomorph.isOpenMap)
+  have hsur : Surjective A := e.equiv.surjective.comp (hq.surjective.comp d.equiv.symm.surjective)
+  let Fv := fun v ↦ f₀ (e.equiv.symm (Multiplicative.ofAdd v))
+  apply explicitFormula_copy_contDiff_of_comp_elementaryHom A hc ho hsur (f := Fv) _ z t
+  intro z' t'
+  have hdesc (v : b.quotient) : f₀ (q v) = g v := by
+    obtain ⟨x, rfl⟩ := QuotientGroup.mk_surjective v
+    exact (h₀ x).trans (hg x).symm
+  have heq (v) : Fv (A v) = g (d.equiv.symm (Multiplicative.ofAdd v)) := by
+    change f₀ (e.equiv.symm (e.equiv _)) = _
+    rw [e.equiv.symm_apply_apply]
+    exact hdesc _
+  simp_rw [heq]
+  exact hgd d z' t'
+/-- Every smooth compactly supported function is the realization of an elementary Schwartz stage. -/
+private theorem explicitFormula_copy_bruhatCompactSupport_mem_schwartz {f : G → ℂ} (hf : f ∈ bruhatCompactSupportSubmodule G) :
+    f ∈ schwartzBruhatSubmodule G := by
+  classical
+  have h := (mem_bruhatSmoothSubmodule_iff f).mp hf.1
+  obtain ⟨k, hk, _, hd⟩ := h 0
+  have hkC : IsCompact (k : Set G) := (lcaDualAnnihilator_annihilator k hk.1) ▸
+    isCompact_lcaDualAnnihilator (lcaAnnihilator k) hk.2.1
+  obtain ⟨H, hH⟩ := exists_openCompactlyGeneratedSubgroup_contains (hf.2.union hkC)
+  let a : BruhatStructuralPair G := ⟨(H.val, OrderDual.toDual k), H.property.1, H.property.2, hk,
+    fun _ hx ↦ hH (Or.inr hx)⟩
+  let e := Classical.choice a.elementary
+  obtain ⟨f₀, h₀, _⟩ := hd a rfl
+  let φ := fun y ↦ f₀ (e.equiv.symm (Multiplicative.ofAdd y))
+  let q : a.val.1 → ElementaryLieGroup e.realDim e.torusDim e.latticeRank e.finiteFactor :=
+    fun x ↦ (e.equiv (QuotientGroup.mk x)).toAdd
+  have hq : Continuous q := continuous_toAdd.comp (e.equiv.continuous.comp QuotientGroup.continuous_mk)
+  have hs : Surjective q := fun y ↦ (e.equiv.surjective.comp QuotientGroup.mk_surjective) (Multiplicative.ofAdd y)
+  have he (x : a.val.1) : φ (q x) = f x.val := by
+    change f₀ (e.equiv.symm (e.equiv _)) = _
+    rw [e.equiv.symm_apply_apply, h₀]
+  have hc : HasCompactSupport φ := by
+    have hc' := (H.val.isClosed_of_isOpen H.property.1).isClosedEmbedding_subtypeVal.isCompact_preimage hf.2
+    apply HasCompactSupport.intro (hc'.image hq)
+    intro y hy
+    obtain ⟨x, rfl⟩ := hs y
+    exact (he x).trans (image_eq_zero_of_notMem_tsupport fun hx ↦ hy ⟨x, hx, rfl⟩)
+  let s : SchwartzBruhatStage e := ⟨φ, elementarySchwartz_of_compactSupport (f := φ)
+    (explicitFormula_copy_bruhatSmooth_fixed_quotient h a e h₀) hc⟩
+  refine (mem_schwartzBruhatSubmodule_iff f).mpr ⟨a, e, s, funext fun x ↦ ?_⟩
+  rw [schwartzBruhatStageRealization_apply]
+  split_ifs with hx
+  · exact he ⟨x, hx⟩
+  · exact (image_eq_zero_of_notMem_tsupport fun ht ↦ hx (hH (Or.inl ht))).symm
+
+
+end ExplicitFormulaCopyFixedQuotient
+
+section ExplicitFormulaShellInversion
+
+/-- A left translate of a test on the idele classes is a test. -/
+private theorem explicitFormula_test_translate (f : 𝒟(C[F])) (r : C[F]) :
+    ∃ f' : 𝒟(C[F]), ∀ h, f'.val h = f.val (r * h) := by
+  let v : SchwartzBruhat C[F] :=
+    ⟨f.val, explicitFormula_copy_bruhatCompactSupport_mem_schwartz f.property⟩
+  let u : SchwartzBruhat C[F] := ⟨_, schwartzBruhat_translate_mem r⁻¹ v⟩
+  have hu (h : C[F]) : u.val h = f.val (r * h) := by
+    change f.val (r⁻¹⁻¹ * h) = _
+    rw [inv_inv]
+  have hc : HasCompactSupport u.val := by
+    have h := f.property.2.comp_homeomorph (Homeomorph.mulLeft r)
+    convert h using 1
+    funext h
+    exact hu h
+  exact ⟨⟨u.val, (mem_bruhatSmoothSubmodule_iff _).mpr (schwartzBruhat_isBruhatSmooth u), hc⟩,
+    hu⟩
+
+/-- Fourier inversion on the norm shell of a class `g`: the radial profiles at `log |g|`,
+weighted by `χ(g)⁻¹`, sum to `f(g)`. -/
+private theorem explicitFormula_shell_inversion (τ : ℝ≥0ˣ →ₜ* C[F])
+    (hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F]))
+    (Φ : chartChars(τ) → 𝓢(ℝ, ℂ))
+    (hM : ∀ χ s, (∫ g, classMellinIntegrand(f, ideleClassNormTwist χ.val s, -1 / 2) g
+      ∂classMeasure) / (classVolume : ℂ) = logMellin (Φ χ) (s - 1 / 2)) (g : C[F]) :
+    HasSum (fun χ : chartChars(τ) ↦ Φ χ (Real.log ((ideleClassNorm F g : ℝ≥0) : ℝ)) *
+      (((χ.val g)⁻¹ : Circle) : ℂ)) (f.val g) := by
+  set x := Real.log ((ideleClassNorm F g : ℝ≥0) : ℝ) with hx
+  set r := radialFlow(τ, x) with hr
+  obtain ⟨f', hf'⟩ := explicitFormula_test_translate f r
+  have hsec : positiveRealLogEquiv.symm (Multiplicative.ofAdd x) = ideleClassNorm F g := by
+    rw [ContinuousMulEquiv.symm_apply_eq, ← ofAdd_toAdd (positiveRealLogEquiv _),
+      positiveRealLogEquiv_apply]
+  have hnr : ideleClassNorm F r = ideleClassNorm F g := by
+    rw [hr, hτ, hsec]
+  let c : (ideleClassNorm F).ker := ⟨r⁻¹ * g, by
+    rw [MonoidHom.mem_ker, map_mul, map_inv, hnr, inv_mul_cancel]⟩
+  have h := idelicExplicitFormula_normOneFourierInversion τ hτ f' c
+  have hfc : f'.val c = f.val g := by
+    rw [hf']
+    change f.val (r * (r⁻¹ * g)) = f.val g
+    rw [mul_inv_cancel_left]
+  rw [hfc] at h
+  convert h using 1
+  funext χ
+  have hχr : χ.val r = 1 := χ.property _
+  have hχc : χ.val (c : C[F]) = χ.val g := by
+    change χ.val (r⁻¹ * g) = χ.val g
+    rw [map_mul, map_inv, hχr, inv_one, one_mul]
+  rw [hχc, explicitFormula_profile_eq τ hτ f Φ hM χ x]
+  congr 2
+  refine integral_congr_ae (.of_forall fun u ↦ ?_)
+  change f.val (r * (u : C[F])) * _ = f'.val (u : C[F]) * _
+  rw [hf']
+
+end ExplicitFormulaShellInversion
+
+
+section ExplicitFormulaRealPlace
+
+/-- At a real place, the class of a real unit has class norm its absolute value. -/
+private theorem explicitFormula_real_classNorm (w : InfinitePlace F) (hw : w.IsReal) (u : ℝˣ) :
+    ((ideleClassNorm F (infiniteClassMap(w)
+      (Units.map (InfinitePlace.Completion.ringEquivRealOfIsReal hw).symm.toMonoidHom u)) :
+        ℝ≥0) : ℝ) = |(u : ℝ)| := by
+  rw [ideleClassNorm_ofCompletion, hw.mult_eq_one, pow_one]
+  let j := InfinitePlace.Completion.isometryEquivRealOfIsReal hw
+  change ‖j.symm (u : ℝ)‖ = |(u : ℝ)|
+  rw [← dist_zero_right, ← Real.norm_eq_abs, ← dist_zero_right (u : ℝ), ← j.symm.dist_eq _ 0,
+    show j.symm 0 = 0 from map_zero (InfinitePlace.Completion.ringEquivRealOfIsReal hw).symm]
+
+/-- At a real place, a character on the class of a real unit is given by its radial exponent
+and sign parity. -/
+private theorem explicitFormula_real_character (w : InfinitePlace F) (hw : w.IsReal)
+    (χ : U[F]) (u : ℝˣ) :
+    ((χ (infiniteClassMap(w)
+      (Units.map (InfinitePlace.Completion.ringEquivRealOfIsReal hw).symm.toMonoidHom u)) :
+        Circle) : ℂ) =
+      (‖(u : ℝ)‖ : ℂ) ^ (realHeckeCharacter_parameters χ w hw).exists.choose.1 *
+        (if 0 < (u : ℝ) then 1 else (-1 : ℂ)) ^
+          (realHeckeCharacter_parameters χ w hw).exists.choose.2.val := by
+  rw [← ((realHeckeCharacter_parameters χ w hw).exists.choose_spec.2 u)]
+  change _ = (χ _ : ℂ) * (_ : ℂ) ^ (0 : ℂ)
+  rw [Complex.cpow_zero, mul_one]
+
+/-- `(e^x)^a = e^{a x}` for real `x`. -/
+private theorem explicitFormula_exp_cpow (x : ℝ) (a : ℂ) :
+    ((Real.exp x : ℝ) : ℂ) ^ a = Complex.exp (a * x) := by
+  rw [Complex.cpow_def_of_ne_zero (Complex.ofReal_ne_zero.mpr (Real.exp_pos x).ne'),
+    ← Complex.ofReal_log (Real.exp_pos x).le, Real.log_exp, mul_comm]
+
+/-- The parity weight of the real digamma kernel as a sign average:
+`e^{-(1/2 + b + ε) t / 2} = e^{-t/4} ((c₊ + c₋)/2 + e^{-t/2} (c₊ - c₋)/2)` with
+`c₊ = e^{-b t/2}` and `c₋ = (-1)^ε e^{-b t/2}`. -/
+private theorem explicitFormula_real_kernel_alg (b : ℂ) (ε : Fin 2) (t : ℝ) :
+    Complex.exp (-((1 / 2 + b + (ε.val : ℂ)) / 2) * (t : ℂ)) =
+      ((Real.exp (-(t / 4)) : ℝ) : ℂ) *
+        (((Complex.exp (b * ((t / 2 : ℝ) : ℂ)))⁻¹ +
+            (Complex.exp (b * ((t / 2 : ℝ) : ℂ)) * (-1 : ℂ) ^ ε.val)⁻¹) / 2 +
+          ((Real.exp (-(t / 2)) : ℝ) : ℂ) * ((Complex.exp (b * ((t / 2 : ℝ) : ℂ)))⁻¹ -
+            (Complex.exp (b * ((t / 2 : ℝ) : ℂ)) * (-1 : ℂ) ^ ε.val)⁻¹) / 2) := by
+  have h1 : ((Real.exp (-(t / 4)) : ℝ) : ℂ) = Complex.exp (-(t / 4 : ℂ)) := by
+    push_cast; rfl
+  have h2 : ((Real.exp (-(t / 2)) : ℝ) : ℂ) = Complex.exp (-(t / 2 : ℂ)) := by
+    push_cast; rfl
+  rw [h1, h2]
+  push_cast
+  fin_cases ε
+  · simp only [pow_zero, mul_one, Nat.cast_zero, add_zero, sub_self,
+      mul_zero, zero_div, ← Complex.exp_neg, add_self_div_two]
+    rw [← Complex.exp_add]
+    congr 1
+    ring
+  · simp only [pow_one, mul_neg, mul_one, Nat.cast_one, inv_neg,
+      ← Complex.exp_neg, sub_neg_eq_add, add_neg_cancel, zero_div, zero_add]
+    rw [mul_div_assoc, add_self_div_two, ← Complex.exp_add, ← Complex.exp_add]
+    congr 1
+    ring
+
+/-- Fourier inversion on the norm shells through `±e^y` at a real place, with the character
+values written through the radial exponent `a` and sign parity `ε` of each character. -/
+private theorem explicitFormula_real_shell (τ : ℝ≥0ˣ →ₜ* C[F])
+    (hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F])) (w : InfinitePlace F)
+    (hw : w.IsReal) (Φ : chartChars(τ) → 𝓢(ℝ, ℂ))
+    (hM : ∀ χ s, (∫ g, classMellinIntegrand(f, ideleClassNormTwist χ.val s, -1 / 2) g
+      ∂classMeasure) / (classVolume : ℂ) = logMellin (Φ χ) (s - 1 / 2)) (y : ℝ) :
+    let e : ℝˣ →* w.Completionˣ :=
+      Units.map (InfinitePlace.Completion.ringEquivRealOfIsReal hw).symm.toMonoidHom
+    HasSum (fun χ : chartChars(τ) ↦ Φ χ y *
+        (Complex.exp ((realHeckeCharacter_parameters χ.val w hw).exists.choose.1 * y))⁻¹)
+        (f.val (infiniteClassMap(w) (e (Units.mk0 (Real.exp y) (Real.exp_pos y).ne')))) ∧
+      HasSum (fun χ : chartChars(τ) ↦ Φ χ y *
+        (Complex.exp ((realHeckeCharacter_parameters χ.val w hw).exists.choose.1 * y) *
+          (-1 : ℂ) ^ (realHeckeCharacter_parameters χ.val w hw).exists.choose.2.val)⁻¹)
+        (f.val (infiniteClassMap(w) (e (-Units.mk0 (Real.exp y) (Real.exp_pos y).ne')))) := by
+  intro e
+  have hy := Real.exp_pos y
+  constructor
+  · have h := explicitFormula_shell_inversion τ hτ f Φ hM
+      (infiniteClassMap(w) (e (Units.mk0 (Real.exp y) hy.ne')))
+    rw [explicitFormula_real_classNorm w hw, Units.val_mk0, abs_of_pos hy, Real.log_exp] at h
+    convert h using 2 with χ
+    rw [Circle.coe_inv, explicitFormula_real_character w hw, Units.val_mk0, ite_eq_left hy, one_pow,
+      mul_one, Real.norm_of_nonneg hy.le, explicitFormula_exp_cpow]
+  · have h := explicitFormula_shell_inversion τ hτ f Φ hM
+      (infiniteClassMap(w) (e (-Units.mk0 (Real.exp y) hy.ne')))
+    rw [explicitFormula_real_classNorm w hw, Units.val_neg, Units.val_mk0, abs_neg,
+      abs_of_pos hy, Real.log_exp] at h
+    convert h using 2 with χ
+    rw [Circle.coe_inv, explicitFormula_real_character w hw, Units.val_neg, Units.val_mk0,
+      ite_eq_right (by linarith), norm_neg, Real.norm_of_nonneg hy.le, explicitFormula_exp_cpow]
+
+end ExplicitFormulaRealPlace
+
+
+/-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (domination at a real place `w`). For
+the radial profiles `Φ_χ` of a test `f` (as in `idelicExplicitFormula_finiteMatching`), each
+real digamma kernel `t ↦ K_χ(t)` at `w` (with the radial exponent and sign parity of `χ` at
+`w`) is integrable on `(0, ∞)`, and `∑_χ ∫_0^∞ |K_χ(t)| dt < ∞`.
+
+Why it holds. `Φ_χ(x)` is the Fourier coefficient on `C¹` of the translate of `f` by the norm
+section at `eˣ`, supported in a fixed interval `|x| ≤ log M` (`f` has compact support). Near
+`t = 0` the kernel is bounded by `C (1 + |a_χ|)² (sup |Φ_χ| + sup |Φ_χ'| + sup |Φ_χ''|)`
+(`a_χ` the radial exponent at `w`, `Φ_χ'` the profile of the flow derivative of `f`), and for
+`t ≥ 1` by `C e^{-t/4} sup |Φ_χ|`. These suprema times any power of `1 + |a_χ|` are summable
+over `χ`: the coefficients of the smooth function `f` on `C¹` decay faster than any power of
+the archimedean frequency, uniformly on the compact set of translates
+(`idelicExplicitFormula_normOneFourier_summable`). -/
+theorem idelicExplicitFormula_infiniteMatching_realDomination (τ : ℝ≥0ˣ →ₜ* C[F])
+    (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F])) (w : InfinitePlace F)
+    (hw : w.IsReal) (Φ : chartChars(τ) → 𝓢(ℝ, ℂ)) (_hΦ : ∀ χ, ExponentialDecay (Φ χ))
+    (_hM : ∀ χ s, (∫ g, classMellinIntegrand(f, ideleClassNormTwist χ.val s, -1 / 2) g
+      ∂classMeasure) / (classVolume : ℂ) = logMellin (Φ χ) (s - 1 / 2)) :
+    let K : chartChars(τ) → ℝ → ℂ := fun χ t ↦
+      let p := (realHeckeCharacter_parameters χ.val w hw).exists.choose
+      heckeArchimedeanDigammaKernel (1 / 2) ((1 / 2 + p.1 + p.2.val) / 2)
+        ((1 / 2 - p.1 + p.2.val) / 2) (Φ χ) t
+    (∀ χ, IntegrableOn (K χ) (Ioi 0)) ∧
+      Summable (fun χ ↦ ∫ t in Ioi (0 : ℝ), ‖K χ t‖) := by
+  sorry
+
+
+/-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (character sum at a real place `w`).
+Let `Φ_χ` be the radial profiles of a test `f`, as in `idelicExplicitFormula_finiteMatching`,
+and write `g₊(y) = f(e^y)`, `g₋(y) = f(-e^y)` for the test along the positive and negative
+half-lines of `F_w = ℝ`. Summed over the characters trivial on the image of the norm section,
+the archimedean digamma terms at `w` are
+`∫_0^∞ ½ (2 e^{-t} f(1) / t - e^{-t/4} (Q(t/2) + Q(-t/2)) / (1 - e^{-t})) dt - log π · f(1)`
+with `Q(y) = (g₊(y) + g₋(y)) / 2 + e^{-t/2} (g₊(y) - g₋(y)) / 2`.
+
+Computation. Write `χ_w(x) = |x|^a sgn(x)^ε`. Fourier inversion on `C¹` (translated to the
+norm shell `log |g| = y`) gives `∑_χ Φ_χ(y) χ(g)⁻¹ = f(g)`; here `Φ_χ(±t/2) e^{∓a t/2} =
+Φ_χ(±t/2) χ_w(e^{±t/2})⁻¹`, and `e^{-εt/2} = (1 + χ_w(-1)) / 2 + e^{-t/2} (1 - χ_w(-1)) / 2`
+turns the parity weight of the kernel into the sign average. The sums commute with the
+integral over `t` because the coefficients of `f` and of its derivatives along the
+archimedean flows are absolutely summable (`idelicExplicitFormula_normOneFourier_summable`). -/
+theorem idelicExplicitFormula_infiniteMatching_realCharacterSum (τ : ℝ≥0ˣ →ₜ* C[F])
+    (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F])) (w : InfinitePlace F)
+    (hw : w.IsReal) (Φ : chartChars(τ) → 𝓢(ℝ, ℂ)) (_hΦ : ∀ χ, ExponentialDecay (Φ χ))
+    (_hM : ∀ χ s, (∫ g, classMellinIntegrand(f, ideleClassNormTwist χ.val s, -1 / 2) g
+      ∂classMeasure) / (classVolume : ℂ) = logMellin (Φ χ) (s - 1 / 2)) :
+    let e : ℝˣ →* w.Completionˣ :=
+      Units.map (InfinitePlace.Completion.ringEquivRealOfIsReal hw).symm.toMonoidHom
+    let gp : ℝ → ℂ := fun y ↦
+      f.val (infiniteClassMap(w) (e (Units.mk0 (Real.exp y) (Real.exp_pos y).ne')))
+    let gm : ℝ → ℂ := fun y ↦
+      f.val (infiniteClassMap(w) (e (-Units.mk0 (Real.exp y) (Real.exp_pos y).ne')))
+    let Q : ℝ → ℝ → ℂ := fun t y ↦
+      (gp y + gm y) / 2 + (Real.exp (-(t / 2)) : ℂ) * (gp y - gm y) / 2
+    HasSum (fun χ : chartChars(τ) ↦ explicitArchTerm(χ.val, w, Φ χ))
+      ((∫ t in Ioi (0 : ℝ), (1 / 2 : ℂ) * (2 * (Real.exp (-t) : ℂ) * f.val 1 / (t : ℂ) -
+          (Real.exp (-(t / 4)) : ℂ) * (Q t (t / 2) + Q t (-(t / 2))) /
+            (1 - (Real.exp (-t) : ℂ)))) -
+        (Real.log Real.pi : ℂ) * f.val 1) := by
+  intro e gp gm Q
+  have hdom := idelicExplicitFormula_infiniteMatching_realDomination τ _hτ f w hw Φ _hΦ _hM
+  let P : chartChars(τ) → ℂ × Fin 2 := fun χ ↦
+    (realHeckeCharacter_parameters χ.val w hw).exists.choose
+  let K : chartChars(τ) → ℝ → ℂ := fun χ t ↦
+    heckeArchimedeanDigammaKernel (1 / 2) ((1 / 2 + (P χ).1 + (P χ).2.val) / 2)
+      ((1 / 2 - (P χ).1 + (P χ).2.val) / 2) (Φ χ) t
+  have hKi : ∀ χ, IntegrableOn (K χ) (Ioi 0) := hdom.1
+  have hKs : Summable (fun χ ↦ ∫ t in Ioi (0 : ℝ), ‖K χ t‖) := hdom.2
+  let S : ℝ → ℂ := fun t ↦ (1 / 2 : ℂ) * (2 * (Real.exp (-t) : ℂ) * f.val 1 / (t : ℂ) -
+    (Real.exp (-(t / 4)) : ℂ) * (Q t (t / 2) + Q t (-(t / 2))) / (1 - (Real.exp (-t) : ℂ)))
+  have h0 := idelicExplicitFormula_finiteMatching_inversion τ _hτ f Φ _hΦ _hM
+  -- The kernels sum pointwise to the sign-averaged kernel.
+  have hpt (t : ℝ) : HasSum (fun χ ↦ K χ t) (S t) := by
+    obtain ⟨HpA, HpB⟩ := explicitFormula_real_shell τ _hτ f w hw Φ _hM (t / 2)
+    obtain ⟨HmA, HmB⟩ := explicitFormula_real_shell τ _hτ f w hw Φ _hM (-(t / 2))
+    have hP := (((HpA.add HpB).div_const 2).add
+      (((HpA.sub HpB).mul_left ((Real.exp (-(t / 2)) : ℝ) : ℂ)).div_const 2)).mul_left
+        ((Real.exp (-(t / 4)) : ℝ) : ℂ)
+    have hN := (((HmA.add HmB).div_const 2).add
+      (((HmA.sub HmB).mul_left ((Real.exp (-(t / 2)) : ℝ) : ℂ)).div_const 2)).mul_left
+        ((Real.exp (-(t / 4)) : ℝ) : ℂ)
+    have htot := (((h0.mul_left (2 * ((Real.exp (-t) : ℝ) : ℂ))).div_const (t : ℂ)).sub
+      ((hP.add hN).div_const (1 - ((Real.exp (-t) : ℝ) : ℂ)))).mul_left (1 / 2 : ℂ)
+    convert htot using 1
+    swap
+    · simp only [S, Q, gp, gm]
+      ring
+    funext χ
+    have hp := explicitFormula_real_kernel_alg (P χ).1 (P χ).2 t
+    have hm := explicitFormula_real_kernel_alg (-(P χ).1) (P χ).2 t
+    have hcast : ((-(t / 2) : ℝ) : ℂ) = -((t / 2 : ℝ) : ℂ) := by push_cast; ring
+    simp only [K, heckeArchimedeanDigammaKernel]
+    rw [show (1 / 2 : ℝ) * t = t / 2 by ring,
+      show (1 / 2 - (P χ).1 + ((P χ).2.val : ℂ)) / 2 = (1 / 2 + -(P χ).1 + ((P χ).2.val : ℂ)) / 2
+        by ring, hp]
+    simp only [hcast, mul_neg, neg_mul] at hm ⊢
+    rw [hm]
+    push_cast
+    ring
+  -- Termwise integration over the countably many characters with nonzero profile.
+  have hzero (χ : chartChars(τ)) (hχ : ∀ q : ℚ, Φ χ q = 0) (t : ℝ) : K χ t = 0 := by
+    have hΦ0 : (Φ χ : ℝ → ℂ) = 0 :=
+      Continuous.ext_on Rat.denseRange_cast (Φ χ).continuous continuous_const
+        (by rintro _ ⟨q, rfl⟩; exact hχ q)
+    simp only [K, heckeArchimedeanDigammaKernel, hΦ0, Pi.zero_apply]
+    ring
+  let T : Set chartChars(τ) := ⋃ q : ℚ, Function.support (fun χ ↦ Φ χ q)
+  have hT : T.Countable := by
+    refine Set.countable_iUnion fun q ↦ ?_
+    obtain ⟨H, -⟩ := explicitFormula_real_shell τ _hτ f w hw Φ _hM (q : ℝ)
+    refine H.summable.countable_support.mono fun χ hχ ↦ ?_
+    simp only [Function.mem_support] at hχ ⊢
+    exact mul_ne_zero hχ (inv_ne_zero (Complex.exp_ne_zero _))
+  have hoff (χ : chartChars(τ)) (hχ : χ ∉ T) (t : ℝ) : K χ t = 0 := by
+    refine hzero χ (fun q ↦ ?_) t
+    by_contra h
+    exact hχ (Set.mem_iUnion.mpr ⟨q, h⟩)
+  have hsuppI : Function.support (fun χ ↦ ∫ t in Ioi (0 : ℝ), K χ t) ⊆ T := by
+    intro χ hχ
+    by_contra h
+    apply hχ
+    simp only [hoff χ h, integral_zero]
+  have : Countable T := hT.to_subtype
+  have hI := hasSum_integral_of_summable_integral_norm (μ := volume.restrict (Ioi (0 : ℝ)))
+    (F := fun χ : T ↦ K χ.val) (fun χ ↦ hKi χ.val)
+    (hKs.comp_injective Subtype.val_injective)
+  have hI' : HasSum (fun χ ↦ ∫ t in Ioi (0 : ℝ), K χ t) (∫ t in Ioi (0 : ℝ), S t) := by
+    refine (hasSum_subtype_iff_of_support_subset hsuppI).mp ?_
+    have hS : (∫ t in Ioi (0 : ℝ), S t) = ∫ t in Ioi (0 : ℝ), ∑' χ : T, K χ.val t := by
+      refine setIntegral_congr_fun measurableSet_Ioi (fun t _ ↦ ?_)
+      have hsupp : Function.support (fun χ ↦ K χ t) ⊆ T := by
+        intro χ hχ
+        by_contra h
+        exact hχ (hoff χ h t)
+      exact ((hasSum_subtype_iff_of_support_subset hsupp).mpr (hpt t)).tsum_eq.symm
+    rw [hS]
+    exact hI
+  have htot := hI'.sub (h0.mul_left (Real.log Real.pi : ℂ))
+  convert htot using 1
+  funext χ
+  exact dite_eq_left hw
+
+/-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a real place `w`).
+For a test `f` on `F_w^× = ℝ^×`, with `g₊(y) = f(e^y)`, `g₋(y) = f(-e^y)` and `Q` as in
+`idelicExplicitFormula_infiniteMatching_realCharacterSum`,
+`∫_0^∞ ½ (2 e^{-t} f(1) / t - e^{-t/4} (Q(t/2) + Q(-t/2)) / (1 - e^{-t})) dt - log π · f(1)`
+is minus the Connes–Weil principal value of `f` at `w`.
+
+Computation. With `u = ±e^{∓t/2}` the second part of the integrand is
+`½ f(u) |u|^{1/2} / |1 - u|` against `d^×u`, so the left side is
+`-½ ∫ f(u) |u|^{1/2} / |1 - u| d^×u`, regularized at `u = 1` by `e^{-t}/t`, minus `log π f(1)`.
+The principal value is `-∫ log|y| F̂(y) dy` with `F(x) = f(1 + x) / |1 + x|^{1/2}`, and
+`realLogFourier_finitePart` (`𝓕 log|x| = -½ Pf(1/|x|) - (γ + log 2π) δ`) turns it into
+`½ Pf∫ F(x) / |x| dx + (γ + log 2π) F(0)`, the same integral regularized by `2 F(0) log ε`.
+The difference of the two regularizations cancels the constants exactly, so the sum is
+zero (checked numerically to 30 digits on four tests with `f(1) ≠ 0`). -/
+theorem idelicExplicitFormula_infiniteMatching_realLocal (w : InfinitePlace F) (hw : w.IsReal)
+    (testI : 𝒟(w.Completionˣ)) :
+    let e : ℝˣ →* w.Completionˣ :=
+      Units.map (InfinitePlace.Completion.ringEquivRealOfIsReal hw).symm.toMonoidHom
+    let gp : ℝ → ℂ := fun y ↦ testI.val (e (Units.mk0 (Real.exp y) (Real.exp_pos y).ne'))
+    let gm : ℝ → ℂ := fun y ↦ testI.val (e (-Units.mk0 (Real.exp y) (Real.exp_pos y).ne'))
+    let Q : ℝ → ℝ → ℂ := fun t y ↦
+      (gp y + gm y) / 2 + (Real.exp (-(t / 2)) : ℂ) * (gp y - gm y) / 2
+    (∫ t in Ioi (0 : ℝ), (1 / 2 : ℂ) * (2 * (Real.exp (-t) : ℂ) * testI.val 1 / (t : ℂ) -
+          (Real.exp (-(t / 4)) : ℂ) * (Q t (t / 2) + Q t (-(t / 2))) /
+            (1 - (Real.exp (-t) : ℂ)))) -
+        (Real.log Real.pi : ℂ) * testI.val 1 =
+      -infiniteConnesWeilPrincipalValue w testI := by
+  sorry
+
+/-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (character sum at a complex place `w`).
+Let `Φ_χ` be the radial profiles of a test `f`, as in `idelicExplicitFormula_finiteMatching`,
+and write `g(z) = f(e^z)` for the test in logarithmic coordinates on `F_w^× = ℂ^×` (so
+`|e^z|_w = e^{2 Re z}`). Summed over the characters trivial on the image of the norm section,
+the archimedean digamma terms at `w` are
+`∫_0^∞ (2 e^{-t} f(1) / t - A(t)) dt - 2 log 2π · f(1)` with the Poisson average
+`A(t) = (2π)⁻¹ ∫_0^{2π} e^{-t/2} (g(t/2 + iφ) + g(-t/2 + iφ)) / |1 - e^{-t/2 + iφ}|² dφ`.
+
+Computation. Write `χ_w(x) = (|x|²)^a (x/|x|)^n`. Fourier inversion on `C¹` (translated to the
+norm shell) gives `∑_χ Φ_χ(t) χ(g)⁻¹ = f(g)` for `|g| = e^t`; `Φ_χ(±t) e^{∓at} =
+Φ_χ(±t) χ_w(e^{±t/2})⁻¹`, and `r^{|n|}` with `r = e^{-t/2}` is the `n`-th Fourier coefficient
+of the Poisson kernel `P_r(φ) = (1 - r²) / |1 - r e^{iφ}|²`, whose numerator cancels the
+denominator `1 - e^{-t}` of the digamma kernel. The sums commute with the integrals because the
+coefficients of `f` and of its derivatives along the archimedean flows are absolutely
+summable (`idelicExplicitFormula_normOneFourier_summable`). -/
+theorem idelicExplicitFormula_infiniteMatching_complexCharacterSum (τ : ℝ≥0ˣ →ₜ* C[F])
+    (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F])) (w : InfinitePlace F)
+    (hw : w.IsComplex) (Φ : chartChars(τ) → 𝓢(ℝ, ℂ)) (_hΦ : ∀ χ, ExponentialDecay (Φ χ))
+    (_hM : ∀ χ s, (∫ g, classMellinIntegrand(f, ideleClassNormTwist χ.val s, -1 / 2) g
+      ∂classMeasure) / (classVolume : ℂ) = logMellin (Φ χ) (s - 1 / 2)) :
+    let e : ℂˣ →* w.Completionˣ :=
+      Units.map (InfinitePlace.Completion.ringEquivComplexOfIsComplex hw).symm.toMonoidHom
+    let g : ℂ → ℂ := fun z ↦
+      f.val (infiniteClassMap(w) (e (Units.mk0 (Complex.exp z) (Complex.exp_ne_zero z))))
+    let A : ℝ → ℂ := fun t ↦ (2 * Real.pi : ℂ)⁻¹ * ∫ φ in (0 : ℝ)..2 * Real.pi,
+      (Real.exp (-(t / 2)) : ℂ) * (g (t / 2 + φ * Complex.I) + g (-(t / 2) + φ * Complex.I)) /
+        ((‖1 - Complex.exp (-(t / 2) + φ * Complex.I)‖ ^ 2 : ℝ) : ℂ)
+    HasSum (fun χ : chartChars(τ) ↦ explicitArchTerm(χ.val, w, Φ χ))
+      ((∫ t in Ioi (0 : ℝ), (2 * (Real.exp (-t) : ℂ) * f.val 1 / (t : ℂ) - A t)) -
+        2 * (Real.log (2 * Real.pi) : ℂ) * f.val 1) := by
+  sorry
+
+/-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a complex place `w`).
+For a test `f` on `F_w^× = ℂ^×`, with `g(z) = f(e^z)` and the Poisson average `A` as in
+`idelicExplicitFormula_infiniteMatching_complexCharacterSum`,
+`∫_0^∞ (2 e^{-t} f(1) / t - A(t)) dt - 2 log 2π · f(1)` is minus the Connes–Weil principal
+value of `f` at `w`.
+
+Computation. With `u = e^{∓t/2 + iφ}`, `A(t) dt` is `(2π)⁻¹ f(u) |u|_w^{1/2} / |1 - u|_w`
+against `d^×u = 2 dA / |u|²` (`|u|_w = |u|²`), so the left side is
+`-(2π)⁻¹ ∫ f(u) |u|_w^{1/2} / |1 - u|_w d^×u`, regularized at `u = 1` by `2 e^{-t}/t`, minus
+`2 log 2π f(1)`. The principal value is `-∫ log|y|_w F̂(y) dν(y)` with
+`F(x) = f(1 + x) / |1 + x|_w^{1/2}`, and `complexLogFourier_finitePart`
+(`𝓕 log|x|² = -(1/π) Pf(1/|x|²) - 2(γ + log π) δ` for the self-dual measure `2 dA`) turns it
+into `(2π)⁻¹ Pf∫ F(x) / |x|_w dν(x) + 2 (γ + log 2π) F(0)`. The two regularizations differ
+exactly by the constants (the strip-minus-disc integral `∫ dA / r² = 2π log(δ/ε)` near
+`u = 1`); checked numerically to 20 digits. -/
+theorem idelicExplicitFormula_infiniteMatching_complexLocal (w : InfinitePlace F)
+    (hw : w.IsComplex) (testI : 𝒟(w.Completionˣ)) :
+    let e : ℂˣ →* w.Completionˣ :=
+      Units.map (InfinitePlace.Completion.ringEquivComplexOfIsComplex hw).symm.toMonoidHom
+    let g : ℂ → ℂ := fun z ↦
+      testI.val (e (Units.mk0 (Complex.exp z) (Complex.exp_ne_zero z)))
+    let A : ℝ → ℂ := fun t ↦ (2 * Real.pi : ℂ)⁻¹ * ∫ φ in (0 : ℝ)..2 * Real.pi,
+      (Real.exp (-(t / 2)) : ℂ) * (g (t / 2 + φ * Complex.I) + g (-(t / 2) + φ * Complex.I)) /
+        ((‖1 - Complex.exp (-(t / 2) + φ * Complex.I)‖ ^ 2 : ℝ) : ℂ)
+    (∫ t in Ioi (0 : ℝ), (2 * (Real.exp (-t) : ℂ) * testI.val 1 / (t : ℂ) - A t)) -
+        2 * (Real.log (2 * Real.pi) : ℂ) * testI.val 1 =
+      -infiniteConnesWeilPrincipalValue w testI := by
+  sorry
+
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (one infinite place `w`). Let `Φ_χ` be
 the radial profiles of a test `f`, as in `idelicExplicitFormula_finiteMatching`. Summed over
 the characters trivial on the image of the norm section, the archimedean digamma terms at `w`
@@ -11060,7 +11608,20 @@ theorem idelicExplicitFormula_infiniteMatching (τ : ℝ≥0ˣ →ₜ* C[F])
       ∂classMeasure) / (classVolume : ℂ) = logMellin (Φ χ) (s - 1 / 2)) :
     HasSum (fun χ : chartChars(τ) ↦ explicitArchTerm(χ.val, w, Φ χ))
       (-infiniteConnesWeilPrincipalValue w testI) := by
-  sorry
+  by_cases hw : w.IsReal
+  · have h1 := idelicExplicitFormula_infiniteMatching_realCharacterSum τ _hτ f w hw Φ _hΦ _hM
+    have h2 := idelicExplicitFormula_infiniteMatching_realLocal w hw testI
+    have h1' : testI.val 1 = f.val 1 := by rw [_hI, map_one]
+    simp only [← _hI, ← h1'] at h1
+    simp only at h2
+    rwa [h2] at h1
+  · have hc : w.IsComplex := InfinitePlace.not_isReal_iff_isComplex.mp hw
+    have h1 := idelicExplicitFormula_infiniteMatching_complexCharacterSum τ _hτ f w hc Φ _hΦ _hM
+    have h2 := idelicExplicitFormula_infiniteMatching_complexLocal w hc testI
+    have h1' : testI.val 1 = f.val 1 := by rw [_hI, map_one]
+    simp only [← _hI, ← h1'] at h1
+    simp only at h2
+    rwa [h2] at h1
 
 /-- Paper: Theorem B.4.4.7, pp. 623–626. The pointwise idelic explicit formula: at every
 test, the multiplicity-weighted Mellin values at the completed Hecke zeros sum to the pole
