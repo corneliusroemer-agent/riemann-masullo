@@ -10711,6 +10711,559 @@ private theorem explicitFormula_normOneFourier_summable_of_count (τ : ℝ≥0ˣ
 
 end ExplicitFormulaNormOneDecay
 
+section ExplicitFormulaNormOneCover
+
+variable {X : Type*} [CommGroup X] [TopologicalSpace X] [IsTopologicalGroup X]
+
+/-- A real-valued homomorphism on an open subgroup extends to the whole group.
+Copied from the private `openSubgroup_extend_real` (AppD Sec1d). -/
+private theorem explicitFormula_count_extend_real (J : Subgroup X) (hJ : IsOpen (J : Set X))
+    (g : J →ₜ* Multiplicative ℝ) : ∃ f : X →ₜ* Multiplicative ℝ, ∀ x : J, f x.val = g x := by
+  let i : Additive J →+ Additive X := MonoidHom.toAdditive J.subtype
+  let l : Additive J →+ ℝ := MonoidHom.toAdditive g.toMonoidHom
+  obtain ⟨v, hv⟩ := (Module.Baer.of_divisible ℝ).extension_property_addMonoidHom i
+    Subtype.val_injective l
+  let f : X →* Multiplicative ℝ := AddMonoidHom.toMultiplicative v
+  have he (x : J) : f x.val = g x := DFunLike.congr_fun hv (Additive.ofMul x)
+  refine ⟨⟨f, continuous_of_continuousAt_one f ?_⟩, he⟩
+  have hc : ContinuousAt (f ∘ Subtype.val : J → Multiplicative ℝ) 1 :=
+    by rw [show (f ∘ Subtype.val : J → _) = g from funext he]; exact g.continuous.continuousAt
+  exact hJ.isOpenEmbedding_subtypeVal.continuousAt_iff.mp hc
+
+/-- The whole group as a subgroup is the group. Copied from the private `topSubgroupEquiv`
+(AppD Sec1d). -/
+private def explicitFormula_count_topEquiv : (⊤ : Subgroup X) ≃ₜ* X :=
+  { Subgroup.topEquiv with
+    continuous_toFun := continuous_subtype_val
+    continuous_invFun := continuous_id.subtype_mk _ }
+
+/-- Quotients along a topological isomorphism. Copied from the private `quotientCongr`
+(AppD Sec1d). -/
+private def explicitFormula_count_quotientCongr {G H : Type*} [CommGroup G] [TopologicalSpace G]
+    [IsTopologicalGroup G] [CommGroup H] [TopologicalSpace H] [IsTopologicalGroup H]
+    (K : Subgroup H) (N : Subgroup G) (e : H ≃ₜ* G) (he : K.map e.toMulEquiv = N) :
+    H ⧸ K ≃ₜ* G ⧸ N :=
+  let φ := QuotientGroup.congr K N e.toMulEquiv he
+  { φ with
+    continuous_toFun := (QuotientGroup.isQuotientMap_mk K).continuous_iff.mpr
+      (QuotientGroup.continuous_mk.comp e.continuous)
+    continuous_invFun := (QuotientGroup.isQuotientMap_mk N).continuous_iff.mpr
+      (QuotientGroup.continuous_mk.comp e.symm.continuous) }
+
+variable [T2Space X] [LocallyCompactSpace X]
+
+/-- One-parameter subgroups lift through the quotient by a compact subgroup. Adapted from the
+private `oneParameterMap_quotient_surjective` (AppD Sec1d). -/
+private theorem explicitFormula_count_flow_lift (K : Subgroup X) (hk : IsCompact (K : Set X))
+    (a : Multiplicative ℝ →ₜ* X ⧸ K) :
+    ∃ b : Multiplicative ℝ →ₜ* X, ∀ t, (QuotientGroup.mk (b t) : X ⧸ K) = a t := by
+  have : T2Space (X ⧸ K) := IsTopologicalGroup.t2Space_iff_one_closed.mpr <| by
+    rw [← (QuotientGroup.isQuotientMap_mk K).isCoinducing.isClosed_preimage]
+    convert hk.isClosed using 1
+    simpa only [QuotientGroup.mk_one] using QuotientGroup.preimage_mk_one K
+  let q : X →ₜ* X ⧸ K := ⟨QuotientGroup.mk' K, QuotientGroup.continuous_mk⟩
+  obtain ⟨Z, hZ⟩ := lcaQuotientDual_equiv_annihilator K hk.isClosed
+  obtain ⟨ea, hea⟩ := lcaTopologicalLie_dual (G := X)
+  obtain ⟨eb, heb⟩ := lcaTopologicalLie_dual (G := X ⧸ K)
+  let e := exists_realPontryaginDualEquiv.choose
+  let g := (e.symm : PontryaginDual (Multiplicative ℝ) →ₜ* Multiplicative ℝ).comp
+    ((eb a).comp (Z.symm : lcaAnnihilator K →ₜ* _))
+  obtain ⟨f, hf⟩ := explicitFormula_count_extend_real (lcaAnnihilator K)
+    (isOpen_lcaAnnihilator K hk) g
+  let u := (e : Multiplicative ℝ →ₜ* PontryaginDual (Multiplicative ℝ)).comp f
+  let b := ea.symm u
+  have hb : PontryaginDual.map b = u := (hea _).symm.trans (ea.apply_symm_apply u)
+  have hqb : q.comp b = a := by
+    apply eb.injective
+    rw [heb]
+    apply ContinuousMonoidHom.ext
+    intro χ
+    apply PontryaginDual.ext
+    intro t
+    have he : PontryaginDual.map q χ = (Z χ).val :=
+      PontryaginDual.ext fun x ↦ (hZ χ x).symm
+    change χ (q (b t)) = eb a χ t
+    calc χ (q (b t)) = PontryaginDual.map b (PontryaginDual.map q χ) t := rfl
+      _ = e (f (Z χ).val) t := by rw [hb, he]; rfl
+      _ = eb a χ t := by
+        rw [hf]
+        change e (e.symm (eb a (Z.symm (Z χ)))) t = _
+        rw [e.apply_symm_apply, Z.symm_apply_apply]
+  exact ⟨b, fun t ↦ congrArg (fun c : Multiplicative ℝ →ₜ* X ⧸ K ↦ c t) hqb⟩
+
+/-- A group with a norm onto the positive reals that has a section and a compact kernel is
+compactly generated. Copied from the private `compactlyGenerated_of_split` (AppD Sec1d). -/
+private theorem explicitFormula_count_compactlyGenerated (n : X →* ℝ≥0ˣ) (τ : ℝ≥0ˣ →ₜ* X)
+    (hτ : RightInverse τ n) (hk : IsCompact (n.ker : Set X)) : IsCompactlyGeneratedGroup X := by
+  obtain ⟨U, hU, hne⟩ := exists_compact_mem_nhds (1 : X)
+  let K := U ∪ (n.ker : Set X)
+  let J := Subgroup.closure K
+  have hK : K ∈ 𝓝 (1 : X) := Filter.mem_of_superset hne subset_union_left
+  have hJ : IsOpen (J : Set X) :=
+    J.isOpen_of_mem_nhds (Filter.mem_of_superset hK Subgroup.subset_closure)
+  have hker : n.ker ≤ J := subset_union_right.trans Subgroup.subset_closure
+  have : ConnectedSpace ℝ≥0ˣ := (Real.expOrderIso.toHomeomorph.trans
+    (Nonneg.unitsHomeomorphPos ℝ).symm).surjective.connectedSpace (by fun_prop)
+  have ht (t : ℝ≥0ˣ) : τ t ∈ J := by
+    have hpre : IsClopen (τ ⁻¹' (J : Set X)) :=
+      ⟨(J.isClosed_of_isOpen hJ).preimage τ.continuous, hJ.preimage τ.continuous⟩
+    change t ∈ τ ⁻¹' (J : Set X)
+    rw [hpre.eq_univ ⟨1, by change τ 1 ∈ J; rw [map_one]; exact J.one_mem⟩]
+    exact mem_univ t
+  refine ⟨K, hK, hU.union hk, top_unique (fun x _ ↦ ?_)⟩
+  have hx : x / τ (n x) ∈ n.ker := by simp [MonoidHom.mem_ker, hτ (n x)]
+  exact div_mul_cancel x (τ (n x)) ▸ J.mul_mem (hker hx) (ht _)
+
+/-- A good subgroup is compact: it is the annihilator of its open annihilator. -/
+private theorem explicitFormula_count_good_isCompact (k : Subgroup X)
+    (hk : IsBruhatGoodSubgroup k) : IsCompact (k : Set X) := by
+  rw [← lcaDualAnnihilator_annihilator k hk.1]
+  exact isCompact_lcaDualAnnihilator _ hk.2.1
+
+/-- A compact subgroup lies in the kernel of a continuous norm to the positive reals. -/
+private theorem explicitFormula_count_le_ker (n : X →* ℝ≥0ˣ) (hn : Continuous n)
+    (k : Subgroup X) (hkc : IsCompact (k : Set X)) : k ≤ n.ker := by
+  have hc : Continuous fun g : X ↦ (((n g : ℝ≥0ˣ) : ℝ≥0) : ℝ) :=
+    NNReal.continuous_coe.comp (Units.continuous_val.comp hn)
+  obtain ⟨R, hR⟩ := (hkc.image hc).bddAbove
+  have hle (x : X) (hx : x ∈ k) : ¬ 1 < (((n x : ℝ≥0ˣ) : ℝ≥0) : ℝ) := by
+    intro h1
+    obtain ⟨m, hm⟩ := pow_unbounded_of_one_lt R h1
+    refine (hR ⟨x ^ m, k.pow_mem hx m, rfl⟩).not_gt ?_
+    simpa only [map_pow, Units.val_pow_eq_pow_val, NNReal.coe_pow] using hm
+  intro x hx
+  have h1 := hle x hx
+  have h2 := hle x⁻¹ (k.inv_mem hx)
+  have hpos : 0 < (((n x : ℝ≥0ˣ) : ℝ≥0) : ℝ) :=
+    NNReal.coe_pos.mpr (pos_iff_ne_zero.mpr (n x).ne_zero)
+  rw [map_inv, Units.val_inv_eq_inv_val, NNReal.coe_inv, one_lt_inv₀ hpos] at h2
+  have he : (((n x : ℝ≥0ˣ) : ℝ≥0) : ℝ) = 1 := le_antisymm (not_lt.mp h1) (not_lt.mp h2)
+  exact Units.ext (NNReal.coe_eq_one.mp he)
+
+end ExplicitFormulaNormOneCover
+
+section ExplicitFormulaNormOneCover2
+
+variable {X : Type*} [CommGroup X] [TopologicalSpace X] [IsTopologicalGroup X] [T2Space X]
+  [LocallyCompactSpace X]
+
+/-- For a good subgroup `k` of a group with a split norm and compact norm-one part, there are
+finitely many one-parameter subgroups `b j` of the norm-one part such that finitely many
+translates of `{∏ b j (x j) · κ : |x j| ≤ 1, κ ∈ k}` cover the norm-one part. The flows are
+lifts of the coordinate directions of an elementary presentation of the quotient by `k`, pushed
+into the norm-one part with the section. -/
+private theorem explicitFormula_count_cover (n : X →* ℝ≥0ˣ) (hn : Continuous n)
+    (τ : ℝ≥0ˣ →ₜ* X) (hτ : RightInverse τ n) (hker : IsCompact (n.ker : Set X))
+    (k : Subgroup X) (hk : IsBruhatGoodSubgroup k) :
+    ∃ (r : ℕ) (b : Fin r → Multiplicative ℝ →ₜ* X), (∀ j t, b j t ∈ n.ker) ∧
+      ∃ s : Finset n.ker, ∀ y ∈ n.ker, ∃ g ∈ s, ∃ x : Fin r → ℝ,
+        (∀ j, |x j| ≤ 1) ∧ ∃ κ ∈ k, y = (g : X) * (∏ j, b j (Multiplicative.ofAdd (x j))) * κ := by
+  classical
+  have hkc := explicitFormula_count_good_isCompact k hk
+  have hkn := explicitFormula_count_le_ker n hn k hkc
+  have hc := explicitFormula_count_compactlyGenerated n τ hτ hker
+  let a : BruhatStructuralPair X := ⟨(⊤, OrderDual.toDual k), isOpen_univ,
+    isCompactlyGeneratedGroup_of_continuousMulEquiv explicitFormula_count_topEquiv.symm hc,
+    hk, le_top⟩
+  let e := Classical.choice a.elementary
+  let A : a.quotient ≃ₜ* X ⧸ k := explicitFormula_count_quotientCongr _ k
+    explicitFormula_count_topEquiv (by
+      ext x
+      constructor
+      · rintro ⟨y, hy, rfl⟩
+        exact hy
+      · intro hx
+        exact ⟨⟨x, Subgroup.mem_top x⟩, hx, rfl⟩)
+  let E := EuclideanSpace ℝ (Fin e.realDim) × EuclideanSpace ℝ (Fin e.torusDim)
+  let ψ := elementaryCoverZeroHom (m := e.realDim) (n := e.torusDim) (r := e.latticeRank)
+    (F := e.finiteFactor)
+  obtain ⟨hψc, hψo⟩ := elementaryCoverZeroHom_continuous_isOpenMap (m := e.realDim)
+    (n := e.torusDim) (r := e.latticeRank) (F := e.finiteFactor)
+  let r := Module.finrank ℝ E
+  let β := Module.finBasis ℝ E
+  let fZ (i : Fin r) : Multiplicative ℝ →ₜ* Multiplicative
+      (ElementaryLieGroup e.realDim e.torusDim e.latticeRank e.finiteFactor) :=
+    { toFun := fun t ↦ Multiplicative.ofAdd (ψ (t.toAdd • β i))
+      map_one' := by simp
+      map_mul' := fun s t ↦ by
+        simp only [toAdd_mul, add_smul, map_add, ofAdd_add]
+      continuous_toFun := continuous_ofAdd.comp
+        (hψc.comp ((continuous_toAdd).smul continuous_const)) }
+  let B : X ⧸ k ≃ₜ* Multiplicative
+      (ElementaryLieGroup e.realDim e.torusDim e.latticeRank e.finiteFactor) :=
+    A.symm.trans e.equiv
+  choose u hu using fun i ↦ explicitFormula_count_flow_lift k hkc
+    ((B.symm : Multiplicative _ →ₜ* X ⧸ k).comp (fZ i))
+  let N : X →ₜ* ℝ≥0ˣ := ⟨n, hn⟩
+  let b (i : Fin r) : Multiplicative ℝ →ₜ* X := u i * (τ.comp (N.comp (u i)))⁻¹
+  have hbt (i : Fin r) (t) : b i t = u i t * (τ (n (u i t)))⁻¹ := rfl
+  have hb (i : Fin r) (t) : b i t ∈ n.ker := by
+    rw [hbt, MonoidHom.mem_ker, map_mul, map_inv, hτ, mul_inv_cancel]
+  let P : X →* Multiplicative
+      (ElementaryLieGroup e.realDim e.torusDim e.latticeRank e.finiteFactor) :=
+    (B : X ⧸ k →* _).comp (QuotientGroup.mk' k)
+  have hPc : Continuous P := B.continuous.comp QuotientGroup.continuous_mk
+  have hPu (i : Fin r) (t) : P (u i t) = fZ i t := by
+    change B (QuotientGroup.mk (u i t)) = _
+    rw [hu i t]
+    exact B.apply_symm_apply _
+  have hPk (x : X) (hx : P x = 1) : x ∈ k := by
+    have h1 : (QuotientGroup.mk x : X ⧸ k) = 1 := B.injective (hx.trans (map_one B).symm)
+    exact (QuotientGroup.eq_one_iff x).mp h1
+  let O : Set E := {v | ∀ i, |β.repr v i| < 1}
+  have hO : IsOpen O := by
+    have : O = ⋂ i, (fun v ↦ β.repr v i) ⁻¹' Set.Ioo (-1) 1 := by
+      ext v
+      simp [O, abs_lt]
+    rw [this]
+    refine isOpen_iInter_of_finite fun i ↦ IsOpen.preimage ?_ isOpen_Ioo
+    exact (β.coord i).continuous_of_finiteDimensional
+  let W : Set X := P ⁻¹' (Multiplicative.toAdd ⁻¹' (ψ '' O))
+  have hW : IsOpen W := ((hψo O hO).preimage continuous_toAdd).preimage hPc
+  have h1W : (1 : X) ∈ W := ⟨0, fun i ↦ by simp, by simp⟩
+  obtain ⟨s, hs⟩ := hker.elim_finite_subcover
+    (fun g : n.ker ↦ (fun y ↦ (g : X)⁻¹ * y) ⁻¹' W)
+    (fun g ↦ hW.preimage (continuous_const.mul continuous_id))
+    (fun y hy ↦ Set.mem_iUnion.mpr ⟨⟨y, hy⟩, by
+      change (y : X)⁻¹ * y ∈ W
+      rw [inv_mul_cancel]
+      exact h1W⟩)
+  refine ⟨r, b, hb, s, fun y hy ↦ ?_⟩
+  obtain ⟨g, hgs, hgy⟩ := Set.mem_iUnion₂.mp (hs hy)
+  obtain ⟨v, hvO, hv⟩ := hgy
+  let x : Fin r → ℝ := fun i ↦ β.repr v i
+  let U : X := ∏ i, u i (Multiplicative.ofAdd (x i))
+  have hUdef : ∏ i, u i (Multiplicative.ofAdd (x i)) = U := rfl
+  have hPU : P U = P ((g : X)⁻¹ * y) := by
+    rw [map_prod]
+    simp only [hPu]
+    change ∏ i, Multiplicative.ofAdd (ψ (x i • β i)) = _
+    rw [← ofAdd_sum, ← map_sum, β.sum_repr v]
+    exact congrArg Multiplicative.ofAdd hv |>.trans (ofAdd_toAdd _)
+  let κ : X := U⁻¹ * ((g : X)⁻¹ * y)
+  have hκ : κ ∈ k := hPk κ (by rw [map_mul, map_inv, hPU, inv_mul_cancel])
+  have hUκ : U * κ = (g : X)⁻¹ * y := mul_inv_cancel_left U _
+  clear_value κ U
+  have hnU : n U = 1 := by
+    have h := congrArg n hUκ
+    have h2 : n ((g : X)⁻¹ * y) = 1 := by
+      rw [map_mul, map_inv, MonoidHom.mem_ker.mp g.property, MonoidHom.mem_ker.mp hy, inv_one,
+        one_mul]
+    rw [map_mul, h2, MonoidHom.mem_ker.mp (hkn hκ), mul_one] at h
+    exact h
+  have hbU : ∏ j, b j (Multiplicative.ofAdd (x j)) = U := by
+    let D : X →* X :=
+      { toFun := fun z ↦ z * (τ (n z))⁻¹
+        map_one' := by simp only [map_one, inv_one, mul_one]
+        map_mul' := fun z w ↦ by
+          simp only [map_mul, mul_inv]
+          exact mul_mul_mul_comm _ _ _ _ }
+    have hD : ∀ j, b j (Multiplicative.ofAdd (x j)) = D (u j (Multiplicative.ofAdd (x j))) :=
+      fun j ↦ rfl
+    simp only [hD]
+    rw [← map_prod, hUdef]
+    change U * (τ (n U))⁻¹ = U
+    rw [hnU, map_one, inv_one, mul_one]
+  refine ⟨g, hgs, x, fun j ↦ (hvO j).le, κ, hκ, ?_⟩
+  rw [hbU, mul_assoc, hUκ, mul_inv_cancel_left]
+
+end ExplicitFormulaNormOneCover2
+
+section ExplicitFormulaNormOneChar
+
+variable {X : Type*} [CommGroup X] [TopologicalSpace X] [IsTopologicalGroup X] [T2Space X]
+  [LocallyCompactSpace X]
+
+/-- A character along a one-parameter subgroup is `t ↦ exp(iθt)`, and its frequency
+`bruhatDirectionalDeriv a χ 1` is `iθ`. -/
+private theorem explicitFormula_count_char_flow (a : Multiplicative ℝ →ₜ* X)
+    (χ : PontryaginDual X) : ∃ θ : ℝ,
+      (∀ t : ℝ, (χ (a (Multiplicative.ofAdd t)) : ℂ) =
+        Complex.exp (((θ * t : ℝ) : ℂ) * Complex.I)) ∧
+      bruhatDirectionalDeriv a (fun x : X ↦ (χ x : ℂ)) 1 = θ * Complex.I := by
+  obtain ⟨e, he⟩ := exists_realPontryaginDualEquiv
+  obtain ⟨x, hx⟩ := e.surjective ((χ : X →ₜ* Circle).comp a)
+  let θ := 2 * Real.pi * x.toAdd
+  have hval (t : ℝ) : (χ (a (Multiplicative.ofAdd t)) : ℂ) =
+      Complex.exp (((θ * t : ℝ) : ℂ) * Complex.I) := by
+    have h1 : e x (Multiplicative.ofAdd t) = χ (a (Multiplicative.ofAdd t)) := by rw [hx]; rfl
+    have h : χ (a (Multiplicative.ofAdd t)) = Circle.exp (2 * Real.pi * (x.toAdd * t)) := by
+      rw [← h1, ← he]
+      rfl
+    rw [h, Circle.coe_exp]
+    congr 1
+    push_cast
+    simp only [θ]
+    push_cast
+    ring
+  refine ⟨θ, hval, ?_⟩
+  have hfun : (fun t : ℝ ↦ (χ (1 * a (Multiplicative.ofAdd t)) : ℂ)) =
+      fun t : ℝ ↦ Complex.exp ((t : ℂ) * (θ * Complex.I)) := by
+    funext t
+    rw [one_mul, hval]
+    congr 1
+    push_cast
+    ring
+  have hd : HasDerivAt (fun t : ℝ ↦ Complex.exp ((t : ℂ) * (θ * Complex.I))) (θ * Complex.I) 0 := by
+    have := (((hasDerivAt_id (0 : ℝ)).ofReal_comp).mul_const ((θ : ℂ) * Complex.I)).cexp
+    simpa using this
+  rw [bruhatDirectionalDeriv, hfun, hd.deriv]
+
+/-- `|exp(iα) - 1| ≤ |α|`, so a character close to `1` along all flows is close to `1`. -/
+private theorem explicitFormula_count_exp_sub_one (α : ℝ) :
+    ‖Complex.exp ((α : ℂ) * Complex.I) - 1‖ ≤ |α| := by
+  have := Real.norm_exp_I_mul_ofReal_sub_one_le (x := α)
+  rw [mul_comm]
+  simpa using this
+
+end ExplicitFormulaNormOneChar
+
+section ExplicitFormulaNormOneCount
+
+/-- Bessel's inequality for the indicator of a set `E` of norm-one classes on which the
+characters of a finite family all have real part at least `1/2`: with `h = ∑_χ χ`,
+`∫ |h|² = (#t) vol(C¹)` by orthogonality, and `|h|² ≥ (#t/2)²` on `E`. -/
+private theorem explicitFormula_count_bessel (τ : ℝ≥0ˣ →ₜ* C[F])
+    (hτ : RightInverse τ (ideleClassNorm F)) (t : Finset chartChars(τ))
+    (E : Set (ideleClassNorm F).ker) (hEc : IsClosed E)
+    (hχ : ∀ χ ∈ t, ∀ u ∈ E, (1 / 2 : ℝ) ≤ ((χ.val (u : C[F]) : Circle) : ℂ).re) :
+    ((t.card : ℝ) / 2) ^ 2 * (normOneIdeleClassTamagawaMeasure F).real E ≤
+      t.card * classVolume := by
+  let K := (ideleClassNorm F).ker
+  let μ := normOneIdeleClassTamagawaMeasure F
+  let : BorelSpace C[F] := ⟨rfl⟩
+  let mK : MeasurableSpace K := Subtype.instMeasurableSpace
+  have : OpensMeasurableSpace K := Subtype.opensMeasurableSpace (α := C[F]) _
+  have hE : MeasurableSet E := hEc.measurableSet
+  have : IsFiniteMeasure μ :=
+    ⟨by rw [normOneIdeleClassTamagawaMeasure_volume]; exact ENNReal.ofReal_lt_top⟩
+  have hcont (χ : U[F]) : Continuous fun u : K ↦ ((χ (u : C[F]) : Circle) : ℂ) :=
+    continuous_subtype_val.comp (χ.continuous.comp continuous_subtype_val)
+  have hint (χ ψ : U[F]) : Integrable (fun u : K ↦
+      ((χ (u : C[F]) : Circle) : ℂ) * ((ψ (u : C[F]) : Circle) : ℂ)) μ := by
+    refine Integrable.of_bound ((hcont χ).mul (hcont ψ)).aestronglyMeasurable 1
+      (.of_forall fun u ↦ ?_)
+    rw [norm_mul, Circle.norm_coe, Circle.norm_coe, mul_one]
+  let h : K → ℂ := fun u ↦ ∑ χ ∈ t, ((χ.val (u : C[F]) : Circle) : ℂ)
+  have hhc : Continuous h := continuous_finsetSum _ fun χ _ ↦ hcont χ.val
+  let H : K → ℝ := fun u ↦ ‖h u‖ ^ 2
+  have hHc : Continuous H := (continuous_norm.comp hhc).pow 2
+  have hHint : Integrable H μ := by
+    refine Integrable.of_bound hHc.aestronglyMeasurable ((t.card : ℝ) ^ 2)
+      (.of_forall fun u ↦ ?_)
+    have h1 : ‖h u‖ ≤ t.card := by
+      refine (norm_sum_le _ _).trans ?_
+      simp only [Circle.norm_coe, Finset.sum_const, nsmul_eq_mul, mul_one, le_refl]
+    rw [Real.norm_eq_abs, abs_of_nonneg (by positivity)]
+    exact pow_le_pow_left₀ (norm_nonneg _) h1 2
+  have hpt (u : K) : ((H u : ℝ) : ℂ) = ∑ χ ∈ t, ∑ ψ ∈ t,
+      ((χ.val⁻¹ (u : C[F]) : Circle) : ℂ) * ((ψ.val (u : C[F]) : Circle) : ℂ) := by
+    have hconj : (starRingEnd ℂ) (h u) = ∑ χ ∈ t, ((χ.val⁻¹ (u : C[F]) : Circle) : ℂ) := by
+      simp only [h, map_sum]
+      refine Finset.sum_congr rfl fun χ _ ↦ ?_
+      change _ = (((χ.val (u : C[F]))⁻¹ : Circle) : ℂ)
+      rw [Circle.coe_inv_eq_conj]
+    rw [← Finset.sum_mul_sum, ← hconj, mul_comm, Complex.mul_conj, Complex.normSq_eq_norm_sq]
+  have hI : ∫ u, H u ∂μ = t.card * classVolume := by
+    have hc : ∫ u, ((H u : ℝ) : ℂ) ∂μ = t.card * classVolume := by
+      simp_rw [hpt]
+      rw [integral_finsetSum (f := fun (χ : chartChars(τ)) (u : (ideleClassNorm F).ker) ↦ ∑ ψ ∈ t,
+        ((χ.val⁻¹ (u : C[F]) : Circle) : ℂ) * ((ψ.val (u : C[F]) : Circle) : ℂ))
+        _ fun χ _ ↦ integrable_finsetSum _ fun ψ _ ↦ hint _ _]
+      have hin (χ : chartChars(τ)) : ∫ u, ∑ ψ ∈ t,
+          ((χ.val⁻¹ (u : C[F]) : Circle) : ℂ) * ((ψ.val (u : C[F]) : Circle) : ℂ) ∂μ =
+          ∑ ψ ∈ t, if χ = ψ then (classVolume : ℂ) else 0 := by
+        rw [integral_finsetSum (f := fun (ψ : chartChars(τ)) (u : (ideleClassNorm F).ker) ↦
+          ((χ.val⁻¹ (u : C[F]) : Circle) : ℂ) * ((ψ.val (u : C[F]) : Circle) : ℂ))
+          _ fun ψ _ ↦ hint _ _]
+        exact Finset.sum_congr rfl fun ψ _ ↦
+          explicitFormula_integral_chartChar_inv_mul τ hτ χ ψ
+      simp only [hin, Finset.sum_ite_eq, Finset.sum_ite_mem, Finset.inter_self]
+      rw [Finset.sum_const, nsmul_eq_mul]
+    rw [integral_complex_ofReal] at hc
+    exact_mod_cast hc
+  have hlow : μ.real E • (((t.card : ℝ) / 2) ^ 2) ≤ ∫ u in E, H u ∂μ := by
+    refine setIntegral_ge_of_const_le hE (measure_ne_top _ _) (fun u hu ↦ ?_)
+      hHint.integrableOn
+    have hre : (t.card : ℝ) / 2 ≤ (h u).re := by
+      simp only [h, Complex.re_sum]
+      calc (t.card : ℝ) / 2 = ∑ χ ∈ t, (1 / 2 : ℝ) := by
+            rw [Finset.sum_const, nsmul_eq_mul]; ring
+        _ ≤ _ := Finset.sum_le_sum fun χ hχt ↦ hχ χ hχt u hu
+    have h2 : (t.card : ℝ) / 2 ≤ ‖h u‖ := hre.trans (Complex.re_le_norm _)
+    exact pow_le_pow_left₀ (by positivity) h2 2
+  have hle : ∫ u in E, H u ∂μ ≤ ∫ u, H u ∂μ :=
+    setIntegral_le_integral hHint (.of_forall fun u ↦ by positivity)
+  rw [smul_eq_mul, mul_comm] at hlow
+  rw [← hI]
+  exact hlow.trans hle
+
+/-- The count for one bound `T`, given a cover of `C¹` by finitely many translates of the flow
+box `{∏ b j (x j) · κ : |x j| ≤ 1, κ ∈ k}`. With `L = 2r(T+1)+1`, the characters in question
+have real part at least `1/2` on the small box `E` (`|x j| ≤ 1/L`), and `C¹` is covered by
+`#s (2L+1)^r` translates of `E`, so Bessel's inequality gives at most `4 #s (2L+1)^r`. -/
+private theorem explicitFormula_count_key (τ : ℝ≥0ˣ →ₜ* C[F])
+    (hτ : RightInverse τ (ideleClassNorm F)) (k : Subgroup C[F])
+    (hkn : k ≤ (ideleClassNorm F).ker) (hkc : IsCompact (k : Set C[F])) {r : ℕ}
+    (b : Fin r → Multiplicative ℝ →ₜ* C[F]) (hb : ∀ j t, b j t ∈ (ideleClassNorm F).ker)
+    (s : Finset (ideleClassNorm F).ker)
+    (hcov : ∀ y ∈ (ideleClassNorm F).ker, ∃ g ∈ s, ∃ x : Fin r → ℝ, (∀ j, |x j| ≤ 1) ∧
+      ∃ κ ∈ k, y = (g : C[F]) * (∏ j, b j (Multiplicative.ofAdd (x j))) * κ)
+    (T : ℕ) (t : Finset chartChars(τ))
+    (ht : ∀ χ ∈ t, (∀ u : (ideleClassNorm F).ker, (u : C[F]) ∈ k → χ.val u = 1) ∧
+      ∀ j, ‖bruhatDirectionalDeriv (b j) (fun x : C[F] ↦ (χ.val x : ℂ)) 1‖ ≤ T) :
+    t.card ≤ 4 * s.card * (4 * r + 3) ^ r * (T + 1) ^ r := by
+  classical
+  let K := (ideleClassNorm F).ker
+  let μ := normOneIdeleClassTamagawaMeasure F
+  let : BorelSpace C[F] := ⟨rfl⟩
+  let mK : MeasurableSpace K := Subtype.instMeasurableSpace
+  have hB : @BorelSpace K _ mK := Subtype.borelSpace _
+  let : μ.IsHaarMeasure :=
+    (multiplicativeTamagawaMeasures_existsUnique F).exists.choose_spec.2.2.2.1
+  have : IsFiniteMeasure μ :=
+    ⟨by rw [normOneIdeleClassTamagawaMeasure_volume]; exact ENNReal.ofReal_lt_top⟩
+  have : @MeasurableMul K mK _ := @ContinuousMul.measurableMul _ _ mK hB _ _
+  set L : ℕ := 2 * r * (T + 1) + 1 with hL
+  have hLpos : (0 : ℝ) < L := by positivity
+  set ρ : ℝ := 1 / L with hρ
+  let Φ : (Fin r → ℝ) → C[F] := fun z ↦ ∏ j, b j (Multiplicative.ofAdd (z j))
+  have hΦc : Continuous Φ := continuous_finsetProd _ fun j _ ↦
+    (b j).continuous.comp (continuous_ofAdd.comp (continuous_apply j))
+  have hΦadd (z w : Fin r → ℝ) : Φ (z + w) = Φ z * Φ w := by
+    simp only [Φ, ← Finset.prod_mul_distrib, ← map_mul, Pi.add_apply, ofAdd_add]
+  have hΦK (z : Fin r → ℝ) : Φ z ∈ K := Subgroup.prod_mem _ fun j _ ↦ hb j _
+  let box : Set C[F] := (fun p : (Fin r → ℝ) × C[F] ↦ Φ p.1 * p.2) ''
+    (Set.pi univ (fun _ ↦ Icc (-ρ) ρ) ×ˢ (k : Set C[F]))
+  have hbox : IsCompact box := ((isCompact_univ_pi fun _ ↦ isCompact_Icc).prod hkc).image
+    ((hΦc.comp continuous_fst).mul continuous_snd)
+  let E : Set K := Subtype.val ⁻¹' box
+  have hEc : IsClosed E := hbox.isClosed.preimage continuous_subtype_val
+  have hEm : MeasurableSet E := hEc.measurableSet
+  have hre : ∀ χ ∈ t, ∀ u ∈ E, (1 / 2 : ℝ) ≤ ((χ.val (u : C[F]) : Circle) : ℂ).re := by
+    intro χ hχ u hu
+    obtain ⟨⟨z, κ⟩, ⟨hz, hκ⟩, hzu⟩ := hu
+    simp only [Set.mem_pi, Set.mem_univ, true_implies, Set.mem_Icc] at hz
+    choose θ hθ hκθ using fun j ↦ explicitFormula_count_char_flow (b j) χ.val
+    have hθT (j : Fin r) : |θ j| ≤ T := by
+      have := (ht χ hχ).2 j
+      rwa [hκθ j, norm_mul, Complex.norm_I, mul_one, Complex.norm_real, Real.norm_eq_abs]
+        at this
+    have h1 : χ.val κ = 1 := (ht χ hχ).1 ⟨κ, hkn hκ⟩ hκ
+    have hprod : ((∏ j, χ.val (b j (Multiplicative.ofAdd (z j))) : Circle) : ℂ) =
+        ∏ j, ((χ.val (b j (Multiplicative.ofAdd (z j))) : Circle) : ℂ) :=
+      map_prod Circle.coeHom _ _
+    have hval : ((χ.val (u : C[F]) : Circle) : ℂ) =
+        Complex.exp (((∑ j, θ j * z j : ℝ) : ℂ) * Complex.I) := by
+      rw [← hzu]
+      simp only [map_mul, h1, mul_one, Φ, map_prod]
+      rw [hprod]
+      simp only [hθ]
+      rw [← Complex.exp_sum, ← Finset.sum_mul]
+      push_cast
+      rfl
+    have hsum : |∑ j, θ j * z j| ≤ 1 / 2 := by
+      refine (Finset.abs_sum_le_sum_abs _ _).trans ?_
+      calc ∑ j, |θ j * z j| ≤ ∑ _j : Fin r, (T : ℝ) * ρ :=
+            Finset.sum_le_sum fun j _ ↦ by
+              rw [abs_mul]
+              exact mul_le_mul (hθT j) (abs_le.mpr (hz j)) (abs_nonneg _) (Nat.cast_nonneg _)
+        _ = r * T / L := by
+            rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, hρ]
+            ring
+        _ ≤ 1 / 2 := by
+            rw [div_le_iff₀ hLpos, hL]
+            push_cast
+            nlinarith [Nat.cast_nonneg (α := ℝ) r, Nat.cast_nonneg (α := ℝ) T]
+    have hd := explicitFormula_count_exp_sub_one (∑ j, θ j * z j)
+    rw [← hval] at hd
+    have hab := Complex.abs_re_le_norm (((χ.val (u : C[F]) : Circle) : ℂ) - 1)
+    rw [Complex.sub_re, Complex.one_re] at hab
+    linarith [neg_abs_le ((((χ.val (u : C[F]) : Circle) : ℂ)).re - 1)]
+  let G : Finset (Fin r → ℤ) := Fintype.piFinset fun _ ↦ Finset.Icc (-(L : ℤ)) L
+  have hGcard : G.card = (2 * L + 1) ^ r := by
+    rw [Fintype.card_piFinset, Finset.prod_const, Finset.card_univ, Fintype.card_fin,
+      Int.card_Icc]
+    congr 1
+    omega
+  let w : (Fin r → ℤ) → (Fin r → ℝ) := fun m j ↦ (m j : ℝ) / L
+  let hgt (p : K × (Fin r → ℤ)) : K := p.1 * ⟨Φ (w p.2), hΦK _⟩
+  have hcover : μ univ ≤ ((s.card * (2 * L + 1) ^ r : ℕ) : ENNReal) * μ E := by
+    have hsub : (univ : Set K) ⊆ ⋃ p ∈ s ×ˢ G, (fun u ↦ (hgt p)⁻¹ * u) ⁻¹' E := by
+      intro y _
+      obtain ⟨g, hg, x, hx, κ, hκ, hy⟩ := hcov y y.property
+      let m : Fin r → ℤ := fun j ↦ ⌊x j * L + 1 / 2⌋
+      have hxL (j : Fin r) : -(L : ℝ) ≤ x j * L ∧ x j * L ≤ L := by
+        have := abs_le.mp (hx j)
+        constructor <;> nlinarith
+      have hmG : m ∈ G := Fintype.mem_piFinset.mpr fun j ↦ Finset.mem_Icc.mpr
+        ⟨Int.le_floor.mpr (by push_cast; linarith [(hxL j).1]),
+          Int.floor_le_iff.mpr (by push_cast; linarith [(hxL j).2])⟩
+      refine Set.mem_biUnion (x := (g, m)) (Finset.mem_product.mpr ⟨hg, hmG⟩) ?_
+      refine ⟨(x - w m, κ), ⟨fun j _ ↦ ?_, hκ⟩, ?_⟩
+      · change (x - w m) j ∈ Icc (-ρ) ρ
+        have h1 := Int.floor_le (x j * L + 1 / 2)
+        have h2 := Int.lt_floor_add_one (x j * L + 1 / 2)
+        have he : (x - w m) j = (x j * L - m j) / L := by
+          simp only [Pi.sub_apply, w]
+          field_simp
+        rw [he, hρ, Set.mem_Icc]
+        constructor
+        · rw [← neg_div]
+          exact div_le_div_of_nonneg_right (by linarith) hLpos.le
+        · exact div_le_div_of_nonneg_right (by linarith) hLpos.le
+      · change Φ (x - w m) * κ = ((g : C[F]) * Φ (w m))⁻¹ * (y : C[F])
+        have hx' : Φ x = Φ (w m) * Φ (x - w m) := by rw [← hΦadd, add_sub_cancel]
+        rw [hy]
+        change Φ (x - w m) * κ = ((g : C[F]) * Φ (w m))⁻¹ * ((g : C[F]) * Φ x * κ)
+        rw [hx']
+        group
+    calc μ univ ≤ μ (⋃ p ∈ s ×ˢ G, (fun u ↦ (hgt p)⁻¹ * u) ⁻¹' E) := measure_mono hsub
+      _ ≤ ∑ p ∈ s ×ˢ G, μ ((fun u ↦ (hgt p)⁻¹ * u) ⁻¹' E) := measure_biUnion_finset_le _ _
+      _ = ∑ p ∈ s ×ˢ G, μ E := Finset.sum_congr rfl fun p _ ↦ measure_preimage_mul μ _ E
+      _ = _ := by
+        rw [Finset.sum_const, Finset.card_product, hGcard, nsmul_eq_mul]
+  have hV : 0 < classVolume :=
+    ENNReal.toReal_pos (IsOpen.measure_pos μ isOpen_univ univ_nonempty).ne'
+      (measure_ne_top _ _)
+  have hcoverR : classVolume ≤ ((s.card * (2 * L + 1) ^ r : ℕ) : ℝ) * μ.real E := by
+    have := ENNReal.toReal_mono (ENNReal.mul_ne_top (ENNReal.natCast_ne_top _)
+      (measure_ne_top _ _)) hcover
+    rwa [ENNReal.toReal_mul, ENNReal.toReal_natCast] at this
+  have hbes := explicitFormula_count_bessel τ hτ t E hEc hre
+  set P : ℝ := ((s.card * (2 * L + 1) ^ r : ℕ) : ℝ) with hP
+  set c : ℝ := ((t.card : ℕ) : ℝ) with hc
+  have hμE : 0 < μ.real E := by
+    by_contra h
+    have h0 : μ.real E = 0 := le_antisymm (not_lt.mp h) measureReal_nonneg
+    rw [h0, mul_zero] at hcoverR
+    linarith
+  have hcP : c ≤ 4 * P := by
+    rcases (Nat.cast_nonneg t.card : (0 : ℝ) ≤ c).eq_or_lt with h0 | hpos
+    · have hP0 : 0 ≤ P := by positivity
+      have hc0 : c = 0 := by rw [hc]; exact h0.symm
+      linarith
+    · have h3 : c * (c / 4) * μ.real E ≤ c * P * μ.real E := by
+        have := hbes.trans (mul_le_mul_of_nonneg_left hcoverR hpos.le)
+        nlinarith
+      have h4 := le_of_mul_le_mul_right h3 hμE
+      have h5 := le_of_mul_le_mul_left h4 hpos
+      linarith
+  have hnat : t.card ≤ 4 * (s.card * (2 * L + 1) ^ r) := by
+    rw [hP, hc] at hcP
+    exact_mod_cast hcP
+  have hL3 : 2 * L + 1 ≤ (4 * r + 3) * (T + 1) := by
+    rw [hL]
+    nlinarith
+  calc t.card ≤ 4 * (s.card * (2 * L + 1) ^ r) := hnat
+    _ ≤ 4 * (s.card * ((4 * r + 3) * (T + 1)) ^ r) := by
+        gcongr
+    _ = 4 * s.card * (4 * r + 3) ^ r * (T + 1) ^ r := by
+        rw [mul_pow]
+        ring
+
+end ExplicitFormulaNormOneCount
+
 /-- Paper: Lemma B.4.4.9, pp. 624–625 (the counting step, through Lemma B.4.4.8, p. 624).
 For a good subgroup `k` of the idele classes there are finitely many one-parameter subgroups
 `b j` of the norm-one classes `C¹` such that the characters trivial on the image of the norm
@@ -10718,15 +11271,16 @@ section `τ` (equivalently, the characters of `C¹`) that are trivial on `k ∩ 
 frequencies `κ_j(χ)` (the derivative of `t ↦ χ(b j t)` at `0`) of size at most `T` number at
 most `C (T + 1)^d`.
 
-Why it holds. `k` is compact (its annihilator is open), and `C¹/(k ∩ C¹)` is a compact abelian
-Lie group, a torus `𝕋^d` times a finite group: the image of the profinite finite-unit part in a
-Lie group is finite, so `k` contains the image of an open subgroup `U` of the finite idele units,
-and `C¹/U` is an extension of a finite ray class group by the archimedean norm-one units modulo
-the units congruent to `1` (Dirichlet's unit theorem). Take for `b` the archimedean norm-one
-flows (`t ↦ e^{t x}` at the archimedean places with `x` in the trace-zero hyperplane, and the
-rotations at the complex places); their images span the Lie algebra of `𝕋^d`. A character of
-`𝕋^d × A` is `(n, a)` with `n ∈ ℤ^d`, and `κ_j = 2πi ⟨n, v_j⟩` for vectors `v_j` spanning
-`ℝ^d`, so `‖n‖ ≤ c · max_j |κ_j|`, and there are at most `|Â| (2cT + 1)^d` such characters. -/
+Proof. `k` is compact (its annihilator is open), so it lies in `C¹`, and `C[F]/k` has an
+elementary presentation `ℝ^m × 𝕋^n × ℤ^l × A`. The coordinate directions of `ℝ^m × 𝕋^n` lift to
+one-parameter subgroups of `C[F]` (the quotient is by a compact subgroup), and dividing by the
+norm section puts them in `C¹`; the images of the boxes `|x_j| ≤ 1` times `k` then form a
+neighbourhood, so finitely many translates cover the compact `C¹`. A character `χ` with all
+`|κ_j(χ)| ≤ T` and trivial on `k` has real part at least `1/2` on the box of side `1/L`,
+`L = 2r(T+1)+1`, which takes up a proportion at least `1/(#translates · (2L+1)^r)` of `C¹`;
+Bessel's inequality for `∑_χ χ` (orthogonality on `C¹`) bounds the number of such characters by
+`4 · #translates · (2L+1)^r`. No arithmetic input (Dirichlet's unit theorem) is needed beyond
+the compactness of `C¹`. -/
 theorem idelicExplicitFormula_normOneFourier_count (τ : ℝ≥0ˣ →ₜ* C[F])
     (_hτ : RightInverse τ (ideleClassNorm F)) (k : Subgroup C[F])
     (_hk : IsBruhatGoodSubgroup k) :
@@ -10735,7 +11289,27 @@ theorem idelicExplicitFormula_normOneFourier_count (τ : ℝ≥0ˣ →ₜ* C[F])
         {χ : chartChars(τ) | (∀ u : (ideleClassNorm F).ker, (u : C[F]) ∈ k → χ.val u = 1) ∧
           ∀ j, ‖bruhatDirectionalDeriv (b j) (fun x : C[F] ↦ (χ.val x : ℂ)) 1‖ ≤ T}.encard ≤
           ((C * (T + 1) ^ d : ℕ) : ℕ∞) := by
-  sorry
+  classical
+  have hn : Continuous (ideleClassNorm F) := (isProperMap_ideleClassNorm F).continuous
+  have hker : IsCompact ((ideleClassNorm F).ker : Set C[F]) :=
+    (isProperMap_ideleClassNorm F).isCompact_preimage (isCompact_singleton (x := (1 : ℝ≥0ˣ)))
+  have hkc := explicitFormula_count_good_isCompact k _hk
+  have hkn := explicitFormula_count_le_ker (ideleClassNorm F) hn k hkc
+  obtain ⟨r, b, hb, s, hcov⟩ :=
+    explicitFormula_count_cover (ideleClassNorm F) hn τ _hτ hker k _hk
+  refine ⟨r, b, hb, 4 * s.card * (4 * r + 3) ^ r, r, fun T ↦ ?_⟩
+  by_contra hlt
+  rw [not_le] at hlt
+  obtain ⟨t', ht'S, ht'⟩ := Set.exists_subset_encard_eq (Order.add_one_le_of_lt hlt)
+  have hfin : t'.Finite := Set.finite_of_encard_eq_coe ht'
+  have hcard := explicitFormula_count_key τ _hτ k hkn hkc b hb s hcov T hfin.toFinset
+    (fun χ hχ ↦ ht'S ((Set.Finite.mem_toFinset hfin).mp hχ))
+  have h2 : ((hfin.toFinset.card : ℕ) : ℕ∞) =
+      ((4 * s.card * (4 * r + 3) ^ r * (T + 1) ^ r : ℕ) : ℕ∞) + 1 := by
+    rw [← Set.encard_coe_eq_coe_finsetCard, hfin.coe_toFinset, ht']
+  have h3 : hfin.toFinset.card = 4 * s.card * (4 * r + 3) ^ r * (T + 1) ^ r + 1 := by
+    exact_mod_cast h2
+  omega
 
 /-- Paper: Theorem B.4.4.7, pp. 625–626 (Fourier inversion on `C¹`, absolute convergence).
 The Fourier coefficients `∫_{C¹} f(u) χ(u) du` of a test `f` on the idele classes, indexed by
