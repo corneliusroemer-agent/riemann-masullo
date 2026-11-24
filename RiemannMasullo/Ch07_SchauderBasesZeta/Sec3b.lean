@@ -3123,16 +3123,20 @@ def SLocalPWOrbitalQuotient (ω : PontryaginDual J₁(T)) (p : Vℚ)
 
 namespace SLocalPWOrbitalQuotient
 
+-- Elaborated synchronously so that these instance terms stay exactly as before (#7088).
+set_option Elab.async false in
 instance instAddCommGroup (ω : PontryaginDual J₁(T)) (p : Vℚ)
     (W : Submodule ℂ (Θ(T, ω))) :
     AddCommGroup (SLocalPWOrbitalQuotient ω p W) :=
   inferInstanceAs (AddCommGroup (W ⧸ (Rₚ₀(p, ω)).comap W.subtype))
 
+set_option Elab.async false in
 instance instModule (ω : PontryaginDual J₁(T)) (p : Vℚ)
     (W : Submodule ℂ (Θ(T, ω))) :
     Module ℂ (SLocalPWOrbitalQuotient ω p W) :=
   inferInstanceAs (Module ℂ (W ⧸ (Rₚ₀(p, ω)).comap W.subtype))
 
+set_option Elab.async false in
 instance instTopologicalSpace (ω : PontryaginDual J₁(T)) (p : Vℚ)
     (W : Submodule ℂ (Θ(T, ω))) :
     TopologicalSpace (SLocalPWOrbitalQuotient ω p W) :=
@@ -7189,13 +7193,16 @@ def SLocalGammaOrbitalQuotient (ω : PontryaginDual J₁(S)) := fullPV(ω) ⧸ �
 
 namespace SLocalGammaOrbitalQuotient
 
+set_option Elab.async false in
 instance instAddCommGroup (ω : PontryaginDual J₁(S)) :
     AddCommGroup (SLocalGammaOrbitalQuotient ω) :=
   inferInstanceAs (AddCommGroup (fullPV(ω) ⧸ Γker(ω)))
 
+set_option Elab.async false in
 instance instModule (ω : PontryaginDual J₁(S)) : Module ℂ (SLocalGammaOrbitalQuotient ω) :=
   inferInstanceAs (Module ℂ (fullPV(ω) ⧸ Γker(ω)))
 
+set_option Elab.async false in
 instance instTopologicalSpace (ω : PontryaginDual J₁(S)) :
     TopologicalSpace (SLocalGammaOrbitalQuotient ω) :=
   inferInstanceAs (TopologicalSpace (fullPV(ω) ⧸ Γker(ω)))
