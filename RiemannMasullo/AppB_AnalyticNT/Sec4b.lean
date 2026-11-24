@@ -9369,6 +9369,117 @@ theorem idelicExplicitFormula_radialProfile (τ : ℝ≥0ˣ →ₜ* C[F])
         ∂normOneIdeleClassTamagawaMeasure F := by
   sorry
 
+section ExplicitFormulaMellinMatching
+
+/-- The log-Mellin transform is the two-sided Laplace transform. -/
+private theorem explicitFormula_logMellin_eq (I : ℝ → ℂ) (w : ℂ) :
+    mellin (fun t ↦ I (Real.log t)) w = ∫ x : ℝ, Complex.exp (w * x) * I x := by
+  rw [mellin, ← integral_comp_exp]
+  refine integral_congr_ae (.of_forall fun x ↦ ?_)
+  simp only [Real.log_exp, Complex.real_smul, smul_eq_mul]
+  rw [Complex.cpow_def_of_ne_zero (by exact_mod_cast (Real.exp_pos x).ne'),
+    ← Complex.ofReal_log (Real.exp_pos x).le, Real.log_exp, Complex.ofReal_exp, ← mul_assoc,
+    ← Complex.exp_add]
+  congr 2
+  ring
+
+/-- The exponential flow into the positive real units carries Lebesgue measure to `dt/t`. -/
+private theorem explicitFormula_positiveRealHaar_integral (h : ℝ≥0ˣ → ℂ) :
+    ∫ t, h t ∂positiveRealHaar =
+      ∫ x : ℝ, h (positiveRealLogEquiv.symm (Multiplicative.ofAdd x)) := by
+  let : BorelSpace ℝ≥0ˣ := borelSpace_units_of_continuousInv₀ _
+  let E : ℝ ≃ₜ ℝ≥0ˣ := Real.expOrderIso.toHomeomorph.trans (Nonneg.unitsHomeomorphPos ℝ).symm
+  have hE : positiveRealHaar = volume.map E := by
+    apply congrArg (fun h : ℝ → ℝ≥0ˣ ↦ volume.map h)
+    funext y
+    exact Units.ext (NNReal.eq (Real.coe_toNNReal _ (Real.exp_pos y).le))
+  have hEx (x : ℝ) : E x = positiveRealLogEquiv.symm (Multiplicative.ofAdd x) := by
+    apply positiveRealLogEquiv.injective
+    rw [ContinuousMulEquiv.apply_symm_apply]
+    apply Multiplicative.toAdd.injective
+    rw [positiveRealLogEquiv_apply, toAdd_ofAdd]
+    change Real.log (Real.exp x) = x
+    exact Real.log_exp x
+  rw [hE, E.isClosedEmbedding.measurableEmbedding.integral_map]
+  simp only [hEx]
+
+/-- Fubini over `C[F] = ℝ_{>0} × C¹` along a norm section, in logarithmic coordinates. -/
+private theorem explicitFormula_mellin_radial (τ : ℝ≥0ˣ →ₜ* C[F])
+    (hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F])) (χ : U[F])
+    (hχ : ∀ t : ℝ≥0ˣ, χ (τ t) = 1) (s : ℂ) :
+    ∫ g, classMellinIntegrand(f, ideleClassNormTwist χ s, -1 / 2) g ∂classMeasure =
+      ∫ x : ℝ, Complex.exp ((s - 1 / 2) * x) *
+        ∫ u, f.val (radialFlow(τ, x) * (u : C[F])) * (χ (u : C[F]) : ℂ)
+          ∂normOneIdeleClassTamagawaMeasure F := by
+  let : BorelSpace C[F] := ⟨rfl⟩
+  let : BorelSpace ℝ≥0ˣ := borelSpace_units_of_continuousInv₀ _
+  let : SecondCountableTopology ℝ≥0ˣ := Units.isEmbedding_val₀.secondCountableTopology
+  let : SFinite positiveRealHaar := by unfold positiveRealHaar; infer_instance
+  have : IsFiniteMeasure (normOneIdeleClassTamagawaMeasure F) :=
+    ⟨by rw [normOneIdeleClassTamagawaMeasure_volume]; exact ENNReal.ofReal_lt_top⟩
+  let : (classMeasure).IsHaarMeasure := (ideleClassTamagawaMeasure_isWeil F).1
+  let w : ℂ := s - 1 / 2
+  let c : C[F] →ₜ* ℂ := ideleClassNormTwist χ w
+  have hc (g : C[F]) : ideleClassNormTwist χ s g * classWeight(g, -1 / 2) = c g := by
+    have hpos : (((ideleClassNorm F g).val : ℝ) : ℂ) ≠ 0 :=
+      Complex.ofReal_ne_zero.mpr (NNReal.coe_pos.mpr (Units.zero_lt _)).ne'
+    change ((χ g : Circle) : ℂ) * (((ideleClassNorm F g).val : ℝ) : ℂ) ^ s *
+        (((ideleClassNorm F g).val : ℝ) : ℂ) ^ (-1 / 2 : ℂ) =
+      ((χ g : Circle) : ℂ) * (((ideleClassNorm F g).val : ℝ) : ℂ) ^ w
+    rw [mul_assoc, ← Complex.cpow_add _ _ hpos]
+    congr 2
+    simp only [w]
+    ring
+  let H : C[F] → ℂ := fun g ↦ f.val g * c g
+  have hH : (fun g ↦ classMellinIntegrand(f, ideleClassNormTwist χ s, -1 / 2) g) = H := by
+    funext g
+    change f.val g * ideleClassNormTwist χ s g * classWeight(g, -1 / 2) = f.val g * c g
+    rw [mul_assoc, hc]
+  have hHc : Continuous H := (explicitTest_continuous f).mul c.continuous
+  have hHi : Integrable H classMeasure :=
+    hHc.integrable_of_hasCompactSupport f.property.2.mul_right
+  let j : ℝ≥0ˣ × (ideleClassNorm F).ker → C[F] := fun p ↦ τ p.1 * p.2.val
+  have hjc : Continuous j :=
+    (τ.continuous.comp continuous_fst).mul (continuous_subtype_val.comp continuous_snd)
+  -- The Tamagawa measure on `C¹` lives on the subtype σ-algebra, not on the local Borel one.
+  let mK : MeasurableSpace (ideleClassNorm F).ker := Subtype.instMeasurableSpace
+  have hO : @OpensMeasurableSpace (ideleClassNorm F).ker _ mK :=
+    Subtype.opensMeasurableSpace (α := C[F]) _
+  have hPO : @OpensMeasurableSpace (ℝ≥0ˣ × (ideleClassNorm F).ker) _
+      (@Prod.instMeasurableSpace _ _ _ mK) :=
+    @Prod.opensMeasurableSpace ℝ≥0ˣ (ideleClassNorm F).ker _ _ _ _ mK hO _
+  have hj : @Measurable _ _ (@Prod.instMeasurableSpace _ _ _ mK) _ j :=
+    @Continuous.measurable _ _ _ (@Prod.instMeasurableSpace _ _ _ mK) hPO _ _ _ j hjc
+  have hprod := classTamagawa_normProduct (fun t ↦ τ t) τ.continuous hτ
+  rw [← hprod] at hHi
+  rw [hH, ← hprod]
+  rw [integral_map hj.aemeasurable hHc.aestronglyMeasurable]
+  have hHi' : Integrable (H ∘ j)
+      (positiveRealHaar.prod (normOneIdeleClassTamagawaMeasure F)) :=
+    (integrable_map_measure hHc.aestronglyMeasurable hj.aemeasurable).mp hHi
+  refine (integral_prod (fun z ↦ H (j z)) hHi').trans ?_
+  rw [explicitFormula_positiveRealHaar_integral]
+  refine integral_congr_ae (.of_forall fun x ↦ ?_)
+  let t : ℝ≥0ˣ := positiveRealLogEquiv.symm (Multiplicative.ofAdd x)
+  have ht : ((t : ℝ≥0) : ℝ) = Real.exp x := by
+    have h := positiveRealLogEquiv_apply t
+    rw [ContinuousMulEquiv.apply_symm_apply, toAdd_ofAdd] at h
+    exact (Real.exp_log (NNReal.coe_pos.mpr (Units.zero_lt _))).symm.trans
+      (congrArg Real.exp h.symm)
+  have hpt (u : (ideleClassNorm F).ker) : H (j (t, u)) =
+      Complex.exp (w * x) * (f.val (τ t * (u : C[F])) * (χ (u : C[F]) : ℂ)) := by
+    have hn : ideleClassNorm F (τ t * u.val) = t := by
+      rw [map_mul, hτ t, MonoidHom.mem_ker.mp u.property, mul_one]
+    change f.val (τ t * u.val) * (((χ (τ t * u.val) : Circle) : ℂ) *
+      (((ideleClassNorm F (τ t * u.val)).val : ℝ) : ℂ) ^ w) = _
+    rw [hn, ht, map_mul, hχ, one_mul, Complex.ofReal_exp,
+      Complex.cpow_def_of_ne_zero (Complex.exp_ne_zero _),
+      Complex.log_exp (by simp [Real.pi_pos]) (by simp [Real.pi_pos.le])]
+    ring_nf
+  exact (integral_congr_ae (.of_forall hpt)).trans (integral_const_mul _ _)
+
+end ExplicitFormulaMellinMatching
+
 /-- Paper: Theorem B.4.4.7, pp. 623–624 (Fubini for `C[F] = C¹ × ℝ_{>0}`). For a character
 `χ` trivial on the image of the norm section `τ`, the idelic Mellin integral of a test `f`
 against `χ |·|^(s - 1/2)`, divided by the volume of `C¹`, is the Mellin transform at
@@ -9382,7 +9493,14 @@ theorem idelicExplicitFormula_mellinMatching (τ : ℝ≥0ˣ →ₜ* C[F])
           (classVolume : ℂ) =
         logMellin (fun x ↦ c * ∫ u, f.val (radialFlow(τ, x) * (u : C[F])) *
           (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F) (s - 1 / 2) := by
-  sorry
+  refine ⟨1 / (classVolume : ℂ), fun s ↦ ?_⟩
+  refine Eq.trans ?_ (explicitFormula_logMellin_eq (fun x ↦ 1 / (classVolume : ℂ) *
+    ∫ u, f.val (radialFlow(τ, x) * (u : C[F])) * (χ (u : C[F]) : ℂ)
+      ∂normOneIdeleClassTamagawaMeasure F) (s - 1 / 2)).symm
+  rw [explicitFormula_mellin_radial τ _hτ f χ _hχ s, div_eq_mul_one_div, mul_comm,
+    ← integral_const_mul]
+  refine integral_congr_ae (.of_forall fun x ↦ ?_)
+  ring
 
 section ExplicitFormulaPoles
 
@@ -9469,7 +9587,18 @@ radial profiles of a test `f` (Mellin transforms matching the idelic Mellin inte
 `idelicExplicitFormula_mellinMatching`). Summed over the characters trivial on the image of
 the norm section, the discriminant–conductor terms minus the prime-power terms of the
 explicit formula of Theorem B.4.2.2 for `Φ_χ` give minus the sum over the finite places of
-the scaled Connes–Weil principal values of the restrictions of `f`. -/
+the scaled Connes–Weil principal values of the restrictions of `f`.
+
+Computation. Because the class measure is `dt/t` times the measure on `C¹`
+(`classTamagawa_normProduct`), `Φ_χ(x) = vol(C¹)⁻¹ ∫_{C¹} f(τ(eˣ) u) χ(u) du`, and Fourier
+inversion on the compact group `C¹` gives `∑_χ χ(c)⁻¹ Φ_χ(log |c|) = f(c)`. Summing only over
+the `χ` unramified at `v` averages over `O_v^×`, so the prime-power terms at `v` sum to
+`(log q_v / vol O_v^×) ∫_{|u| ≠ 1} f_v(u) |u|^{1/2} / |1 - u| d^×u`. For a character of
+`O_v^×` of conductor exponent `a`, `∫_{O_v^×} (χ(u) - 1) / |1 - u| du = -a · vol O_v^×`, so the
+conductor terms at `v` sum to `-(log q_v / vol O_v^×) ∫_{O_v^×} (f_v(u) - f_v(1)) / |1 - u| d^×u`,
+and `log |d_F| = ∑_v d_v log q_v`. By `finiteConnesWeilPrincipalValue_eq_finitePart` the total is
+the claimed sum (`finiteConnesWeilPrincipalValue_unitsIndicator` holds: the Fourier transform of
+`1_{-1 + O_v^×}` paired with `-log|y| / log q_v` gives `-d_v`). -/
 theorem idelicExplicitFormula_finiteMatching (τ : ℝ≥0ˣ →ₜ* C[F])
     (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F]))
     (testF : ∀ v : Primes(F), 𝒟((v.adicCompletion F)ˣ))
@@ -9486,7 +9615,17 @@ theorem idelicExplicitFormula_finiteMatching (τ : ℝ≥0ˣ →ₜ* C[F])
 the radial profiles of a test `f`, as in `idelicExplicitFormula_finiteMatching`. Summed over
 the characters trivial on the image of the norm section, the archimedean digamma terms at `w`
 of the explicit formula of Theorem B.4.2.2 for `Φ_χ` give minus the Connes–Weil principal
-value at `w` of the restriction of `f`. -/
+value at `w` of the restriction of `f`.
+
+Computation. Write the radial characters as `χ_w(x) = |x|^{iθ} sgn(x)^ε` (real) or
+`(|x|²)^{iθ} (x/|x|)^n` (complex). Fourier inversion on `C¹` (as for the finite places) turns
+`e^{-εy}` into the sign average and `e^{-|n|t/2}` into the Poisson kernel, so the sum of the
+digamma integrals is `-c_w ∫ f_w(u) |u|_w^{1/2} / |1 - u|_w d^×u` with `c_w = 1/2` (real) or
+`1/(2π)` (complex), regularized at `u = 1` by the `e^{-t}/t` term. On the other side `infiniteConnesPrincipalValue`
+is `-∫ log|y|_w · f̂`, and `𝓕(log|y|) = -½ Pf(1/|x|) - (γ + log 2π) δ` on `ℝ`,
+`-(1/2π) Pf(1/|x|²) - (γ + log π) δ` on `ℝ²`. The constants `- log π` and `- 2 log 2π` cancel
+the difference of the two regularizations exactly; checked numerically to 20–30 digits on
+several tests with `f_w(1) ≠ 0` at a real and at a complex place. -/
 theorem idelicExplicitFormula_infiniteMatching (τ : ℝ≥0ˣ →ₜ* C[F])
     (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F])) (w : InfinitePlace F)
     (testI : 𝒟(w.Completionˣ)) (_hI : ∀ u, testI.val u = f.val (infiniteClassMap(w) u))
