@@ -10160,24 +10160,261 @@ private theorem explicitFormula_profile_eq (τ : ℝ≥0ˣ →ₜ* C[F])
 
 end ExplicitFormulaInversion
 
+section ExplicitFormulaNormOneFourier
+
+open scoped ComplexConjugate Pointwise
+
+/-- A nontrivial character of a group with a left invariant measure has integral `0`. -/
+private theorem explicitFormula_integral_character_eq_zero {K : Type*} [CommGroup K]
+    [TopologicalSpace K] {mK : MeasurableSpace K} [MeasurableMul K] (μ : Measure K)
+    [μ.IsMulLeftInvariant] (ψ : PontryaginDual K) {x : K} (hx : ψ x ≠ 1) :
+    ∫ y, (ψ y : ℂ) ∂μ = 0 := by
+  have ht := integral_mul_left_eq_self (μ := μ) (fun y ↦ (ψ y : ℂ)) x
+  simp_rw [map_mul, Circle.coe_mul, integral_const_mul] at ht
+  by_contra hn
+  exact hx (Circle.ext ((mul_eq_right₀ hn).mp ht))
+
+/-- A continuous function on a compact abelian group whose integrals against every character
+of a point-separating subgroup of characters vanish is zero (Stone–Weierstrass). -/
+private theorem explicitFormula_eq_zero_of_integral_character {K : Type*} [CommGroup K]
+    [TopologicalSpace K] [IsTopologicalGroup K] [T2Space K] [CompactSpace K]
+    {mK : MeasurableSpace K} [BorelSpace K] (μ : Measure K) [μ.IsHaarMeasure]
+    (S : Subgroup (PontryaginDual K)) (hS : ∀ x : K, x ≠ 1 → ∃ ψ ∈ S, ψ x ≠ 1)
+    (h : C(K, ℂ)) (hh : ∀ ψ ∈ S, ∫ x, h x * (ψ x : ℂ) ∂μ = 0) : h = 0 := by
+  let r : PontryaginDual K →* C(K, ℂ) :=
+    { toFun ψ := ⟨fun x ↦ (ψ x : ℂ), continuous_subtype_val.comp ψ.continuous⟩
+      map_one' := rfl
+      map_mul' _ _ := rfl }
+  let M := S.toSubmonoid.map r
+  let A := StarAlgebra.adjoin ℂ (M : Set C(K, ℂ))
+  have hstar : star (M : Set C(K, ℂ)) ⊆ M := by
+    rw [Set.star_subset]
+    rintro _ ⟨ψ, hψ, rfl⟩
+    refine ⟨ψ⁻¹, S.inv_mem hψ, ContinuousMap.ext fun x ↦ ?_⟩
+    change ((ψ⁻¹ x : Circle) : ℂ) = star ((ψ x : Circle) : ℂ)
+    exact Circle.coe_inv_eq_conj (ψ x)
+  have hsep : A.SeparatesPoints := by
+    intro x y hxy
+    obtain ⟨ψ, hψS, hψ⟩ := hS _ (div_ne_one.mpr hxy)
+    refine ⟨_, ⟨r ψ, StarAlgebra.subset_adjoin ℂ (M : Set C(K, ℂ)) ⟨ψ, hψS, rfl⟩, rfl⟩, ?_⟩
+    change ((ψ x : Circle) : ℂ) ≠ ψ y
+    rw [Ne, Circle.coe_inj]
+    exact fun he ↦ hψ ((map_div ψ _ _).trans (div_eq_one.mpr he))
+  have hspan : A.toSubalgebra.toSubmodule = Submodule.span ℂ (M : Set C(K, ℂ)) := by
+    rw [StarAlgebra.adjoin_eq_span, Set.union_eq_left.mpr hstar, M.closure_eq]
+  have hdense : (Submodule.span ℂ (M : Set C(K, ℂ))).topologicalClosure = ⊤ := by
+    rw [← hspan]
+    exact congrArg (fun S : StarSubalgebra ℂ C(K, ℂ) ↦ S.toSubalgebra.toSubmodule)
+      (ContinuousMap.starSubalgebra_topologicalClosure_eq_top_of_separatesPoints A hsep)
+  let T := ContinuousMap.toLp (E := ℂ) 2 μ ℂ
+  let L := (innerSL ℂ (T (star h))).comp T
+  have horth : Submodule.span ℂ (M : Set C(K, ℂ)) ≤ L.ker := by
+    apply Submodule.span_le.mpr
+    rintro _ ⟨ψ, hψ, rfl⟩
+    change inner ℂ (T (star h)) (T (r ψ)) = 0
+    rw [ContinuousMap.inner_toLp]
+    refine (integral_congr_ae (.of_forall fun x ↦ ?_)).trans (hh ψ hψ)
+    change ((ψ x : Circle) : ℂ) * conj (star (h x)) = h x * ψ x
+    rw [Complex.star_def, Complex.conj_conj, mul_comm]
+  have htop := (Submodule.span ℂ (M : Set C(K, ℂ))).topologicalClosure_minimal horth
+    L.isClosed_ker
+  rw [hdense] at htop
+  have hc : inner ℂ (T (star h)) (T (star h)) = 0 := htop (Submodule.mem_top (x := star h))
+  have hc0 := (ContinuousMap.toLp_injective (p := 2) (𝕜 := ℂ) μ)
+    ((inner_self_eq_zero.mp hc).trans (map_zero T).symm)
+  rw [← star_star h, hc0, star_zero]
+
+
+/-- Integration against a continuous function on a compact group, as a continuous linear map
+on the continuous functions. -/
+private theorem explicitFormula_exists_integralCLM {K : Type*} [TopologicalSpace K]
+    [CompactSpace K] {mK : MeasurableSpace K} [BorelSpace K] (μ : Measure K)
+    [IsFiniteMeasure μ] (k : C(K, ℂ)) :
+    ∃ L : C(K, ℂ) →L[ℂ] ℂ, ∀ p, L p = ∫ x, p x * k x ∂μ := by
+  let T := ContinuousMap.toLp (E := ℂ) 2 μ ℂ
+  refine ⟨(innerSL ℂ (T (star k))).comp T, fun p ↦ ?_⟩
+  change inner ℂ (T (star k)) (T p) = _
+  rw [ContinuousMap.inner_toLp]
+  refine integral_congr_ae (.of_forall fun x ↦ ?_)
+  change p x * conj (star (k x)) = _
+  rw [Complex.star_def, Complex.conj_conj]
+
+/-- Two characters trivial on the image of the norm section agree once they agree on `C¹`. -/
+private theorem explicitFormula_chartChar_ext (τ : ℝ≥0ˣ →ₜ* C[F])
+    (hτ : RightInverse τ (ideleClassNorm F)) (χ χ' : chartChars(τ))
+    (h : ∀ u : (ideleClassNorm F).ker, χ.val (u : C[F]) = χ'.val (u : C[F])) : χ = χ' := by
+  refine Subtype.ext (DFunLike.ext _ _ fun g ↦ ?_)
+  have hg : (τ (ideleClassNorm F g))⁻¹ * g ∈ (ideleClassNorm F).ker := by
+    rw [MonoidHom.mem_ker, map_mul, map_inv, hτ, inv_mul_cancel]
+  have h1 := h ⟨_, hg⟩
+  simp only [map_mul, map_inv, χ.2, χ'.2, inv_one, one_mul] at h1
+  exact h1
+
+/-- Every character of `C[F]` agrees on `C¹` with a character trivial on the image of the
+norm section. -/
+private theorem explicitFormula_exists_chartChar (τ : ℝ≥0ˣ →ₜ* C[F])
+    (hτ : RightInverse τ (ideleClassNorm F)) (ψ : U[F]) :
+    ∃ χ : chartChars(τ), ∀ u : (ideleClassNorm F).ker, χ.val (u : C[F]) = ψ (u : C[F]) := by
+  let N : C[F] →ₜ* ℝ≥0ˣ := ⟨ideleClassNorm F, (isProperMap_ideleClassNorm F).continuous⟩
+  let ψτ : U[F] := (ψ : C[F] →ₜ* Circle).comp (τ.comp N)
+  refine ⟨⟨ψ * ψτ⁻¹, fun t ↦ ?_⟩, fun u ↦ ?_⟩
+  · change ψ (τ t) * (ψ (τ (ideleClassNorm F (τ t))))⁻¹ = 1
+    rw [hτ, mul_inv_cancel]
+  · change ψ (u : C[F]) * (ψ (τ (ideleClassNorm F (u : C[F]))))⁻¹ = ψ (u : C[F])
+    rw [MonoidHom.mem_ker.mp u.property, map_one, map_one, inv_one, mul_one]
+
+/-- Orthogonality of the characters trivial on the image of the norm section, on `C¹`. -/
+private theorem explicitFormula_integral_chartChar_inv_mul (τ : ℝ≥0ˣ →ₜ* C[F])
+    (hτ : RightInverse τ (ideleClassNorm F)) (χ χ' : chartChars(τ)) :
+    ∫ u, ((χ.val⁻¹ (u : C[F]) : Circle) : ℂ) * (χ'.val (u : C[F]) : ℂ)
+      ∂normOneIdeleClassTamagawaMeasure F = if χ = χ' then (classVolume : ℂ) else 0 := by
+  let K := (ideleClassNorm F).ker
+  let μ := normOneIdeleClassTamagawaMeasure F
+  let : BorelSpace C[F] := ⟨rfl⟩
+  let mK : MeasurableSpace K := Subtype.instMeasurableSpace
+  have hB : @BorelSpace K _ mK := Subtype.borelSpace _
+  let : μ.IsHaarMeasure :=
+    (multiplicativeTamagawaMeasures_existsUnique F).exists.choose_spec.2.2.2.1
+  have : @MeasurableMul K mK _ := @ContinuousMul.measurableMul _ _ mK hB _ _
+  split_ifs with hχ
+  · subst hχ
+    have h1 (x : K) : ((χ.val⁻¹ (x : C[F]) : Circle) : ℂ) * (χ.val (x : C[F]) : ℂ) = 1 := by
+      change ((((χ.val (x : C[F]))⁻¹ * χ.val (x : C[F]) : Circle)) : ℂ) = 1
+      rw [inv_mul_cancel, Circle.coe_one]
+    refine (integral_congr_ae (.of_forall h1)).trans ?_
+    rw [integral_const, Complex.real_smul, mul_one]
+    rfl
+  · obtain ⟨u, hu⟩ : ∃ u : K, χ.val (u : C[F]) ≠ χ'.val (u : C[F]) := by
+      by_contra! h
+      exact hχ (explicitFormula_chartChar_ext τ hτ χ χ' h)
+    let δ : PontryaginDual K :=
+      PontryaginDual.map ⟨K.subtype, continuous_subtype_val⟩ (χ.val⁻¹ * χ'.val)
+    have hδ : δ u ≠ 1 := by
+      change (χ.val (u : C[F]))⁻¹ * χ'.val (u : C[F]) ≠ 1
+      rw [Ne, inv_mul_eq_one]
+      exact hu
+    refine (integral_congr_ae (.of_forall fun x ↦ ?_)).trans
+      (@explicitFormula_integral_character_eq_zero K _ _ mK _ μ _ δ u hδ)
+    change ((χ.val⁻¹ (x : C[F]) : Circle) : ℂ) * (χ'.val (x : C[F]) : ℂ) =
+      (((χ.val (x : C[F]))⁻¹ * χ'.val (x : C[F]) : Circle) : ℂ)
+    rw [Circle.coe_mul]
+    rfl
+
+end ExplicitFormulaNormOneFourier
+
+/-- Paper: Theorem B.4.4.7, pp. 625–626 (Fourier inversion on `C¹`, absolute convergence).
+The Fourier coefficients `∫_{C¹} f(u) χ(u) du` of a test `f` on the idele classes, indexed by
+the characters trivial on the image of the norm section `τ` (these restrict bijectively to the
+characters of `C¹`), are absolutely summable.
+
+Why it holds. `f` is invariant under an open subgroup `k` of the finite idele units, so its
+coefficient vanishes unless `χ` is trivial on the image `k'` of `k` in `C¹`; `C¹/k'` is a
+compact abelian Lie group (a torus times a finite group), and the characters trivial on `k'`
+are those of `C¹/k'`. On `C¹/k'` the function `f` is smooth (it is smooth along the
+archimedean flows), so its Fourier coefficients decay faster than any power of the frequency
+and are absolutely summable. -/
+theorem idelicExplicitFormula_normOneFourier_summable (τ : ℝ≥0ˣ →ₜ* C[F])
+    (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F])) :
+    Summable (fun χ : chartChars(τ) ↦
+      ‖∫ u, f.val (u : C[F]) * (χ.val (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F‖) := by
+  sorry
+
 /-- Paper: Theorem B.4.4.7, pp. 625–626 (Fourier inversion on `C¹`). For a test `f` on the
 idele classes and a norm-one class `c`, the Fourier series of `f` on the compact group `C¹`
 converges absolutely to `f(c)`: summed over the characters trivial on the image of the norm
 section `τ` (these restrict bijectively to the characters of `C¹`), the coefficients
 `vol(C¹)⁻¹ ∫_{C¹} f(u) χ(u) du` times `χ(c)⁻¹` have sum `f(c)`.
 
-Why it holds. `f` is invariant under an open subgroup of the finite idele units and smooth in
-the archimedean directions, so on `C¹` it factors through a compact abelian Lie group (a torus
-times a finite group), on which it is smooth. Its Fourier coefficients there decay faster than
-any power of the frequency, hence are absolutely summable, and the characters of that quotient
-are complete (Fourier series on the torus, finite Fourier analysis on the finite factor).
-Characters of `C¹` that are nontrivial on the subgroup have coefficient `0`. -/
+Proof. The coefficients are absolutely summable
+(`idelicExplicitFormula_normOneFourier_summable`), so the series converges uniformly on `C¹`
+to a continuous function `g`. By orthogonality of characters, `g` has the same Fourier
+coefficients as `f`. The characters of `C[F]` separate points, and each agrees on `C¹` with one
+trivial on the image of `τ`; by Stone–Weierstrass a continuous function on `C¹` all of whose
+Fourier coefficients vanish is zero, so `f = g` on `C¹`. -/
 theorem idelicExplicitFormula_normOneFourierInversion (τ : ℝ≥0ˣ →ₜ* C[F])
     (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F])) (c : (ideleClassNorm F).ker) :
     HasSum (fun χ : chartChars(τ) ↦ ((classVolume : ℂ)⁻¹ *
       ∫ u, f.val (u : C[F]) * (χ.val (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F) *
         (((χ.val (c : C[F]))⁻¹ : Circle) : ℂ)) (f.val c) := by
-  sorry
+  -- Measure-theoretic setup on `C¹` (the Tamagawa measure lives on the subtype σ-algebra).
+  let K := (ideleClassNorm F).ker
+  let μ := normOneIdeleClassTamagawaMeasure F
+  let : BorelSpace C[F] := ⟨rfl⟩
+  let mK : MeasurableSpace K := Subtype.instMeasurableSpace
+  have hB : @BorelSpace K _ mK := Subtype.borelSpace _
+  let : CompactSpace K := (ideleClassGroup_finiteness F).2.1
+  let : μ.IsHaarMeasure :=
+    (multiplicativeTamagawaMeasures_existsUnique F).exists.choose_spec.2.2.2.1
+  have : @MeasurableMul K mK _ := @ContinuousMul.measurableMul _ _ mK hB _ _
+  have : IsFiniteMeasure μ :=
+    ⟨by rw [normOneIdeleClassTamagawaMeasure_volume]; exact ENNReal.ofReal_lt_top⟩
+  have hvol : (classVolume : ℂ) ≠ 0 := by
+    have h0 : μ Set.univ ≠ 0 := Measure.measure_univ_ne_zero.mpr (NeZero.ne μ)
+    exact Complex.ofReal_ne_zero.mpr (ENNReal.toReal_ne_zero.mpr ⟨h0, measure_ne_top _ _⟩)
+  -- The coefficients and the characters as continuous functions on `C¹`.
+  let fK : C(K, ℂ) := ⟨fun u ↦ f.val (u : C[F]),
+    (explicitTest_continuous f).comp continuous_subtype_val⟩
+  let chr : U[F] → C(K, ℂ) := fun ψ ↦ ⟨fun u ↦ (ψ (u : C[F]) : ℂ),
+    continuous_subtype_val.comp (ψ.continuous.comp continuous_subtype_val)⟩
+  let a : chartChars(τ) → ℂ := fun χ ↦ (classVolume : ℂ)⁻¹ *
+    ∫ u, f.val (u : C[F]) * (χ.val (u : C[F]) : ℂ) ∂μ
+  have ha : Summable (fun χ ↦ ‖a χ‖) := by
+    refine ((idelicExplicitFormula_normOneFourier_summable τ _hτ f).mul_left
+      ‖(classVolume : ℂ)⁻¹‖).congr fun χ ↦ ?_
+    simp only [a, norm_mul]
+    rfl
+  let e : chartChars(τ) → C(K, ℂ) := fun χ ↦ a χ • chr χ.val⁻¹
+  have he : Summable e := by
+    refine ha.of_norm_bounded fun χ ↦ ?_
+    rw [norm_smul]
+    refine mul_le_of_le_one_right (norm_nonneg _) ((ContinuousMap.norm_le _ zero_le_one).mpr
+      fun u ↦ ?_)
+    change ‖((χ.val⁻¹ (u : C[F]) : Circle) : ℂ)‖ ≤ 1
+    exact (Circle.norm_coe _).le
+  obtain ⟨g, hg⟩ := he
+  -- Orthogonality: the coefficients of `g` are those of `f`.
+  have hcoef (χ' : chartChars(τ)) :
+      ∫ u, (fK - g) u * (χ'.val (u : C[F]) : ℂ) ∂μ = 0 := by
+    obtain ⟨L, hL⟩ := explicitFormula_exists_integralCLM μ (chr χ'.val)
+    have hLe (χ : chartChars(τ)) : L (e χ) = if χ = χ' then a χ' * classVolume else 0 := by
+      rw [hL]
+      simp only [e, chr, ContinuousMap.smul_apply, ContinuousMap.coe_mk, smul_eq_mul, mul_assoc]
+      rw [integral_const_mul]
+      convert congrArg (a χ * ·) (explicitFormula_integral_chartChar_inv_mul τ _hτ χ χ') using 1
+      split_ifs with hχ
+      · subst hχ; rfl
+      · rw [mul_zero]
+    have h1 : HasSum (fun χ ↦ L (e χ)) (L g) := hg.mapL L
+    simp_rw [hLe] at h1
+    have h2 := h1.unique (hasSum_ite_eq χ' (a χ' * classVolume))
+    have hf : L fK = a χ' * classVolume := by
+      rw [hL]
+      simp only [a, fK, chr, ContinuousMap.coe_mk]
+      field_simp
+    calc ∫ u, (fK - g) u * (χ'.val (u : C[F]) : ℂ) ∂μ = L (fK - g) := (hL _).symm
+      _ = 0 := by rw [map_sub, hf, h2, sub_self]
+  -- Completeness of the characters of `C¹`.
+  let S : Subgroup (PontryaginDual K) :=
+    (PontryaginDual.map ⟨K.subtype, continuous_subtype_val⟩).toMonoidHom.range
+  have hS (x : K) (hx : x ≠ 1) : ∃ ψ ∈ S, ψ x ≠ 1 := by
+    obtain ⟨ψ, hψ⟩ := exists_pontryaginDual_apply_ne_one (G := C[F])
+      (x := (x : C[F])) fun h ↦ hx (Subtype.ext h)
+    exact ⟨_, ⟨ψ, rfl⟩, hψ⟩
+  have hzero := @explicitFormula_eq_zero_of_integral_character K _ _ _ _ _ mK hB μ _ S hS
+    (fK - g) (by
+      rintro _ ⟨ψ, rfl⟩
+      obtain ⟨χ, hχ⟩ := explicitFormula_exists_chartChar τ _hτ ψ
+      refine (integral_congr_ae (.of_forall fun u ↦ ?_)).trans (hcoef χ)
+      change (fK - g) u * (ψ (u : C[F]) : ℂ) = (fK - g) u * (χ.val (u : C[F]) : ℂ)
+      rw [hχ])
+  have hfg : f.val c = g c := by
+    have h := congrArg (fun h : C(K, ℂ) ↦ h c) hzero
+    rw [ContinuousMap.sub_apply, ContinuousMap.zero_apply, sub_eq_zero] at h
+    exact h
+  rw [hfg]
+  have h := hg.mapL (ContinuousMap.evalCLM ℂ c)
+  refine h.congr_fun fun χ ↦ ?_
+  rfl
 
 /-- Paper: Theorem B.4.4.7, pp. 625–626 (Fourier inversion on `C¹` at the identity). The
 values at `0` of the radial profiles `Φ_χ` of a test `f` (fixed by their Mellin transforms
