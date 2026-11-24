@@ -10660,6 +10660,356 @@ private theorem explicitFormula_hasSum_integral {ι X : Type*} {mX : MeasurableS
 
 end ExplicitFormulaConductorLocal
 
+section ExplicitFormulaConductorCharacter
+
+/-- The unit filtration `U_j = {u : ‖u‖ = 1, ‖u - 1‖ ≤ q_v^{-j}}` of a finite completion
+(`U_0` is the group of integer units). -/
+private def explicitFormula_unitFiltration (v : Primes(F)) (j : ℕ) :
+    Subgroup (v.adicCompletion F)ˣ where
+  carrier := {u | ‖u.val‖ = 1 ∧ ‖u.val - 1‖ ≤ q(v) ^ (-(j : ℤ))}
+  mul_mem' := by
+    rintro a b ⟨ha1, ha⟩ ⟨hb1, hb⟩
+    refine ⟨by rw [Units.val_mul, norm_mul, ha1, hb1, one_mul], ?_⟩
+    have e : (a * b).val - 1 = a.val * (b.val - 1) + (a.val - 1) := by
+      rw [Units.val_mul]; ring
+    rw [e]
+    refine (IsUltrametricDist.norm_add_le_max _ _).trans (max_le ?_ ha)
+    rw [norm_mul, ha1, one_mul]
+    exact hb
+  one_mem' := by
+    refine ⟨by rw [Units.val_one, norm_one], ?_⟩
+    rw [Units.val_one, sub_self, norm_zero]
+    have hq : (0 : ℝ) < q(v) := by
+      exact_mod_cast (HeightOneSpectrum.one_lt_absNorm v).trans' zero_lt_one
+    positivity
+  inv_mem' := by
+    rintro a ⟨ha1, ha⟩
+    have hne : a.val ≠ 0 := a.ne_zero
+    refine ⟨by rw [Units.val_inv_eq_inv_val, norm_inv, ha1, inv_one], ?_⟩
+    have e : (a⁻¹).val - 1 = a.val⁻¹ * (1 - a.val) := by
+      rw [Units.val_inv_eq_inv_val]; field_simp
+    rw [e, norm_mul, norm_inv, ha1, inv_one, one_mul, norm_sub_rev]
+    exact ha
+
+private theorem explicitFormula_mem_unitFiltration (v : Primes(F)) (j : ℕ)
+    (u : (v.adicCompletion F)ˣ) :
+    u ∈ explicitFormula_unitFiltration v j ↔
+      ‖u.val‖ = 1 ∧ ‖u.val - 1‖ ≤ q(v) ^ (-(j : ℤ)) := Iff.rfl
+
+private theorem explicitFormula_unitFiltration_measurable (v : Primes(F)) (j : ℕ) :
+    MeasurableSet (explicitFormula_unitFiltration v j : Set (v.adicCompletion F)ˣ) := by
+  let : BorelSpace (v.adicCompletion F)ˣ := ⟨rfl⟩
+  have hc : IsClosed {u : (v.adicCompletion F)ˣ |
+      ‖u.val‖ = 1 ∧ ‖u.val - 1‖ ≤ q(v) ^ (-(j : ℤ))} :=
+    (isClosed_eq (continuous_norm.comp Units.continuous_val) continuous_const).inter
+      (isClosed_le (continuous_norm.comp (Units.continuous_val.sub continuous_const))
+        continuous_const)
+  exact hc.measurableSet
+
+/-- Norms on a finite completion are integral powers of `q_v`, so a norm below `q_v^n` is at
+most `q_v^(n-1)`. -/
+private theorem explicitFormula_norm_le_zpow_pred (v : Primes(F)) (x : v.adicCompletion F)
+    (n : ℤ) (h : ‖x‖ < q(v) ^ n) : ‖x‖ ≤ q(v) ^ (n - 1) := by
+  have hq : (1 : ℝ) < q(v) := by exact_mod_cast HeightOneSpectrum.one_lt_absNorm v
+  by_cases hx : x = 0
+  · rw [hx, norm_zero]
+    positivity
+  rw [norm_adicCompletion_eq_zpow F v hx] at h ⊢
+  have := (zpow_lt_zpow_iff_right₀ hq).mp h
+  exact zpow_le_zpow_right₀ hq.le (by omega)
+
+/-- The truncated weight `1 / max(‖x‖, q^{-N})` grows by `q^{N+1} - q^N` on the ball of
+radius `q^{-(N+1)}` and is unchanged elsewhere. -/
+private theorem explicitFormula_filtrationWeight_succ (v : Primes(F)) (x : v.adicCompletion F)
+    (N : ℕ) :
+    (max ‖x‖ (q(v) ^ (-((N + 1 : ℕ) : ℤ))))⁻¹ =
+      (max ‖x‖ (q(v) ^ (-(N : ℤ))))⁻¹ +
+        (if ‖x‖ ≤ q(v) ^ (-((N + 1 : ℕ) : ℤ)) then q(v) ^ (N + 1) - q(v) ^ N else 0) := by
+  have hq : (1 : ℝ) < q(v) := by exact_mod_cast HeightOneSpectrum.one_lt_absNorm v
+  have hle : q(v) ^ (-((N + 1 : ℕ) : ℤ)) ≤ q(v) ^ (-(N : ℤ)) :=
+    zpow_le_zpow_right₀ hq.le (by omega)
+  split_ifs with h
+  · rw [max_eq_right h, max_eq_right (h.trans hle), zpow_neg, zpow_neg, inv_inv, inv_inv,
+      zpow_natCast, zpow_natCast]
+    ring
+  · push Not at h
+    have h2 : q(v) ^ (-(N : ℤ)) ≤ ‖x‖ := by
+      by_contra h3
+      push Not at h3
+      have h4 := explicitFormula_norm_le_zpow_pred v x _ h3
+      have e : -(N : ℤ) - 1 = -((N + 1 : ℕ) : ℤ) := by push_cast; ring
+      rw [e] at h4
+      linarith
+    rw [max_eq_left h.le, max_eq_left h2, add_zero]
+
+/-- A character nontrivial on a filtration subgroup integrates to zero over it. -/
+private theorem explicitFormula_integral_filtration_char (v : Primes(F)) (χ : U[F]) (j : ℕ)
+    (w : (v.adicCompletion F)ˣ) (hw : w ∈ explicitFormula_unitFiltration v j)
+    (hχ : χ (finiteClassMap(v) w) ≠ 1) :
+    ∫ u in (explicitFormula_unitFiltration v j : Set (v.adicCompletion F)ˣ),
+      (((χ (finiteClassMap(v) u))⁻¹ : Circle) : ℂ) ∂μ𝔭(v) = 0 := by
+  let K := v.adicCompletion F
+  let : BorelSpace Kˣ := ⟨rfl⟩
+  let : (μ𝔭(v)).IsHaarMeasure := finiteLocalMultiplicativeTamagawaMeasure_haar F v
+  let H := explicitFormula_unitFiltration v j
+  have hHm : MeasurableSet (H : Set Kˣ) := explicitFormula_unitFiltration_measurable v j
+  let η : Kˣ → ℂ := fun u ↦ (((χ (finiteClassMap(v) u))⁻¹ : Circle) : ℂ)
+  have hη (a b : Kˣ) : η (a * b) = η a * η b := by
+    simp only [η, map_mul, mul_inv, Circle.coe_mul]
+  have hI : (∫ u in (H : Set Kˣ), η u ∂μ𝔭(v)) = η w * ∫ u in (H : Set Kˣ), η u ∂μ𝔭(v) := by
+    rw [← integral_indicator hHm, ← integral_const_mul]
+    refine (integral_mul_left_eq_self (μ := μ𝔭(v)) ((H : Set Kˣ).indicator η) w).symm.trans
+      (integral_congr_ae (.of_forall fun u ↦ ?_))
+    dsimp only
+    by_cases hu : u ∈ H
+    · have hwu : w * u ∈ H := H.mul_mem hw hu
+      rw [indicator_of_mem (SetLike.mem_coe.mpr hwu), indicator_of_mem (SetLike.mem_coe.mpr hu),
+        hη]
+    · have hwu : w * u ∉ H := fun h ↦ hu (by
+        have := H.mul_mem (H.inv_mem hw) h
+        rwa [inv_mul_cancel_left] at this)
+      rw [indicator_of_notMem (fun h ↦ hwu (SetLike.mem_coe.mp h)),
+        indicator_of_notMem (fun h ↦ hu (SetLike.mem_coe.mp h)), mul_zero]
+  have hne : η w ≠ 1 := by
+    intro h
+    apply hχ
+    have h' : (χ (finiteClassMap(v) w))⁻¹ = 1 := Circle.ext (by rw [Circle.coe_one]; exact h)
+    exact inv_eq_one.mp h'
+  have h0 : (1 - η w) * (∫ u in (H : Set Kˣ), η u ∂μ𝔭(v)) = 0 := by
+    rw [sub_mul, one_mul, ← hI, sub_self]
+  exact (mul_eq_zero.mp h0).resolve_left (sub_ne_zero.mpr (Ne.symm hne))
+
+/-- `(q_v^{k+1} - q_v^k) vol U_{k+1} = vol O_v^×`, from the additive measure: `μ` is
+`q_v/(q_v - 1)` times additive measure on the norm-one sphere, `U_{k+1}` is a translate of the
+ball of radius `q_v^{-(k+1)}`, and the sphere is the unit ball minus the ball of radius
+`q_v^{-1}`. -/
+private theorem explicitFormula_filtration_volume (v : Primes(F)) (k : ℕ) :
+    (q(v) ^ (k + 1) - q(v) ^ k) *
+      (μ𝔭(v)).real (explicitFormula_unitFiltration v (k + 1) : Set (v.adicCompletion F)ˣ) =
+      V𝔭(v) := by
+  let K := v.adicCompletion F
+  let : ProperSpace K := properSpace_adicCompletion v
+  let : BorelSpace K := ⟨rfl⟩
+  let : BorelSpace Kˣ := ⟨rfl⟩
+  let : (ν𝔭(v)).IsAddHaarMeasure := finiteLocalAdditiveTamagawaMeasure_isAddHaar F v
+  have hq : (1 : ℝ) < q(v) := by exact_mod_cast HeightOneSpectrum.one_lt_absNorm v
+  have hq0 : (0 : ℝ) < q(v) := zero_lt_one.trans hq
+  let D : ℝ → ℂ := fun r ↦
+    ∫ y, (Metric.closedBall (0 : K) r).indicator (fun _ ↦ (1 : ℂ)) y ∂ν𝔭(v)
+  have hDint (r : ℝ) :
+      Integrable ((Metric.closedBall (0 : K) r).indicator (fun _ ↦ (1 : ℂ))) ν𝔭(v) :=
+    ((continuousOn_const (c := (1 : ℂ))).integrableOn_compact
+      (isCompact_closedBall (0 : K) r)).integrable_indicator
+      Metric.isClosed_closedBall.measurableSet
+  obtain ⟨p, hp⟩ : ∃ p : Kˣ, ‖p.val‖ = (q(v))⁻¹ := by
+    let val : Valuation K (WithZero (Multiplicative ℤ)) := Valued.v
+    obtain ⟨a, ha⟩ := val.exists_isUniformizer_of_isCyclic_of_nontrivial
+    exact ⟨Units.mk0 a ha.ne_zero, norm_uniformizer_adicCompletion v _ ha⟩
+  have hDpow (m : ℕ) : D (q(v) ^ (-(m : ℤ))) = ((q(v) ^ (-(m : ℤ)) : ℝ) : ℂ) * D 1 := by
+    have h := explicitFormula_closedBall_mass_mul v (p ^ m) 1
+    have hn : ‖(p ^ m).val‖ = q(v) ^ (-(m : ℤ)) := by
+      rw [Units.val_pow_eq_pow_val, norm_pow, hp, zpow_neg, zpow_natCast, inv_pow]
+    rw [hn, mul_one] at h
+    exact h
+  have hball1 (y : K) (r : ℝ) (hr : r < 1) (hy : ‖y - 1‖ ≤ r) : ‖y‖ = 1 := by
+    have h1 : ‖y - 1‖ ≠ ‖(1 : K)‖ := by rw [norm_one]; exact (hy.trans_lt hr).ne
+    have := IsUltrametricDist.norm_add_eq_max_of_norm_ne_norm h1
+    rw [sub_add_cancel, norm_one, max_eq_right (hy.trans hr.le)] at this
+    exact this
+  -- The filtration subgroup.
+  set r : ℝ := q(v) ^ (-((k + 1 : ℕ) : ℤ)) with hr
+  have hr1 : r < 1 := zpow_lt_one_of_neg₀ hq (by omega)
+  let g : K → ℂ := (Metric.closedBall (1 : K) r).indicator (fun _ ↦ (1 : ℂ))
+  have hgU : (fun u : Kˣ ↦ g u.val) =
+      (explicitFormula_unitFiltration v (k + 1) : Set Kˣ).indicator (fun _ ↦ (1 : ℂ)) := by
+    funext u
+    have : u.val ∈ Metric.closedBall (1 : K) r ↔
+        u ∈ (explicitFormula_unitFiltration v (k + 1) : Set Kˣ) := by
+      rw [SetLike.mem_coe, explicitFormula_mem_unitFiltration, Metric.mem_closedBall,
+        dist_eq_norm]
+      exact ⟨fun h ↦ ⟨hball1 _ r hr1 h, h⟩, fun h ↦ h.2⟩
+    simp only [g, indicator, this]
+  have hgdiv : (fun y ↦ g y / ((‖y‖ : ℝ) : ℂ)) = g := by
+    funext y
+    by_cases hy : y ∈ Metric.closedBall (1 : K) r
+    · rw [hball1 y r hr1 (by rwa [Metric.mem_closedBall, dist_eq_norm] at hy)]
+      simp
+    · simp [g, indicator_of_notMem hy]
+  have hgtrans : (∫ y, g y ∂ν𝔭(v)) = D r := by
+    change _ = ∫ y, (Metric.closedBall (0 : K) r).indicator (fun _ ↦ (1 : ℂ)) y ∂ν𝔭(v)
+    rw [← integral_sub_right_eq_self (μ := ν𝔭(v))
+      ((Metric.closedBall (0 : K) r).indicator (fun _ ↦ (1 : ℂ))) (1 : K)]
+    congr 1
+    funext y
+    simp only [g, indicator, Metric.mem_closedBall, dist_eq_norm, sub_zero]
+  have hU := existsUnique_finiteWeilFourierDistribution_units_integral v g
+  rw [hgU, integral_indicator_const _ (explicitFormula_unitFiltration_measurable v (k + 1)),
+    hgdiv, hgtrans, hr, hDpow, Complex.real_smul, mul_one] at hU
+  -- The integer units.
+  let s : K → ℂ := (Metric.sphere (0 : K) 1).indicator (fun _ ↦ (1 : ℂ))
+  have hOm : MeasurableSet ((O(v)).units : Set Kˣ) :=
+    (Submonoid.isOpen_units (Valued.isOpen_valuationSubring _)).measurableSet
+  have hsU : (fun u : Kˣ ↦ s u.val) =
+      ((O(v)).units : Set Kˣ).indicator (fun _ ↦ (1 : ℂ)) := by
+    funext u
+    have : u.val ∈ Metric.sphere (0 : K) 1 ↔ u ∈ ((O(v)).units : Set Kˣ) := by
+      rw [mem_sphere_zero_iff_norm, SetLike.mem_coe,
+        HeightOneSpectrum.adicCompletionIntegers.mem_units_iff_valued_eq_one,
+        Valued.toNormedField.norm_eq_one_iff]
+    simp only [s, indicator, this]
+  have hsdiv : (fun y ↦ s y / ((‖y‖ : ℝ) : ℂ)) = s := by
+    funext y
+    by_cases hy : y ∈ Metric.sphere (0 : K) 1
+    · rw [mem_sphere_zero_iff_norm.mp hy]
+      simp
+    · simp [s, indicator_of_notMem hy]
+  obtain ⟨c, hc⟩ : ∃ c : ℝ, c = q(v) ^ (-((1 : ℕ) : ℤ)) := ⟨_, rfl⟩
+  have hq1 : c < 1 := hc ▸ zpow_lt_one_of_neg₀ hq (by norm_num)
+  have hdisc (y : K) (h : ‖y‖ < 1) : ‖y‖ ≤ c := by
+    have := explicitFormula_norm_le_zpow_pred v y 0 (by rwa [zpow_zero])
+    rw [hc]
+    simpa using this
+  have hsdiff : s = fun y ↦ (Metric.closedBall (0 : K) 1).indicator (fun _ ↦ (1 : ℂ)) y -
+      (Metric.closedBall (0 : K) c).indicator (fun _ ↦ (1 : ℂ)) y := by
+    funext y
+    simp only [s, indicator, mem_sphere_zero_iff_norm, Metric.mem_closedBall, dist_zero_right]
+    by_cases h1 : ‖y‖ = 1
+    · simp [h1, not_le.mpr hq1]
+    · by_cases h2 : ‖y‖ ≤ 1
+      · have h3 : ‖y‖ ≤ c := hdisc y (lt_of_le_of_ne h2 h1)
+        simp [h1, h2, h3]
+      · have h3 : ¬ ‖y‖ ≤ c := fun h ↦ h2 (h.trans hq1.le)
+        simp [h1, h2, h3]
+  have hO := existsUnique_finiteWeilFourierDistribution_units_integral v s
+  rw [hsU, integral_indicator_const _ hOm, hsdiv, hsdiff, integral_sub (hDint 1) (hDint _),
+    Complex.real_smul, mul_one] at hO
+  change _ = _ * (D 1 - D c) at hO
+  rw [hc, hDpow 1] at hO
+  -- Combine.
+  apply Complex.ofReal_injective
+  change (((q(v) ^ (k + 1) - q(v) ^ k) * (μ𝔭(v)).real _ : ℝ) : ℂ) =
+    (((μ𝔭(v)).real ((O(v)).units : Set Kˣ) : ℝ) : ℂ)
+  rw [Complex.ofReal_mul, hU, hO]
+  have key : (q(v) ^ (k + 1) - q(v) ^ k) * q(v) ^ (-((k + 1 : ℕ) : ℤ)) =
+      1 - q(v) ^ (-((1 : ℕ) : ℤ)) := by
+    rw [zpow_neg, zpow_neg, zpow_natCast, zpow_natCast, pow_one]
+    field_simp
+    ring
+  have keyc := congrArg (fun x : ℝ ↦ (x : ℂ)) key
+  push_cast at keyc ⊢
+  linear_combination ((q(v) : ℂ) / ((q(v) : ℂ) - 1) * D 1) * keyc
+
+
+/-- The conductor integral truncated at level `N < a`: with the weight
+`1 / max(|1 - u|, q^{-N})` it is `-(N + 1) vol O_v^×`. -/
+private theorem explicitFormula_conductor_partial (v : Primes(F)) (χ : U[F]) (a : ℕ)
+    (ha : ∀ n < a, n ∉ conductorExponents(χ, v)) (N : ℕ) (hN : N < a) :
+    ∫ u in ((O(v)).units : Set (v.adicCompletion F)ˣ),
+      ((((χ (finiteClassMap(v) u))⁻¹ : Circle) : ℂ) - 1) *
+        (((max ‖1 - u.val‖ (q(v) ^ (-(N : ℤ))))⁻¹ : ℝ) : ℂ) ∂μ𝔭(v) =
+      -(((N + 1 : ℕ) : ℂ) * (V𝔭(v) : ℂ)) := by
+  let K := v.adicCompletion F
+  let : BorelSpace Kˣ := ⟨rfl⟩
+  let : (μ𝔭(v)).IsHaarMeasure := finiteLocalMultiplicativeTamagawaMeasure_haar F v
+  let O := ((O(v)).units : Set Kˣ)
+  have hq : (1 : ℝ) < q(v) := by exact_mod_cast HeightOneSpectrum.one_lt_absNorm v
+  have hOm : MeasurableSet O :=
+    (Submonoid.isOpen_units (Valued.isOpen_valuationSubring _)).measurableSet
+  have hOc : IsCompact O := Submonoid.units_isCompact
+    (isCompact_iff_compactSpace.mpr (compactSpace_adicCompletionIntegers v))
+  have hO1 (u : Kˣ) : u ∈ O ↔ ‖u.val‖ = 1 := by
+    change u ∈ (O(v)).units ↔ _
+    rw [HeightOneSpectrum.adicCompletionIntegers.mem_units_iff_valued_eq_one,
+      Valued.toNormedField.norm_eq_one_iff]
+  have hsub1 (u : Kˣ) (hu : u ∈ O) : ‖1 - u.val‖ ≤ 1 := by
+    rw [sub_eq_add_neg]
+    refine (IsUltrametricDist.norm_add_le_max _ _).trans ?_
+    rw [norm_one, norm_neg, (hO1 u).mp hu, max_self]
+  let η : Kˣ → ℂ := fun u ↦ (((χ (finiteClassMap(v) u))⁻¹ : Circle) : ℂ)
+  have hηc : Continuous η := continuous_subtype_val.comp
+    ((χ.continuous.comp (continuous_ideleClass_ofAdicCompletion F v)).inv)
+  have hηI : IntegrableOn η O μ𝔭(v) := hηc.continuousOn.integrableOn_compact hOc
+  have h1I : IntegrableOn (fun _ ↦ (1 : ℂ)) O μ𝔭(v) :=
+    continuousOn_const.integrableOn_compact hOc
+  have hwc (M : ℕ) : Continuous (fun u : Kˣ ↦
+      (((max ‖1 - u.val‖ (q(v) ^ (-(M : ℤ))))⁻¹ : ℝ) : ℂ)) := by
+    refine Complex.continuous_ofReal.comp (Continuous.inv₀
+      ((continuous_norm.comp (continuous_const.sub Units.continuous_val)).max continuous_const)
+      fun u ↦ ?_)
+    exact (lt_max_of_lt_right (zpow_pos (zero_lt_one.trans hq) _)).ne'
+  have hVO : (∫ u in O, (1 : ℂ) ∂μ𝔭(v)) = (V𝔭(v) : ℂ) := by
+    rw [setIntegral_const, Complex.real_smul, mul_one]
+    rfl
+  have hnon (n : ℕ) (hn : n < a) :
+      ∃ w ∈ explicitFormula_unitFiltration v n, χ (finiteClassMap(v) w) ≠ 1 := by
+    have h := ha n hn
+    simp only [Set.mem_ofPred_eq, not_forall] at h
+    obtain ⟨w, h1, h2, h3⟩ := h
+    exact ⟨w, ⟨h1, h2⟩, h3⟩
+  induction N with
+  | zero =>
+    have e : ∀ u ∈ O, (η u - 1) *
+        (((max ‖1 - u.val‖ (q(v) ^ (-((0 : ℕ) : ℤ))))⁻¹ : ℝ) : ℂ) = η u - 1 := by
+      intro u hu
+      rw [Nat.cast_zero, neg_zero, zpow_zero, max_eq_right (hsub1 u hu), inv_one,
+        Complex.ofReal_one, mul_one]
+    change ∫ u in O, (η u - 1) * _ ∂μ𝔭(v) = _
+    rw [setIntegral_congr_fun hOm e, integral_sub hηI h1I, hVO]
+    obtain ⟨w, hw, hχw⟩ := hnon 0 hN
+    have hset : (explicitFormula_unitFiltration v 0 : Set Kˣ) = O := by
+      ext u
+      rw [SetLike.mem_coe, explicitFormula_mem_unitFiltration, hO1]
+      refine ⟨fun h ↦ h.1, fun h ↦ ⟨h, ?_⟩⟩
+      rw [Nat.cast_zero, neg_zero, zpow_zero, norm_sub_rev]
+      exact hsub1 u ((hO1 u).mpr h)
+    have h0 := explicitFormula_integral_filtration_char v χ 0 w hw hχw
+    rw [hset] at h0
+    change (∫ u in O, η u ∂μ𝔭(v)) - _ = _
+    rw [h0]
+    simp
+  | succ N ih =>
+    have ihN := ih (by omega)
+    obtain ⟨w, hw, hχw⟩ := hnon (N + 1) hN
+    let H := explicitFormula_unitFiltration v (N + 1)
+    have hHm : MeasurableSet (H : Set Kˣ) := explicitFormula_unitFiltration_measurable v (N + 1)
+    have hHO : (H : Set Kˣ) ⊆ O := fun u hu ↦ (hO1 u).mpr hu.1
+    have e : ∀ u ∈ O, (η u - 1) *
+        (((max ‖1 - u.val‖ (q(v) ^ (-((N + 1 : ℕ) : ℤ))))⁻¹ : ℝ) : ℂ) =
+        (η u - 1) * (((max ‖1 - u.val‖ (q(v) ^ (-(N : ℤ))))⁻¹ : ℝ) : ℂ) +
+          ((q(v) ^ (N + 1) - q(v) ^ N : ℝ) : ℂ) *
+            (H : Set Kˣ).indicator (fun u ↦ η u - 1) u := by
+      intro u hu
+      rw [explicitFormula_filtrationWeight_succ v (1 - u.val) N]
+      have hmem : u ∈ H ↔ ‖1 - u.val‖ ≤ q(v) ^ (-((N + 1 : ℕ) : ℤ)) := by
+        rw [explicitFormula_mem_unitFiltration, norm_sub_rev]
+        exact ⟨fun h ↦ h.2, fun h ↦ ⟨(hO1 u).mp hu, h⟩⟩
+      by_cases h : ‖1 - u.val‖ ≤ q(v) ^ (-((N + 1 : ℕ) : ℤ))
+      · rw [ite_eq_left h, indicator_of_mem (SetLike.mem_coe.mpr (hmem.mpr h))]
+        push_cast
+        ring
+      · rw [ite_eq_right h, indicator_of_notMem (fun h' ↦ h (hmem.mp (SetLike.mem_coe.mp h')))]
+        push_cast
+        ring
+    change ∫ u in O, (η u - 1) * _ ∂μ𝔭(v) = _
+    have hI1 : IntegrableOn (fun u ↦ (η u - 1) *
+        (((max ‖1 - u.val‖ (q(v) ^ (-(N : ℤ))))⁻¹ : ℝ) : ℂ)) O μ𝔭(v) :=
+      ((hηc.sub continuous_const).mul (hwc N)).continuousOn.integrableOn_compact hOc
+    have hI2 : Integrable ((H : Set Kˣ).indicator (fun u ↦ η u - 1)) (μ𝔭(v).restrict O) :=
+      (hηI.sub h1I).integrable.indicator hHm
+    rw [setIntegral_congr_fun hOm e, integral_add hI1 (hI2.const_mul _), integral_const_mul]
+    change (∫ u in O, (η u - 1) * _ ∂μ𝔭(v)) + _ = _
+    rw [ihN, integral_indicator hHm, Measure.restrict_restrict hHm, inter_eq_left.mpr hHO,
+      integral_sub (hηI.mono_set hHO) (h1I.mono_set hHO),
+      explicitFormula_integral_filtration_char v χ (N + 1) w hw hχw, setIntegral_const,
+      Complex.real_smul, mul_one]
+    have hvol := congrArg (fun x : ℝ ↦ (x : ℂ)) (explicitFormula_filtration_volume v N)
+    simp only [Complex.ofReal_mul] at hvol
+    rw [← hvol]
+    push_cast
+    ring
+
+end ExplicitFormulaConductorCharacter
+
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (conductor integral of one character).
 For a character `χ` of the idele classes and a finite place `v` where its conductor exponent is
 `a` (the least `n` with `χ` trivial on the image of `1 + 𝔭_v^n` in the norm-one units),
@@ -10676,7 +11026,52 @@ theorem idelicExplicitFormula_conductorLocal_character (v : Primes(F)) (χ : U[F
         ((((χ (finiteClassMap(v) u))⁻¹ : Circle) : ℂ) - 1) *
           ((Real.sqrt ‖u.val‖ : ℂ) / ((‖1 - u.val‖ : ℝ) : ℂ)) ∂μ𝔭(v) =
       -(((sInf (conductorExponents(χ, v)) : ℕ) : ℂ) * (V𝔭(v) : ℂ)) := by
-  sorry
+  let : BorelSpace (v.adicCompletion F)ˣ := ⟨rfl⟩
+  obtain ⟨n, -, hn⟩ := exists_heckeConductorExponents χ
+  rw [(hn v).csInf_eq]
+  have hmem := (hn v).1
+  have hlow : ∀ m < n v, m ∉ conductorExponents(χ, v) :=
+    fun m hm h ↦ absurd ((hn v).2 h) (not_le.mpr hm)
+  have hOm : MeasurableSet ((O(v)).units : Set (v.adicCompletion F)ˣ) :=
+    (Submonoid.isOpen_units (Valued.isOpen_valuationSubring _)).measurableSet
+  have hO1 (u : (v.adicCompletion F)ˣ) (hu : u ∈ ((O(v)).units : Set (v.adicCompletion F)ˣ)) :
+      ‖u.val‖ = 1 := by
+    rw [SetLike.mem_coe, HeightOneSpectrum.adicCompletionIntegers.mem_units_iff_valued_eq_one] at hu
+    exact Valued.toNormedField.norm_eq_one_iff.mpr hu
+  have hq : (1 : ℝ) < q(v) := by exact_mod_cast HeightOneSpectrum.one_lt_absNorm v
+  cases hnv : n v with
+  | zero =>
+    rw [hnv] at hmem
+    have hmem' : ∀ u : (v.adicCompletion F)ˣ, ‖u.val‖ = 1 →
+        ‖u.val - 1‖ ≤ q(v) ^ (-((0 : ℕ) : ℤ)) → χ (finiteClassMap(v) u) = 1 := hmem
+    rw [Nat.cast_zero, zero_mul, neg_zero]
+    refine setIntegral_eq_zero_of_forall_eq_zero fun u hu ↦ ?_
+    have h1 := hO1 u hu
+    have h2 : ‖u.val - 1‖ ≤ q(v) ^ (-((0 : ℕ) : ℤ)) := by
+      rw [Nat.cast_zero, neg_zero, zpow_zero]
+      rw [sub_eq_add_neg]
+      refine (IsUltrametricDist.norm_add_le_max _ _).trans ?_
+      rw [norm_neg, norm_one, h1, max_self]
+    rw [hmem' u h1 h2, inv_one, Circle.coe_one, sub_self, zero_mul]
+  | succ N =>
+    rw [hnv] at hmem hlow
+    have hmem' : ∀ u : (v.adicCompletion F)ˣ, ‖u.val‖ = 1 →
+        ‖u.val - 1‖ ≤ q(v) ^ (-((N + 1 : ℕ) : ℤ)) → χ (finiteClassMap(v) u) = 1 := hmem
+    rw [← explicitFormula_conductor_partial v χ (N + 1) hlow N (Nat.lt_succ_self N)]
+    refine setIntegral_congr_fun hOm fun u hu ↦ ?_
+    have h1 := hO1 u hu
+    by_cases h : ‖u.val - 1‖ ≤ q(v) ^ (-((N + 1 : ℕ) : ℤ))
+    · rw [hmem' u h1 h, inv_one, Circle.coe_one, sub_self, zero_mul, zero_mul]
+    · push Not at h
+      have h2 : q(v) ^ (-(N : ℤ)) ≤ ‖1 - u.val‖ := by
+        rw [norm_sub_rev]
+        by_contra h3
+        push Not at h3
+        have h4 := explicitFormula_norm_le_zpow_pred v _ _ h3
+        have e : -(N : ℤ) - 1 = -((N + 1 : ℕ) : ℤ) := by push_cast; ring
+        rw [e] at h4
+        linarith
+      rw [max_eq_left h2, h1, Real.sqrt_one, Complex.ofReal_one, Complex.ofReal_inv, one_div]
 
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (conductor terms at one place). Summed
 over the characters trivial on the image of the norm section, `log q_v` times the conductor
