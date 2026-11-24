@@ -9487,7 +9487,7 @@ private theorem sLocalInfiniteRestriction_chart_apply (χ : PontryaginDual Jₛ)
 
 /-- Along a norm-twist chart, the Euler factor at a real place is a translate of the real
 Gamma factor. -/
-private theorem infiniteLocalEulerFactor_chart_real (χ : PontryaginDual Jₛ)
+theorem infiniteLocalEulerFactor_chart_real (χ : PontryaginDual Jₛ)
     (w : InfinitePlace F) (hw : w.IsReal) :
     ∃ b : ℂ, ∀ z : ℂ, infiniteLocalEulerFactor w
       (sLocalInfiniteRestriction w (chartₛ(χ) z)) = Complex.Gammaℝ (z + b) := by
@@ -9518,7 +9518,7 @@ private theorem infiniteLocalEulerFactor_chart_real (χ : PontryaginDual Jₛ)
 
 /-- Along a norm-twist chart, the Euler factor at a complex place is half a translate of the
 complex Gamma factor. -/
-private theorem infiniteLocalEulerFactor_chart_complex (χ : PontryaginDual Jₛ)
+theorem infiniteLocalEulerFactor_chart_complex (χ : PontryaginDual Jₛ)
     (w : InfinitePlace F) (hw : w.IsComplex) :
     ∃ b : ℂ, ∀ z : ℂ, infiniteLocalEulerFactor w
       (sLocalInfiniteRestriction w (chartₛ(χ) z)) = Complex.Gammaℂ (z + b) / 2 := by
@@ -9580,7 +9580,7 @@ private theorem neg_card_filter_eq_sum_min {ι : Type*} [Fintype ι] (ord : ι �
   simp
 
 /-- Along a norm-twist chart, every pole of an archimedean Euler factor is simple. -/
-private theorem neg_one_le_meromorphicOrderAt_infiniteLocalEulerFactor_chart
+theorem neg_one_le_meromorphicOrderAt_infiniteLocalEulerFactor_chart
     (χ : PontryaginDual Jₛ) (w : InfinitePlace F) (s : ℂ) :
     ((-1 : ℤ) : WithTop ℤ) ≤ meromorphicOrderAt (fun z ↦ infiniteLocalEulerFactor w
       (sLocalInfiniteRestriction w (chartₛ(χ) z))) s := by
