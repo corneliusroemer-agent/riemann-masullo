@@ -28,7 +28,6 @@ namespace RiemannMasullo
 
 set_option quotPrecheck false
 set_option maxSynthPendingDepth 8
-set_option Elab.async false
 
 variable {F : Type*} [Field F] [NumberField F]
 

@@ -33,7 +33,6 @@ namespace RiemannMasullo
 
 set_option quotPrecheck false
 set_option maxHeartbeats 600000
-set_option Elab.async false
 
 variable {F : Type*} [Field F] [NumberField F]
 variable {S T R : Finset (HeightOneSpectrum (𝓞 F))}

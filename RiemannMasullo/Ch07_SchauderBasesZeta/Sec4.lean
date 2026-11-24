@@ -34,7 +34,6 @@ namespace RiemannMasullo
 
 set_option quotPrecheck false
 set_option maxHeartbeats 150000
-set_option Elab.async false
 
 variable {F : Type*} [Field F] [NumberField F]
 
