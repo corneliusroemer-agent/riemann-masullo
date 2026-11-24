@@ -15962,6 +15962,7 @@ private theorem explicitFormula_complexLocal_radialTest (w : InfinitePlace F) (h
       Units.map (InfinitePlace.Completion.ringEquivComplexOfIsComplex hw).symm.toMonoidHom
     ∃ h : 𝒟(w.Completionˣ), h.val 1 = 1 ∧ ∃ (B B' : ℝ → ℂ) (P : ℝ),
       (∀ y, HasDerivAt B (B' y) y) ∧ (∀ y, ‖B y‖ ≤ P) ∧ (∀ y, ‖B' y‖ ≤ P) ∧ B 0 = 1 ∧
+      HasCompactSupport B ∧
       ∀ z : ℂ, h.val (e (Units.mk0 (Complex.exp z) (Complex.exp_ne_zero z))) = B (2 * z.re) := by
   intro e
   have hi := InfinitePlace.Completion.isometry_extensionEmbedding w
@@ -15989,7 +15990,8 @@ private theorem explicitFormula_complexLocal_radialTest (w : InfinitePlace F) (h
   obtain ⟨C, hC⟩ := ((B0.contDiff (n := 1)).continuous_deriv le_rfl).bounded_above_of_compact_support
     B0.hasCompactSupport.deriv
   refine ⟨⟨f, (mem_bruhatSmoothSubmodule_iff _).mpr hs, hc⟩, ?_, fun y ↦ ((B0 y : ℝ) : ℂ),
-    fun y ↦ ((deriv B0 y : ℝ) : ℂ), max 1 C, fun y ↦ ?_, fun y ↦ ?_, fun y ↦ ?_, ?_, fun z ↦ ?_⟩
+    fun y ↦ ((deriv B0 y : ℝ) : ℂ), max 1 C, fun y ↦ ?_, fun y ↦ ?_, fun y ↦ ?_, ?_,
+    B0.hasCompactSupport.comp_left Complex.ofReal_zero, fun z ↦ ?_⟩
   · change ((B0 (Real.log ((m 1).val : ℝ)) : ℝ) : ℂ) = 1
     rw [map_one, Units.val_one, NNReal.coe_one, Real.log_one, hB0, Complex.ofReal_one]
   · exact ((B0.contDiff (n := 1)).differentiable one_ne_zero y).hasDerivAt.ofReal_comp
@@ -16125,7 +16127,7 @@ theorem idelicExplicitFormula_infiniteMatching_complexLocal_integrable (w : Infi
         ((‖1 - Complex.exp (-(t / 2) + φ * Complex.I)‖ ^ 2 : ℝ) : ℂ)
     IntegrableOn (fun t : ℝ ↦ 2 * (Real.exp (-t) : ℂ) * testI.val 1 / (t : ℂ) - A t) (Ioi 0) := by
   intro e g A
-  obtain ⟨h, h1, B, B', P, hB, hBb, hB'b, hB0, hgB⟩ := explicitFormula_complexLocal_radialTest w hw
+  obtain ⟨h, h1, B, B', P, hB, hBb, hB'b, hB0, -, hgB⟩ := explicitFormula_complexLocal_radialTest w hw
   set c := testI.val 1 with hc
   let f0 : 𝒟(w.Completionˣ) := testI - c • h
   have hf0 (x : w.Completionˣ) : f0.val x = testI.val x - c * h.val x := rfl
@@ -16188,6 +16190,36 @@ theorem idelicExplicitFormula_infiniteMatching_complexLocal_vanishing (w : Infin
   simp only [_h1, mul_zero, zero_div, zero_sub, sub_zero]
   rw [integral_neg, he]
 
+/-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a complex place,
+regularization). For a `C¹` function `B` with compact support, bounded derivative and `B(0) = 1`,
+the disc-regularized integral of `2 B(2 log |u|) / (|u| |1 - u|²)` over `ℂ` (the cutoff
+`|u - 1|² ≥ ε` of `complexLogFourier_finitePart`, for the radial test `h(u) = B(log |u|²)`)
+has the limit `-2π (∫_0^∞ J(t) dt + 2γ)`, where
+`J(t) = 2 e^{-t} / t - e^{-t/2} (B(t) + B(-t)) / (1 - e^{-t})` is the regularized radial Poisson
+average (`J` is integrable by `explicitFormula_complexLocal_radialIntegrable`).
+
+Why it holds. In polar coordinates around `u = 1`, with `M(ρ)` the mean of `h(u)/|u|` over the
+circle `|u - 1| = ρ` (`M(0) = 2π`), the left side is `∫_{√ε}^∞ 2 (M(ρ) - 2π 1_{ρ<1}) / ρ dρ`;
+in polar-logarithmic coordinates `u = e^{±t/2 + iφ}` the same function regularized on the
+annuli `|log |u|| < τ/2` instead gives `∫ J` (with `∫_τ^∞ e^{-t}/t = -γ - log τ + o(1)` for the
+`e^{-t}/t` term). The two cutoffs differ, up to `o(1)`, by the integral of `2 / |1 - u|²` over
+the symmetric difference of the excluded disc and annulus, whose asymptotics as `ε, τ → 0`
+supply the constant. Checked numerically to 20 digits for
+`B(y) = e^{-y²}` (`L = -3.88129099784908760…` on both sides). This is the complex counterpart
+of `idelicExplicitFormula_infiniteMatching_realLocal_regularization`; what is missing for a
+proof is the asymptotics of the strip-minus-disc integral. -/
+theorem idelicExplicitFormula_infiniteMatching_complexLocal_regularization (B B' : ℝ → ℂ) (P : ℝ)
+    (hB : ∀ y, HasDerivAt B (B' y) y) (hBb : ∀ y, ‖B y‖ ≤ P) (hB'b : ∀ y, ‖B' y‖ ≤ P)
+    (hB0 : B 0 = 1) (hBc : HasCompactSupport B) :
+    Tendsto (fun ε : ℝ ↦ (∫ u in {u : ℂ | ε ≤ ‖u - 1‖ ^ 2},
+        2 * B (2 * Real.log ‖u‖) / ((‖u‖ * ‖u - 1‖ ^ 2 : ℝ) : ℂ)) +
+        2 * Real.pi * (Real.log ε : ℂ))
+      (𝓝[>] 0)
+      (𝓝 (-(2 * Real.pi : ℂ) * ((∫ t in Ioi (0 : ℝ), (2 * (Real.exp (-t) : ℂ) / (t : ℂ) -
+          (Real.exp (-(t / 2)) : ℂ) * (B t + B (-t)) / (1 - (Real.exp (-t) : ℂ)))) +
+          2 * Real.eulerMascheroniConstant))) := by
+  sorry
+
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a complex place `w`,
 one reference test). Some test `h` on `F_w^× = ℂ^×` with `h(1) = 1` satisfies the identity of
 `idelicExplicitFormula_infiniteMatching_complexLocal`.
@@ -16214,7 +16246,95 @@ theorem idelicExplicitFormula_infiniteMatching_complexLocal_reference (w : Infin
       (∫ t in Ioi (0 : ℝ), (2 * (Real.exp (-t) : ℂ) * h.val 1 / (t : ℂ) - A t)) -
           2 * (Real.log (2 * Real.pi) : ℂ) * h.val 1 =
         -infiniteConnesWeilPrincipalValue w h := by
-  sorry
+  obtain ⟨h, h1, B, B', P, hB, hBb, hB'b, hB0, hBc, hgB⟩ :=
+    explicitFormula_complexLocal_radialTest w hw
+  refine ⟨h, h1, ?_⟩
+  intro e g A
+  have hJ : (∫ t in Ioi (0 : ℝ), (2 * (Real.exp (-t) : ℂ) * h.val 1 / (t : ℂ) - A t)) =
+      ∫ t in Ioi (0 : ℝ), (2 * (Real.exp (-t) : ℂ) / (t : ℂ) -
+        (Real.exp (-(t / 2)) : ℂ) * (B t + B (-t)) / (1 - (Real.exp (-t) : ℂ))) := by
+    refine setIntegral_congr_fun measurableSet_Ioi fun t (ht : 0 < t) ↦ ?_
+    rw [h1, mul_one]
+    exact congrArg (2 * (Real.exp (-t) : ℂ) / (t : ℂ) - ·)
+      (explicitFormula_complexLocal_radialAverage hgB ht)
+  have hreg := idelicExplicitFormula_infiniteMatching_complexLocal_regularization B B' P hB hBb hB'b hB0 hBc
+  -- The principal value through the disc cutoff.
+  let : BorelSpace w.Completion := ⟨rfl⟩
+  let T := (exists_infiniteWeilTestMap w).choose h
+  have hA := (exists_infiniteWeilTestMap w).choose_spec h
+  let r := InfinitePlace.Completion.ringEquivComplexOfIsComplex hw
+  let j := InfinitePlace.Completion.isometryEquivComplexOfIsComplex hw
+  let m := j.symm.toHomeomorph.toMeasurableEquiv
+  have hnorm (t : ℂ) : ‖m t‖ = ‖t‖ := by
+    change ‖j.symm t‖ = ‖t‖
+    rw [← dist_zero_right, ← dist_zero_right t, ← j.symm.dist_eq t 0,
+      show j.symm 0 = 0 from map_zero r.symm]
+  have hmult : w.mult = 2 := hw.mult_eq_two
+  let Fz : w.Completion → ℂ := Function.extend Units.val (h.val : _ → ℂ) (fun _ ↦ 0)
+  have hFu (u : w.Completionˣ) : Fz u.val = h.val u := Units.val_injective.extend_apply _ _ u
+  have hFz (y : w.Completion) (hy : y ∉ range (Units.val : w.Completionˣ → w.Completion)) :
+      Fz y = 0 := by
+    simp only [Fz, Function.extend_apply' _ _ _ (fun ⟨u, hu⟩ ↦ hy ⟨u, hu⟩)]
+  have hA' : ∀ x, T (Multiplicative.ofAdd x) =
+      Fz (1 + x) / (Real.sqrt (‖1 + x‖ ^ w.mult) : ℂ) := hA
+  have hF0 : T (Multiplicative.ofAdd 0) = 1 := by
+    rw [hA', add_zero, ← Units.val_one, hFu, h1, Units.val_one, norm_one, one_pow,
+      Real.sqrt_one, Complex.ofReal_one, div_one]
+  have hT := ((exists_infiniteConnesPrincipalValue w).choose_spec T).2
+  change infiniteConnesPrincipalValue w T = _ at hT
+  have hL := (complexLogFourier_finitePart w hw T).2.2
+  have hμ : ν∞(w) = (2 • (volume : Measure ℂ)).map m :=
+    dite_eq_right (InfinitePlace.not_isReal_iff_isComplex.mpr hw)
+  -- The cutoff integral in coordinates.
+  have hpt (u : ℂ) : 2 * (T (Multiplicative.ofAdd (m (u - 1))) / ((‖m (u - 1)‖ ^ 2 : ℝ) : ℂ)) =
+      2 * B (2 * Real.log ‖u‖) / ((‖u‖ * ‖u - 1‖ ^ 2 : ℝ) : ℂ) := by
+    have h1m : 1 + m (u - 1) = m u := by
+      change 1 + r.symm (u - 1) = r.symm u
+      rw [map_sub, map_one, add_sub_cancel]
+    rw [hA', h1m, hnorm, hnorm, hmult, Real.sqrt_sq (norm_nonneg _)]
+    rcases eq_or_ne u 0 with rfl | hu0
+    · simp
+    · have hmu : m u = (e (Units.mk0 u hu0)).val := rfl
+      have hx : Units.mk0 u hu0 = Units.mk0 (Complex.exp (Complex.log u))
+          (Complex.exp_ne_zero _) := Units.ext (Complex.exp_log hu0).symm
+      rw [hmu, hFu, hx, hgB, Complex.log_re]
+      push_cast
+      ring
+  have hI (ε : ℝ) : (∫ x in {x : w.Completion | ε ≤ ‖x‖ ^ 2},
+      T (Multiplicative.ofAdd x) / ((‖x‖ ^ 2 : ℝ) : ℂ) ∂ν∞(w)) =
+      ∫ u in {u : ℂ | ε ≤ ‖u - 1‖ ^ 2}, 2 * B (2 * Real.log ‖u‖) / ((‖u‖ * ‖u - 1‖ ^ 2 : ℝ) : ℂ) := by
+    have h2 : (2 • (volume : Measure ℂ)) = (2 : ENNReal) • volume := by
+      rw [two_smul, two_smul]
+    have hS : m ⁻¹' {x : w.Completion | ε ≤ ‖x‖ ^ 2} = {t : ℂ | ε ≤ ‖t‖ ^ 2} := by
+      ext t; simp [hnorm]
+    have hmS : MeasurableSet {t : ℂ | ε ≤ ‖t‖ ^ 2} :=
+      measurableSet_le measurable_const (measurable_norm.pow_const 2)
+    have hmS' : MeasurableSet {u : ℂ | ε ≤ ‖u - 1‖ ^ 2} :=
+      measurableSet_le measurable_const ((measurable_norm.comp (measurable_id.sub_const 1)).pow_const 2)
+    rw [hμ, setIntegral_map_equiv, hS, h2, Measure.restrict_smul, integral_smul_measure,
+      ← integral_indicator hmS, ← integral_indicator hmS',
+      ← integral_sub_right_eq_self _ (1 : ℂ), ENNReal.toReal_ofNat, Complex.real_smul,
+      ← integral_const_mul]
+    refine integral_congr_ae (Eventually.of_forall fun u ↦ ?_)
+    simp only [indicator, mem_setOf_eq]
+    split_ifs
+    · exact hpt u
+    · simp
+  simp only [hF0, mul_one] at hL
+  have hL' := hL.congr fun ε ↦ (by rw [hI]; push_cast; ring :
+    (∫ x in {x : w.Completion | ε ≤ ‖x‖ ^ 2}, T (Multiplicative.ofAdd x) / ((‖x‖ ^ 2 : ℝ) : ℂ)
+      ∂ν∞(w)) + ((2 * Real.pi : ℝ) : ℂ) * (Real.log ε : ℂ) =
+    (∫ u in {u : ℂ | ε ≤ ‖u - 1‖ ^ 2}, 2 * B (2 * Real.log ‖u‖) / ((‖u‖ * ‖u - 1‖ ^ 2 : ℝ) : ℂ)) +
+      2 * Real.pi * (Real.log ε : ℂ))
+  have heq := tendsto_nhds_unique hL' hreg
+  rw [hJ]
+  change _ = -infiniteConnesPrincipalValue w T
+  rw [hT, h1, neg_neg]
+  have h2π : (2 * Real.pi : ℂ) ≠ 0 :=
+    mul_ne_zero two_ne_zero (Complex.ofReal_ne_zero.mpr Real.pi_ne_zero)
+  simp only [Complex.ofReal_mul, Complex.ofReal_ofNat, Complex.ofReal_add] at heq
+  apply mul_left_cancel₀ h2π
+  linear_combination heq
 
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a complex place `w`).
 For a test `f` on `F_w^× = ℂ^×`, with `g(z) = f(e^z)` and the Poisson average `A` as in
