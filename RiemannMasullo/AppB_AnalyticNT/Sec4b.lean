@@ -10302,6 +10302,441 @@ private theorem explicitFormula_integral_chartChar_inv_mul (τ : ℝ≥0ˣ →�
 
 end ExplicitFormulaNormOneFourier
 
+section BruhatMellinPolynomialCountCombinatorics
+
+/-- The model series `1/1^2 + 1/2^2 + ...` has partial sums bounded by two. -/
+private theorem summable_bruhatMellin_of_polynomialCount_sum_inv_sq_range (n : ℕ) :
+    ∑ t ∈ Finset.range n, (((t : ℝ) + 1) ^ 2)⁻¹ ≤ 2 := by
+  have key : ∀ m : ℕ,
+      ∑ t ∈ Finset.range m, (((t : ℝ) + 1) ^ 2)⁻¹ ≤ 2 - (m : ℝ)⁻¹ := by
+    intro m
+    induction m with
+    | zero => norm_num
+    | succ p ih =>
+      rw [Finset.sum_range_succ]
+      rcases Nat.eq_zero_or_pos p with hp0 | hp
+      · subst hp0
+        norm_num
+      · have hstep : (((p : ℝ) + 1) ^ 2)⁻¹ ≤ (p : ℝ)⁻¹ - ((p : ℝ) + 1)⁻¹ := by
+          have h1 : (p : ℝ) ≠ 0 := by positivity
+          have h2 : (p : ℝ) + 1 ≠ 0 := by positivity
+          field_simp
+          nlinarith
+        have hcast : ((p + 1 : ℕ) : ℝ)⁻¹ = ((p : ℝ) + 1)⁻¹ := by
+          push_cast
+          ring
+        rw [hcast]
+        linarith
+  exact (key n).trans (by
+    have : (0 : ℝ) ≤ (n : ℝ)⁻¹ := by positivity
+    linarith)
+
+/-- Absorbing polynomial growth into the quadratic decay. -/
+private theorem summable_bruhatMellin_of_polynomialCount_pow_add_div_pow (x : ℝ) (hx : 1 ≤ x)
+    (k : ℕ) : (x + 1) ^ k / x ^ (k + 2) ≤ (2 : ℝ) ^ k / x ^ 2 := by
+  have hx0 : (0 : ℝ) < x := by linarith
+  have habs : (x + 1) ^ k ≤ (2 : ℝ) ^ k * x ^ k := by
+    have hle : x + 1 ≤ 2 * x := by linarith
+    calc (x + 1) ^ k ≤ (2 * x) ^ k := pow_le_pow_left₀ (by linarith) hle k
+      _ = (2 : ℝ) ^ k * x ^ k := mul_pow _ _ _
+  have hxp : (0 : ℝ) < x ^ (k + 2) := pow_pos hx0 _
+  have hx2 : (0 : ℝ) < x ^ 2 := pow_pos hx0 2
+  rw [div_le_div_iff₀ hxp hx2]
+  calc (x + 1) ^ k * x ^ 2 ≤ ((2 : ℝ) ^ k * x ^ k) * x ^ 2 :=
+        mul_le_mul_of_nonneg_right habs (le_of_lt hx2)
+    _ = (2 : ℝ) ^ k * x ^ (k + 2) := by rw [pow_add]; ring
+
+/-- An inverse power decreases when the base increases. -/
+private theorem summable_bruhatMellin_of_polynomialCount_mul_inv_pow_le {K x t : ℝ} (hK : 0 ≤ K)
+    (ht : 0 < t) (htx : t ≤ x) (k : ℕ) : K / x ^ (k + 1) ≤ K / t ^ (k + 1) := by
+  have hx : (0 : ℝ) < x := lt_of_lt_of_le ht htx
+  have hmono : t ^ (k + 1) ≤ x ^ (k + 1) := pow_le_pow_left₀ (le_of_lt ht) htx _
+  have htp : (0 : ℝ) < t ^ (k + 1) := pow_pos ht _
+  have hxp : (0 : ℝ) < x ^ (k + 1) := pow_pos hx _
+  rw [div_le_div_iff₀ hxp htp]
+  calc K * t ^ (k + 1) ≤ K * x ^ (k + 1) := mul_le_mul_of_nonneg_left hmono hK
+    _ = K * x ^ (k + 1) := rfl
+
+/-- Paper: Lemma B.4.4.8, p. 624. Counting the level sets of the height
+`max |Im s| (max_j |n_j|)` polynomially and having quadratic decay in that height
+forces summability. This is the combinatorial half of Lemma B.4.4.8. -/
+private theorem summable_bruhatMellin_of_polynomialCount_of_polyCount_decay
+    {ι : Type*} (m : ι → ℝ) (hm : ∀ z, 0 ≤ m z) (C k : ℕ) (K : ℝ) (hK : 0 ≤ K)
+    (g : ι → ℝ)
+    (hcount : ∀ T : ℕ, {z : ι | m z ≤ (T : ℝ)}.encard ≤ ((C * (T + 1) ^ k : ℕ) : ℕ∞))
+    (hdecay : ∀ z, ‖g z‖ ≤ K / (1 + m z) ^ (k + 2)) :
+    Summable g := by
+  classical
+  set S : ι → ℕ := fun z => Nat.ceil (m z) with hSdef
+  have hSle (z : ι) : m z ≤ (S z : ℝ) := Nat.le_ceil (m z)
+  have hmzle : ∀ {z : ι} {t : ℕ}, S z = t → m z ≤ (t : ℝ) := by
+    intro z t hz
+    calc m z ≤ (S z : ℝ) := hSle z
+      _ = (t : ℝ) := by rw [hz]
+  have hfin : ∀ T : ℕ, {z : ι | S z ≤ T}.Finite := by
+    intro T
+    exact Set.finite_of_encard_le_coe
+      ((Set.encard_mono fun z hz => (hSle z).trans (by exact_mod_cast hz)).trans (hcount T))
+  have hcard : ∀ t : ℕ, {z : ι | S z = t}.encard ≤ ((C * (t + 1) ^ k : ℕ) : ℕ∞) := by
+    intro t
+    have hsub : {z : ι | S z = t} ⊆ {z : ι | m z ≤ (t : ℝ)} := by
+      intro z hz
+      exact hmzle hz
+    exact (Set.encard_mono hsub).trans (hcount t)
+  have hfibercard : ∀ (t : ℕ) (u : Finset ι), (∀ z ∈ u, S z = t) →
+      (u.card : ℝ) ≤ (C : ℝ) * (t + 1) ^ k := by
+    intro t u hu
+    have hcoe : ((u.card : ℕ) : ℕ∞) = (u : Set ι).encard :=
+      (Set.encard_coe_eq_coe_finsetCard u).symm
+    have hle : (u : Set ι).encard ≤ {z : ι | S z = t}.encard :=
+      Set.encard_mono fun z hz => hu z hz
+    have hnat : u.card ≤ C * (t + 1) ^ k := by
+      have : ((u.card : ℕ) : ℕ∞) ≤ ((C * (t + 1) ^ k : ℕ) : ℕ∞) := by
+        rw [hcoe]
+        exact hle.trans (hcard t)
+      exact_mod_cast this
+    exact_mod_cast hnat
+  -- decay of one term, with the level value in the base
+  have hterm : ∀ (t : ℕ) (z : ι), S z = t → ‖g z‖ ≤ K / (max (t : ℝ) 1) ^ (k + 2) := by
+    intro t z hz
+    rcases Nat.eq_zero_or_pos t with ht0 | htpos
+    · have hmz : m z = 0 := le_antisymm (by simpa [ht0] using hmzle hz) (hm z)
+      have hmax : max (t : ℝ) 1 = 1 := by simp [ht0]
+      have hthis := hdecay z
+      rw [hmax] at ⊢
+      simp only [hmz, add_zero, one_pow, div_one] at hthis ⊢
+      exact hthis
+    · have ht1 : (1 : ℝ) ≤ (t : ℝ) := by
+        exact_mod_cast htpos
+      have hmax : max (t : ℝ) 1 = (t : ℝ) := max_eq_left ht1
+      have hmet : ((t : ℝ) - 1) < m z := by
+        by_contra hcon
+        have hcon' : m z ≤ (t : ℝ) - 1 := not_lt.mp hcon
+        have hcast : ((t - 1 : ℕ) : ℝ) = (t : ℝ) - 1 := by
+          push_cast [show 1 ≤ t from htpos]
+          ring
+        have hle : S z ≤ t - 1 := by
+          rw [hSdef]
+          exact Nat.ceil_le.mpr (by rw [hcast]; exact hcon')
+        omega
+      have htm : (t : ℝ) ≤ 1 + m z := by linarith
+      have htpos' : (0 : ℝ) < (t : ℝ) := by linarith
+      rw [hmax]
+      exact (hdecay z).trans
+        (summable_bruhatMellin_of_polynomialCount_mul_inv_pow_le hK htpos' htm (k + 1))
+  -- the contribution of one level
+  have hshell : ∀ (t : ℕ) (u : Finset ι), (∀ z ∈ u, S z = t) →
+      ∑ z ∈ u, ‖g z‖ ≤ (C : ℝ) * K * (2 : ℝ) ^ k * 4 * (((t : ℝ) + 1) ^ 2)⁻¹ := by
+    intro t u hu
+    have hcard' := hfibercard t u hu
+    have hC : (0 : ℝ) ≤ (C : ℝ) := Nat.cast_nonneg _
+    have hCK : (0 : ℝ) ≤ (C : ℝ) * K := mul_nonneg hC hK
+    have hnn : (0 : ℝ) ≤ K / (max (t : ℝ) 1) ^ (k + 2) :=
+      div_nonneg hK (by positivity)
+    have hsum : ∑ z ∈ u, ‖g z‖ ≤ (u.card : ℝ) * (K / (max (t : ℝ) 1) ^ (k + 2)) := by
+      calc ∑ z ∈ u, ‖g z‖ ≤ ∑ _z ∈ u, (K / (max (t : ℝ) 1) ^ (k + 2)) :=
+            Finset.sum_le_sum (fun z hz => hterm t z (hu z hz))
+        _ = _ := by rw [Finset.sum_const, nsmul_eq_mul]
+    rcases Nat.eq_zero_or_pos t with ht0 | htpos
+    · have hmax : max (t : ℝ) 1 = 1 := by simp [ht0]
+      have hcard0 : (u.card : ℝ) ≤ (C : ℝ) := by simpa [ht0] using hcard'
+      have h1 : ∑ z ∈ u, ‖g z‖ ≤ (C : ℝ) * K := by
+        calc ∑ z ∈ u, ‖g z‖ ≤ (u.card : ℝ) * (K / (max (t : ℝ) 1) ^ (k + 2)) := hsum
+          _ = (u.card : ℝ) * K := by rw [hmax]; norm_num
+          _ ≤ (C : ℝ) * K := mul_le_mul_of_nonneg_right hcard0 hK
+      refine h1.trans ?_
+      rw [show (C : ℝ) * K * (2 : ℝ) ^ k * 4 * (((t : ℝ) + 1) ^ 2)⁻¹
+          = (C : ℝ) * K * ((2 : ℝ) ^ k * 4) by rw [ht0]; ring]
+      have h4 : (1 : ℝ) ≤ (2 : ℝ) ^ k * 4 := by
+        have h2 : (1 : ℝ) ≤ (2 : ℝ) ^ k := one_le_pow₀ (by norm_num)
+        linarith
+      calc (C : ℝ) * K = (C : ℝ) * K * 1 := by ring
+        _ ≤ (C : ℝ) * K * ((2 : ℝ) ^ k * 4) := mul_le_mul_of_nonneg_left h4 hCK
+    · have ht1 : (1 : ℝ) ≤ (t : ℝ) := by exact_mod_cast htpos
+      have hmax : max (t : ℝ) 1 = (t : ℝ) := max_eq_left ht1
+      have hstep : ((t : ℝ) + 1) ^ k / (t : ℝ) ^ (k + 2) ≤ (2 : ℝ) ^ k / (t : ℝ) ^ 2 :=
+        summable_bruhatMellin_of_polynomialCount_pow_add_div_pow (t : ℝ) ht1 k
+      have h4 : ((t : ℝ) ^ 2)⁻¹ ≤ 4 * (((t : ℝ) + 1) ^ 2)⁻¹ := by
+        have h1 : ((t : ℝ) + 1) ^ 2 * ((t : ℝ) ^ 2)⁻¹ ≤ 4 := by
+          rw [← div_eq_mul_inv, div_le_iff₀ (by positivity)]
+          nlinarith [sq_nonneg ((t : ℝ) - 1)]
+        have hq' : (0 : ℝ) ≤ (((t : ℝ) + 1) ^ 2)⁻¹ := by positivity
+        calc ((t : ℝ) ^ 2)⁻¹
+            = (((t : ℝ) + 1) ^ 2)⁻¹ * (((t : ℝ) + 1) ^ 2 * ((t : ℝ) ^ 2)⁻¹) := by
+              field_simp
+          _ ≤ (((t : ℝ) + 1) ^ 2)⁻¹ * 4 := mul_le_mul_of_nonneg_left h1 hq'
+          _ = 4 * (((t : ℝ) + 1) ^ 2)⁻¹ := by ring
+      have hnn' : (0 : ℝ) ≤ K / (t : ℝ) ^ (k + 2) :=
+        div_nonneg hK (by positivity)
+      calc ∑ z ∈ u, ‖g z‖ ≤ (u.card : ℝ) * (K / (max (t : ℝ) 1) ^ (k + 2)) := hsum
+        _ = (u.card : ℝ) * (K / (t : ℝ) ^ (k + 2)) := by rw [hmax]
+        _ ≤ ((C : ℝ) * ((t : ℝ) + 1) ^ k) * (K / (t : ℝ) ^ (k + 2)) :=
+            mul_le_mul_of_nonneg_right hcard' hnn'
+        _ = (C : ℝ) * K * (((t : ℝ) + 1) ^ k / (t : ℝ) ^ (k + 2)) := by ring
+        _ ≤ (C : ℝ) * K * ((2 : ℝ) ^ k / (t : ℝ) ^ 2) :=
+            mul_le_mul_of_nonneg_left hstep hCK
+        _ = (C : ℝ) * K * (2 : ℝ) ^ k * ((t : ℝ) ^ 2)⁻¹ := by
+            rw [div_eq_mul_inv]
+            ring
+        _ ≤ (C : ℝ) * K * (2 : ℝ) ^ k * (4 * (((t : ℝ) + 1) ^ 2)⁻¹) :=
+            mul_le_mul_of_nonneg_left h4 (by positivity)
+        _ = (C : ℝ) * K * (2 : ℝ) ^ k * 4 * (((t : ℝ) + 1) ^ 2)⁻¹ := by ring
+  -- assemble
+  have hbound : ∀ u : Finset ι, ∑ z ∈ u, ‖g z‖ ≤ (C : ℝ) * K * (2 : ℝ) ^ k * 8 := by
+    intro u
+    set T := u.sup S with hTdef
+    have hTu : ∀ z ∈ u, S z ≤ T := fun z hz => Finset.le_sup (f := S) hz
+    have hbox : u ⊆ (hfin T).toFinset := by
+      intro z hz
+      rw [Set.Finite.mem_toFinset]
+      exact hTu z hz
+    have hmaps : ∀ z ∈ (hfin T).toFinset, S z ∈ Finset.range (T + 1) := by
+      intro z hz
+      rw [Set.Finite.mem_toFinset] at hz
+      rw [Finset.mem_range]
+      exact Nat.lt_succ_of_le hz
+    have step1 : ∑ z ∈ u, ‖g z‖ ≤ ∑ z ∈ (hfin T).toFinset, ‖g z‖ :=
+      Finset.sum_le_sum_of_subset_of_nonneg hbox (fun _ _ _ => norm_nonneg _)
+    have step2 : ∑ z ∈ (hfin T).toFinset, ‖g z‖
+        = ∑ t ∈ Finset.range (T + 1),
+            ∑ z ∈ (hfin T).toFinset.filter (fun z => S z = t), ‖g z‖ :=
+      (Finset.sum_fiberwise_of_maps_to hmaps _).symm
+    have step3 : ∑ t ∈ Finset.range (T + 1),
+          ∑ z ∈ (hfin T).toFinset.filter (fun z => S z = t), ‖g z‖
+        ≤ ∑ t ∈ Finset.range (T + 1),
+            (C : ℝ) * K * (2 : ℝ) ^ k * 4 * (((t : ℝ) + 1) ^ 2)⁻¹ := by
+      refine Finset.sum_le_sum (fun t _ => ?_)
+      exact hshell t _ (fun z hz => (Finset.mem_filter.mp hz).2)
+    refine (step1.trans (step2.le.trans step3)).trans ?_
+    rw [← Finset.mul_sum]
+    have h0 : (0 : ℝ) ≤ (C : ℝ) * K * (2 : ℝ) ^ k * 4 := by positivity
+    calc (C : ℝ) * K * (2 : ℝ) ^ k * 4 *
+          ∑ t ∈ Finset.range (T + 1), (((t : ℝ) + 1) ^ 2)⁻¹
+        ≤ (C : ℝ) * K * (2 : ℝ) ^ k * 4 * 2 :=
+          mul_le_mul_of_nonneg_left
+            (summable_bruhatMellin_of_polynomialCount_sum_inv_sq_range (T + 1)) h0
+      _ = (C : ℝ) * K * (2 : ℝ) ^ k * 8 := by ring
+  exact Summable.of_norm (summable_of_sum_le (fun z => norm_nonneg _) hbound)
+
+end BruhatMellinPolynomialCountCombinatorics
+
+section ExplicitFormulaNormOneDecay
+
+/-- The Fourier coefficient on `C¹` of a test invariant under a norm-one class `w` vanishes
+at every character nontrivial at `w`. -/
+private theorem explicitFormula_coeff_eq_zero_of_invariant (f : 𝒟(C[F])) (χ : U[F])
+    (w : (ideleClassNorm F).ker) (hw : ∀ g : C[F], f.val (g * w) = f.val g)
+    (hχ : χ (w : C[F]) ≠ 1) :
+    ∫ u, f.val (u : C[F]) * (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F = 0 := by
+  let mK : MeasurableSpace (ideleClassNorm F).ker := Subtype.instMeasurableSpace
+  let : (normOneIdeleClassTamagawaMeasure F).IsHaarMeasure :=
+    (multiplicativeTamagawaMeasures_existsUnique F).exists.choose_spec.2.2.2.1
+  let : BorelSpace C[F] := ⟨rfl⟩
+  have hB : @BorelSpace (ideleClassNorm F).ker _ mK := Subtype.borelSpace _
+  have : @MeasurableMul (ideleClassNorm F).ker mK _ := @ContinuousMul.measurableMul _ _ mK hB _ _
+  set I := ∫ u, f.val (u : C[F]) * (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F
+    with hIdef
+  have hI : I = (χ (w : C[F]) : ℂ) * I := by
+    rw [← integral_const_mul]
+    refine (integral_mul_left_eq_self (μ := normOneIdeleClassTamagawaMeasure F)
+      (fun u : (ideleClassNorm F).ker ↦ f.val (u : C[F]) * (χ (u : C[F]) : ℂ)) w).symm.trans ?_
+    refine integral_congr_ae (.of_forall fun u ↦ ?_)
+    simp only [Subgroup.coe_mul, map_mul, Circle.coe_mul]
+    rw [mul_comm (w : C[F]) (u : C[F]), hw]
+    ring
+  have hχw : (χ (w : C[F]) : ℂ) ≠ 1 := fun h ↦ hχ (Circle.ext h)
+  have : (1 - (χ (w : C[F]) : ℂ)) * I = 0 := by rw [sub_mul, one_mul, ← hI, sub_self]
+  exact (mul_eq_zero.mp this).resolve_left (sub_ne_zero.mpr hχw.symm)
+
+/-- Integration by parts on `C¹` along a one-parameter subgroup `b` with values in `C¹`: the
+Fourier coefficient of the derivative of a test along `b` is `-κ` times that of the test, where
+`κ` is the derivative of `t ↦ χ(b(t))` at `0`. -/
+private theorem explicitFormula_normOne_coeff_flowDeriv (b : Multiplicative ℝ →ₜ* C[F])
+    (hb : ∀ t, b t ∈ (ideleClassNorm F).ker) (χ : U[F]) (f : 𝒟(C[F])) :
+    ∫ u, bruhatDirectionalDeriv b f.val (u : C[F]) * (χ (u : C[F]) : ℂ)
+        ∂normOneIdeleClassTamagawaMeasure F =
+      -(bruhatDirectionalDeriv b (fun x : C[F] ↦ (χ x : ℂ)) 1 *
+        ∫ u, f.val (u : C[F]) * (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F) := by
+  let mK : MeasurableSpace (ideleClassNorm F).ker := Subtype.instMeasurableSpace
+  let : (normOneIdeleClassTamagawaMeasure F).IsHaarMeasure :=
+    (multiplicativeTamagawaMeasures_existsUnique F).exists.choose_spec.2.2.2.1
+  let : BorelSpace C[F] := ⟨rfl⟩
+  have hB : @BorelSpace (ideleClassNorm F).ker _ mK := Subtype.borelSpace _
+  have : @MeasurableMul (ideleClassNorm F).ker mK _ := @ContinuousMul.measurableMul _ _ mK hB _ _
+  have hχ1 : IsBruhatContDiff 1 (fun x : C[F] ↦ (χ x : ℂ)) :=
+    (mem_bruhatSmoothSubmodule_iff _).mp (pontryaginDual_mem_bruhatSmooth χ) 1
+  have hκ : HasDerivAt (fun t : ℝ ↦ (χ (b (Multiplicative.ofAdd t)) : ℂ))
+      (bruhatDirectionalDeriv b (fun x : C[F] ↦ (χ x : ℂ)) 1) 0 := by
+    simpa only [one_mul] using hasDerivAt_bruhatDirectionalDeriv b hχ1 1
+  have hP (y : ℝ) : ∫ u, f.val (b (Multiplicative.ofAdd y) * (u : C[F])) *
+      (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F =
+      (χ (b (Multiplicative.ofAdd y)) : ℂ)⁻¹ *
+        ∫ u, f.val (u : C[F]) * (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F := by
+    let w : (ideleClassNorm F).ker := ⟨b (Multiplicative.ofAdd y), hb _⟩
+    rw [eq_inv_mul_iff_mul_eq₀ (Circle.coe_ne_zero _), ← integral_const_mul]
+    refine (integral_congr_ae (.of_forall fun u ↦ ?_)).trans
+      (integral_mul_left_eq_self (μ := normOneIdeleClassTamagawaMeasure F)
+        (fun u : (ideleClassNorm F).ker ↦ f.val (u : C[F]) * (χ (u : C[F]) : ℂ)) w)
+    change (χ (w : C[F]) : ℂ) * (f.val ((w : C[F]) * (u : C[F])) * (χ (u : C[F]) : ℂ)) =
+      f.val (((w * u : (ideleClassNorm F).ker)) : C[F]) *
+        (χ (((w * u : (ideleClassNorm F).ker)) : C[F]) : ℂ)
+    rw [Subgroup.coe_mul, map_mul, Circle.coe_mul]
+    ring
+  have hinv : HasDerivAt (fun y : ℝ ↦ (χ (b (Multiplicative.ofAdd y)) : ℂ)⁻¹ *
+      ∫ u, f.val (u : C[F]) * (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F)
+      (-bruhatDirectionalDeriv b (fun x : C[F] ↦ (χ x : ℂ)) 1 *
+        ∫ u, f.val (u : C[F]) * (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F) 0 := by
+    have h1 : (χ (b (Multiplicative.ofAdd 0)) : ℂ) = 1 := by
+      rw [ofAdd_zero, map_one, map_one, Circle.coe_one]
+    refine ((hκ.fun_inv (by rw [h1]; exact one_ne_zero)).mul_const
+      (∫ u, f.val (u : C[F]) * (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F)).congr_deriv ?_
+    rw [h1, one_pow, div_one]
+  have hd := (explicitFormula_radial_hasDerivAt b χ f 0).unique
+    (hinv.congr_of_eventuallyEq (.of_forall hP))
+  rw [ofAdd_zero, map_one] at hd
+  simp only [one_mul] at hd
+  rw [hd, neg_mul]
+
+/-- Iterating the integration by parts: for each `N` there is a test (the `N`-th derivative
+along `b`) whose Fourier coefficients on `C¹` are those of `f` times `(-κ)^N`. -/
+private theorem explicitFormula_normOne_coeff_flowDeriv_pow (b : Multiplicative ℝ →ₜ* C[F])
+    (hb : ∀ t, b t ∈ (ideleClassNorm F).ker) (N : ℕ) (f : 𝒟(C[F])) :
+    ∃ g : 𝒟(C[F]), ∀ χ : U[F],
+      ∫ u, g.val (u : C[F]) * (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F =
+        (-bruhatDirectionalDeriv b (fun x : C[F] ↦ (χ x : ℂ)) 1) ^ N *
+          ∫ u, f.val (u : C[F]) * (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F := by
+  induction N with
+  | zero => exact ⟨f, fun χ ↦ by rw [pow_zero, one_mul]⟩
+  | succ N ih =>
+    obtain ⟨g, hg⟩ := ih
+    refine ⟨⟨bruhatDirectionalDeriv b g.val, explicitFormula_flowDeriv_mem b g⟩, fun χ ↦ ?_⟩
+    change ∫ u, bruhatDirectionalDeriv b g.val (u : C[F]) * (χ (u : C[F]) : ℂ)
+      ∂normOneIdeleClassTamagawaMeasure F = _
+    rw [explicitFormula_normOne_coeff_flowDeriv b hb χ g, hg, pow_succ]
+    ring
+
+/-- The Fourier coefficients on `C¹` of a test are bounded uniformly in the character. -/
+private theorem explicitFormula_normOne_coeff_bound (f : 𝒟(C[F])) :
+    ∃ B : ℝ, ∀ χ : U[F], ‖∫ u, f.val (u : C[F]) * (χ (u : C[F]) : ℂ)
+      ∂normOneIdeleClassTamagawaMeasure F‖ ≤ B := by
+  have : IsFiniteMeasure (normOneIdeleClassTamagawaMeasure F) :=
+    ⟨by rw [normOneIdeleClassTamagawaMeasure_volume]; exact ENNReal.ofReal_lt_top⟩
+  obtain ⟨C, hC⟩ := (explicitTest_continuous f).bounded_above_of_compact_support f.property.2
+  refine ⟨C * (normOneIdeleClassTamagawaMeasure F).real univ, fun χ ↦
+    norm_integral_le_of_norm_le_const (.of_forall fun u ↦ ?_)⟩
+  rw [norm_mul, Circle.norm_coe, mul_one]
+  exact hC _
+
+/-- Paper: Lemma B.4.4.8, p. 624 (the decay half, on `C¹`). Along a one-parameter subgroup `b`
+of the idele classes with values in `C¹`, the Fourier coefficient of a test at `χ` decays faster
+than any power of the frequency `κ_b(χ)`, the derivative of `t ↦ χ(b(t))` at `0`: for each `N`,
+`|κ_b(χ)|^N |∫_{C¹} f χ|` is bounded independently of `χ`. -/
+private theorem explicitFormula_normOne_coeff_decay (b : Multiplicative ℝ →ₜ* C[F])
+    (hb : ∀ t, b t ∈ (ideleClassNorm F).ker) (N : ℕ) (f : 𝒟(C[F])) :
+    ∃ B : ℝ, ∀ χ : U[F], ‖bruhatDirectionalDeriv b (fun x : C[F] ↦ (χ x : ℂ)) 1‖ ^ N *
+      ‖∫ u, f.val (u : C[F]) * (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F‖ ≤ B := by
+  obtain ⟨g, hg⟩ := explicitFormula_normOne_coeff_flowDeriv_pow b hb N f
+  obtain ⟨B, hB⟩ := explicitFormula_normOne_coeff_bound g
+  refine ⟨B, fun χ ↦ ?_⟩
+  rw [← norm_neg (bruhatDirectionalDeriv b _ 1), ← norm_pow, ← norm_mul, ← hg]
+  exact hB χ
+
+/-- Assembly of the absolute convergence on `C¹`: if `f` is invariant under `k`, and the
+characters trivial on `k ∩ C¹` with frequencies at most `T` along finitely many one-parameter
+subgroups `b j` of `C¹` number at most `C (T + 1)^d`, the Fourier coefficients of `f` are
+absolutely summable. Off `k ∩ C¹` they vanish; on it they decay like `(1 + ∑ |κ_j|)^{-(d+2)}`. -/
+private theorem explicitFormula_normOneFourier_summable_of_count (τ : ℝ≥0ˣ →ₜ* C[F])
+    (f : 𝒟(C[F])) (k : Subgroup C[F]) (hinv : ∀ h : k, ∀ x, f.val (h.val * x) = f.val x)
+    (r : ℕ) (b : Fin r → Multiplicative ℝ →ₜ* C[F])
+    (hb : ∀ j t, b j t ∈ (ideleClassNorm F).ker) (C d : ℕ)
+    (hcount : ∀ T : ℕ,
+      {χ : chartChars(τ) | (∀ u : (ideleClassNorm F).ker, (u : C[F]) ∈ k → χ.val u = 1) ∧
+        ∀ j, ‖bruhatDirectionalDeriv (b j) (fun x : C[F] ↦ (χ.val x : ℂ)) 1‖ ≤ T}.encard ≤
+        ((C * (T + 1) ^ d : ℕ) : ℕ∞)) :
+    Summable (fun χ : chartChars(τ) ↦
+      ‖∫ u, f.val (u : C[F]) * (χ.val (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F‖) := by
+  classical
+  let S : Set chartChars(τ) :=
+    {χ | ∀ u : (ideleClassNorm F).ker, (u : C[F]) ∈ k → χ.val u = 1}
+  let c : chartChars(τ) → ℝ := fun χ ↦
+    ‖∫ u, f.val (u : C[F]) * (χ.val (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F‖
+  have hzero : ∀ χ ∉ Set.range ((↑) : S → chartChars(τ)), c χ = 0 := by
+    intro χ hχ
+    have hχS : χ ∉ S := fun h ↦ hχ ⟨⟨χ, h⟩, rfl⟩
+    simp only [S, Set.mem_ofPred_eq, not_forall] at hχS
+    obtain ⟨u, hu, hχu⟩ := hχS
+    change ‖_‖ = 0
+    rw [explicitFormula_coeff_eq_zero_of_invariant f χ.val u
+      (fun g ↦ by rw [mul_comm]; exact hinv ⟨u, hu⟩ g) hχu, norm_zero]
+  refine (Function.Injective.summable_iff Subtype.val_injective hzero).mp ?_
+  let κ : Fin r → chartChars(τ) → ℂ := fun j χ ↦
+    bruhatDirectionalDeriv (b j) (fun x : C[F] ↦ (χ.val x : ℂ)) 1
+  let m : S → ℝ := fun χ ↦ ∑ j, ‖κ j χ.val‖
+  have hm : ∀ χ, 0 ≤ m χ := fun χ ↦ Finset.sum_nonneg fun j _ ↦ norm_nonneg _
+  obtain ⟨B0, hB0⟩ := explicitFormula_normOne_coeff_bound f
+  choose B hB using fun j ↦ explicitFormula_normOne_coeff_decay (b j) (hb j) (d + 2) f
+  have hB0nn : 0 ≤ B0 := (norm_nonneg _).trans (hB0 1)
+  have hBnn (j : Fin r) : 0 ≤ B j := (mul_nonneg (pow_nonneg (norm_nonneg _) _) (norm_nonneg _)).trans (hB j 1)
+  refine summable_bruhatMellin_of_polynomialCount_of_polyCount_decay (g := c ∘ Subtype.val)
+    m hm C d (((r : ℝ) + 1) ^ (d + 1) * (B0 + ∑ j, B j))
+    (mul_nonneg (by positivity) (add_nonneg hB0nn (Finset.sum_nonneg fun j _ ↦ hBnn j)))
+    (fun T ↦ ?_) (fun χ ↦ ?_)
+  · rw [← Subtype.val_injective.encard_image]
+    refine (Set.encard_mono ?_).trans (hcount T)
+    rintro _ ⟨χ, hχ, rfl⟩
+    exact ⟨χ.2, fun j ↦ (Finset.single_le_sum (fun i _ ↦ norm_nonneg (κ i χ.val))
+      (Finset.mem_univ j)).trans hχ⟩
+  · have hc0 : 0 ≤ c χ.val := norm_nonneg _
+    rw [Function.comp_apply, Real.norm_of_nonneg hc0, le_div_iff₀ (by positivity)]
+    let g : Option (Fin r) → ℝ := fun o ↦ o.elim 1 fun j ↦ ‖κ j χ.val‖
+    have hg : ∀ o ∈ (Finset.univ : Finset (Option (Fin r))), 0 ≤ g o := by
+      rintro (_ | j) _
+      · exact zero_le_one
+      · exact norm_nonneg _
+    have hJ := pow_sum_le_card_mul_sum_pow hg (d + 1)
+    simp only [Finset.card_univ, Fintype.card_option, Fintype.card_fin, Fintype.sum_option,
+      Option.elim, g, one_pow] at hJ
+    push_cast at hJ
+    have hsum : ∑ j, ‖κ j χ.val‖ ^ (d + 2) * c χ.val ≤ ∑ j, B j :=
+      Finset.sum_le_sum fun j _ ↦ hB j χ.val.val
+    calc c χ.val * (1 + m χ) ^ (d + 2)
+        ≤ c χ.val * (((r : ℝ) + 1) ^ (d + 1) * (1 + ∑ j, ‖κ j χ.val‖ ^ (d + 2))) :=
+          mul_le_mul_of_nonneg_left hJ hc0
+      _ = ((r : ℝ) + 1) ^ (d + 1) * (c χ.val + ∑ j, ‖κ j χ.val‖ ^ (d + 2) * c χ.val) := by
+          rw [← Finset.sum_mul]
+          ring
+      _ ≤ ((r : ℝ) + 1) ^ (d + 1) * (B0 + ∑ j, B j) := by
+          gcongr
+          exact hB0 χ.val.val
+
+end ExplicitFormulaNormOneDecay
+
+/-- Paper: Lemma B.4.4.9, pp. 624–625 (the counting step, through Lemma B.4.4.8, p. 624).
+For a good subgroup `k` of the idele classes there are finitely many one-parameter subgroups
+`b j` of the norm-one classes `C¹` such that the characters trivial on the image of the norm
+section `τ` (equivalently, the characters of `C¹`) that are trivial on `k ∩ C¹` and have all
+frequencies `κ_j(χ)` (the derivative of `t ↦ χ(b j t)` at `0`) of size at most `T` number at
+most `C (T + 1)^d`.
+
+Why it holds. `k` is compact (its annihilator is open), and `C¹/(k ∩ C¹)` is a compact abelian
+Lie group, a torus `𝕋^d` times a finite group: the image of the profinite finite-unit part in a
+Lie group is finite, so `k` contains the image of an open subgroup `U` of the finite idele units,
+and `C¹/U` is an extension of a finite ray class group by the archimedean norm-one units modulo
+the units congruent to `1` (Dirichlet's unit theorem). Take for `b` the archimedean norm-one
+flows (`t ↦ e^{t x}` at the archimedean places with `x` in the trace-zero hyperplane, and the
+rotations at the complex places); their images span the Lie algebra of `𝕋^d`. A character of
+`𝕋^d × A` is `(n, a)` with `n ∈ ℤ^d`, and `κ_j = 2πi ⟨n, v_j⟩` for vectors `v_j` spanning
+`ℝ^d`, so `‖n‖ ≤ c · max_j |κ_j|`, and there are at most `|Â| (2cT + 1)^d` such characters. -/
+theorem idelicExplicitFormula_normOneFourier_count (τ : ℝ≥0ˣ →ₜ* C[F])
+    (_hτ : RightInverse τ (ideleClassNorm F)) (k : Subgroup C[F])
+    (_hk : IsBruhatGoodSubgroup k) :
+    ∃ (r : ℕ) (b : Fin r → Multiplicative ℝ →ₜ* C[F]),
+      (∀ j t, b j t ∈ (ideleClassNorm F).ker) ∧ ∃ C d : ℕ, ∀ T : ℕ,
+        {χ : chartChars(τ) | (∀ u : (ideleClassNorm F).ker, (u : C[F]) ∈ k → χ.val u = 1) ∧
+          ∀ j, ‖bruhatDirectionalDeriv (b j) (fun x : C[F] ↦ (χ.val x : ℂ)) 1‖ ≤ T}.encard ≤
+          ((C * (T + 1) ^ d : ℕ) : ℕ∞) := by
+  sorry
+
 /-- Paper: Theorem B.4.4.7, pp. 625–626 (Fourier inversion on `C¹`, absolute convergence).
 The Fourier coefficients `∫_{C¹} f(u) χ(u) du` of a test `f` on the idele classes, indexed by
 the characters trivial on the image of the norm section `τ` (these restrict bijectively to the
@@ -10317,7 +10752,9 @@ theorem idelicExplicitFormula_normOneFourier_summable (τ : ℝ≥0ˣ →ₜ* C[
     (_hτ : RightInverse τ (ideleClassNorm F)) (f : 𝒟(C[F])) :
     Summable (fun χ : chartChars(τ) ↦
       ‖∫ u, f.val (u : C[F]) * (χ.val (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F‖) := by
-  sorry
+  obtain ⟨k, hk, hinv, -⟩ := (mem_bruhatSmoothSubmodule_iff _).mp f.property.1 0
+  obtain ⟨r, b, hb, C, d, hcount⟩ := idelicExplicitFormula_normOneFourier_count τ _hτ k hk
+  exact explicitFormula_normOneFourier_summable_of_count τ f k hinv r b hb C d hcount
 
 /-- Paper: Theorem B.4.4.7, pp. 625–626 (Fourier inversion on `C¹`). For a test `f` on the
 idele classes and a norm-one class `c`, the Fourier series of `f` on the compact group `C¹`
@@ -10574,32 +11011,6 @@ private theorem explicitFormula_test_congruence_invariant (f : 𝒟(C[F])) (v : 
     rwa [zpow_neg, zpow_natCast, ← inv_pow]))
   rw [mul_comm]
   exact hinv ⟨_, hVk u huV⟩ g
-
-/-- The Fourier coefficient on `C¹` of a test invariant under a norm-one class `w` vanishes
-at every character nontrivial at `w`. -/
-private theorem explicitFormula_coeff_eq_zero_of_invariant (f : 𝒟(C[F])) (χ : U[F])
-    (w : (ideleClassNorm F).ker) (hw : ∀ g : C[F], f.val (g * w) = f.val g)
-    (hχ : χ (w : C[F]) ≠ 1) :
-    ∫ u, f.val (u : C[F]) * (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F = 0 := by
-  let mK : MeasurableSpace (ideleClassNorm F).ker := Subtype.instMeasurableSpace
-  let : (normOneIdeleClassTamagawaMeasure F).IsHaarMeasure :=
-    (multiplicativeTamagawaMeasures_existsUnique F).exists.choose_spec.2.2.2.1
-  let : BorelSpace C[F] := ⟨rfl⟩
-  have hB : @BorelSpace (ideleClassNorm F).ker _ mK := Subtype.borelSpace _
-  have : @MeasurableMul (ideleClassNorm F).ker mK _ := @ContinuousMul.measurableMul _ _ mK hB _ _
-  set I := ∫ u, f.val (u : C[F]) * (χ (u : C[F]) : ℂ) ∂normOneIdeleClassTamagawaMeasure F
-    with hIdef
-  have hI : I = (χ (w : C[F]) : ℂ) * I := by
-    rw [← integral_const_mul]
-    refine (integral_mul_left_eq_self (μ := normOneIdeleClassTamagawaMeasure F)
-      (fun u : (ideleClassNorm F).ker ↦ f.val (u : C[F]) * (χ (u : C[F]) : ℂ)) w).symm.trans ?_
-    refine integral_congr_ae (.of_forall fun u ↦ ?_)
-    simp only [Subgroup.coe_mul, map_mul, Circle.coe_mul]
-    rw [mul_comm (w : C[F]) (u : C[F]), hw]
-    ring
-  have hχw : (χ (w : C[F]) : ℂ) ≠ 1 := fun h ↦ hχ (Circle.ext h)
-  have : (1 - (χ (w : C[F]) : ℂ)) * I = 0 := by rw [sub_mul, one_mul, ← hI, sub_self]
-  exact (mul_eq_zero.mp this).resolve_left (sub_ne_zero.mpr hχw.symm)
 
 /-- Termwise integration of an absolutely summable family of uniformly bounded functions
 against a finite measure, without a countability assumption on the index type (the terms
@@ -12720,220 +13131,6 @@ theorem idelicExplicitFormula (τ : ℝ≥0ˣ →ₜ* C[F]) (_hτ : RightInverse
 -- In (B.4.4.18), c(τ(t)) already equals t^s. Use this radial character once.
 
 section BruhatMellinPolynomialCount
-
-/-- The model series `1/1^2 + 1/2^2 + ...` has partial sums bounded by two. -/
-private theorem summable_bruhatMellin_of_polynomialCount_sum_inv_sq_range (n : ℕ) :
-    ∑ t ∈ Finset.range n, (((t : ℝ) + 1) ^ 2)⁻¹ ≤ 2 := by
-  have key : ∀ m : ℕ,
-      ∑ t ∈ Finset.range m, (((t : ℝ) + 1) ^ 2)⁻¹ ≤ 2 - (m : ℝ)⁻¹ := by
-    intro m
-    induction m with
-    | zero => norm_num
-    | succ p ih =>
-      rw [Finset.sum_range_succ]
-      rcases Nat.eq_zero_or_pos p with hp0 | hp
-      · subst hp0
-        norm_num
-      · have hstep : (((p : ℝ) + 1) ^ 2)⁻¹ ≤ (p : ℝ)⁻¹ - ((p : ℝ) + 1)⁻¹ := by
-          have h1 : (p : ℝ) ≠ 0 := by positivity
-          have h2 : (p : ℝ) + 1 ≠ 0 := by positivity
-          field_simp
-          nlinarith
-        have hcast : ((p + 1 : ℕ) : ℝ)⁻¹ = ((p : ℝ) + 1)⁻¹ := by
-          push_cast
-          ring
-        rw [hcast]
-        linarith
-  exact (key n).trans (by
-    have : (0 : ℝ) ≤ (n : ℝ)⁻¹ := by positivity
-    linarith)
-
-/-- Absorbing polynomial growth into the quadratic decay. -/
-private theorem summable_bruhatMellin_of_polynomialCount_pow_add_div_pow (x : ℝ) (hx : 1 ≤ x)
-    (k : ℕ) : (x + 1) ^ k / x ^ (k + 2) ≤ (2 : ℝ) ^ k / x ^ 2 := by
-  have hx0 : (0 : ℝ) < x := by linarith
-  have habs : (x + 1) ^ k ≤ (2 : ℝ) ^ k * x ^ k := by
-    have hle : x + 1 ≤ 2 * x := by linarith
-    calc (x + 1) ^ k ≤ (2 * x) ^ k := pow_le_pow_left₀ (by linarith) hle k
-      _ = (2 : ℝ) ^ k * x ^ k := mul_pow _ _ _
-  have hxp : (0 : ℝ) < x ^ (k + 2) := pow_pos hx0 _
-  have hx2 : (0 : ℝ) < x ^ 2 := pow_pos hx0 2
-  rw [div_le_div_iff₀ hxp hx2]
-  calc (x + 1) ^ k * x ^ 2 ≤ ((2 : ℝ) ^ k * x ^ k) * x ^ 2 :=
-        mul_le_mul_of_nonneg_right habs (le_of_lt hx2)
-    _ = (2 : ℝ) ^ k * x ^ (k + 2) := by rw [pow_add]; ring
-
-/-- An inverse power decreases when the base increases. -/
-private theorem summable_bruhatMellin_of_polynomialCount_mul_inv_pow_le {K x t : ℝ} (hK : 0 ≤ K)
-    (ht : 0 < t) (htx : t ≤ x) (k : ℕ) : K / x ^ (k + 1) ≤ K / t ^ (k + 1) := by
-  have hx : (0 : ℝ) < x := lt_of_lt_of_le ht htx
-  have hmono : t ^ (k + 1) ≤ x ^ (k + 1) := pow_le_pow_left₀ (le_of_lt ht) htx _
-  have htp : (0 : ℝ) < t ^ (k + 1) := pow_pos ht _
-  have hxp : (0 : ℝ) < x ^ (k + 1) := pow_pos hx _
-  rw [div_le_div_iff₀ hxp htp]
-  calc K * t ^ (k + 1) ≤ K * x ^ (k + 1) := mul_le_mul_of_nonneg_left hmono hK
-    _ = K * x ^ (k + 1) := rfl
-
-/-- Paper: Lemma B.4.4.8, p. 624. Counting the level sets of the height
-`max |Im s| (max_j |n_j|)` polynomially and having quadratic decay in that height
-forces summability. This is the combinatorial half of Lemma B.4.4.8. -/
-private theorem summable_bruhatMellin_of_polynomialCount_of_polyCount_decay
-    {ι : Type*} (m : ι → ℝ) (hm : ∀ z, 0 ≤ m z) (C k : ℕ) (K : ℝ) (hK : 0 ≤ K)
-    (g : ι → ℝ)
-    (hcount : ∀ T : ℕ, {z : ι | m z ≤ (T : ℝ)}.encard ≤ ((C * (T + 1) ^ k : ℕ) : ℕ∞))
-    (hdecay : ∀ z, ‖g z‖ ≤ K / (1 + m z) ^ (k + 2)) :
-    Summable g := by
-  classical
-  set S : ι → ℕ := fun z => Nat.ceil (m z) with hSdef
-  have hSle (z : ι) : m z ≤ (S z : ℝ) := Nat.le_ceil (m z)
-  have hmzle : ∀ {z : ι} {t : ℕ}, S z = t → m z ≤ (t : ℝ) := by
-    intro z t hz
-    calc m z ≤ (S z : ℝ) := hSle z
-      _ = (t : ℝ) := by rw [hz]
-  have hfin : ∀ T : ℕ, {z : ι | S z ≤ T}.Finite := by
-    intro T
-    exact Set.finite_of_encard_le_coe
-      ((Set.encard_mono fun z hz => (hSle z).trans (by exact_mod_cast hz)).trans (hcount T))
-  have hcard : ∀ t : ℕ, {z : ι | S z = t}.encard ≤ ((C * (t + 1) ^ k : ℕ) : ℕ∞) := by
-    intro t
-    have hsub : {z : ι | S z = t} ⊆ {z : ι | m z ≤ (t : ℝ)} := by
-      intro z hz
-      exact hmzle hz
-    exact (Set.encard_mono hsub).trans (hcount t)
-  have hfibercard : ∀ (t : ℕ) (u : Finset ι), (∀ z ∈ u, S z = t) →
-      (u.card : ℝ) ≤ (C : ℝ) * (t + 1) ^ k := by
-    intro t u hu
-    have hcoe : ((u.card : ℕ) : ℕ∞) = (u : Set ι).encard :=
-      (Set.encard_coe_eq_coe_finsetCard u).symm
-    have hle : (u : Set ι).encard ≤ {z : ι | S z = t}.encard :=
-      Set.encard_mono fun z hz => hu z hz
-    have hnat : u.card ≤ C * (t + 1) ^ k := by
-      have : ((u.card : ℕ) : ℕ∞) ≤ ((C * (t + 1) ^ k : ℕ) : ℕ∞) := by
-        rw [hcoe]
-        exact hle.trans (hcard t)
-      exact_mod_cast this
-    exact_mod_cast hnat
-  -- decay of one term, with the level value in the base
-  have hterm : ∀ (t : ℕ) (z : ι), S z = t → ‖g z‖ ≤ K / (max (t : ℝ) 1) ^ (k + 2) := by
-    intro t z hz
-    rcases Nat.eq_zero_or_pos t with ht0 | htpos
-    · have hmz : m z = 0 := le_antisymm (by simpa [ht0] using hmzle hz) (hm z)
-      have hmax : max (t : ℝ) 1 = 1 := by simp [ht0]
-      have hthis := hdecay z
-      rw [hmax] at ⊢
-      simp only [hmz, add_zero, one_pow, div_one] at hthis ⊢
-      exact hthis
-    · have ht1 : (1 : ℝ) ≤ (t : ℝ) := by
-        exact_mod_cast htpos
-      have hmax : max (t : ℝ) 1 = (t : ℝ) := max_eq_left ht1
-      have hmet : ((t : ℝ) - 1) < m z := by
-        by_contra hcon
-        have hcon' : m z ≤ (t : ℝ) - 1 := not_lt.mp hcon
-        have hcast : ((t - 1 : ℕ) : ℝ) = (t : ℝ) - 1 := by
-          push_cast [show 1 ≤ t from htpos]
-          ring
-        have hle : S z ≤ t - 1 := by
-          rw [hSdef]
-          exact Nat.ceil_le.mpr (by rw [hcast]; exact hcon')
-        omega
-      have htm : (t : ℝ) ≤ 1 + m z := by linarith
-      have htpos' : (0 : ℝ) < (t : ℝ) := by linarith
-      rw [hmax]
-      exact (hdecay z).trans
-        (summable_bruhatMellin_of_polynomialCount_mul_inv_pow_le hK htpos' htm (k + 1))
-  -- the contribution of one level
-  have hshell : ∀ (t : ℕ) (u : Finset ι), (∀ z ∈ u, S z = t) →
-      ∑ z ∈ u, ‖g z‖ ≤ (C : ℝ) * K * (2 : ℝ) ^ k * 4 * (((t : ℝ) + 1) ^ 2)⁻¹ := by
-    intro t u hu
-    have hcard' := hfibercard t u hu
-    have hC : (0 : ℝ) ≤ (C : ℝ) := Nat.cast_nonneg _
-    have hCK : (0 : ℝ) ≤ (C : ℝ) * K := mul_nonneg hC hK
-    have hnn : (0 : ℝ) ≤ K / (max (t : ℝ) 1) ^ (k + 2) :=
-      div_nonneg hK (by positivity)
-    have hsum : ∑ z ∈ u, ‖g z‖ ≤ (u.card : ℝ) * (K / (max (t : ℝ) 1) ^ (k + 2)) := by
-      calc ∑ z ∈ u, ‖g z‖ ≤ ∑ _z ∈ u, (K / (max (t : ℝ) 1) ^ (k + 2)) :=
-            Finset.sum_le_sum (fun z hz => hterm t z (hu z hz))
-        _ = _ := by rw [Finset.sum_const, nsmul_eq_mul]
-    rcases Nat.eq_zero_or_pos t with ht0 | htpos
-    · have hmax : max (t : ℝ) 1 = 1 := by simp [ht0]
-      have hcard0 : (u.card : ℝ) ≤ (C : ℝ) := by simpa [ht0] using hcard'
-      have h1 : ∑ z ∈ u, ‖g z‖ ≤ (C : ℝ) * K := by
-        calc ∑ z ∈ u, ‖g z‖ ≤ (u.card : ℝ) * (K / (max (t : ℝ) 1) ^ (k + 2)) := hsum
-          _ = (u.card : ℝ) * K := by rw [hmax]; norm_num
-          _ ≤ (C : ℝ) * K := mul_le_mul_of_nonneg_right hcard0 hK
-      refine h1.trans ?_
-      rw [show (C : ℝ) * K * (2 : ℝ) ^ k * 4 * (((t : ℝ) + 1) ^ 2)⁻¹
-          = (C : ℝ) * K * ((2 : ℝ) ^ k * 4) by rw [ht0]; ring]
-      have h4 : (1 : ℝ) ≤ (2 : ℝ) ^ k * 4 := by
-        have h2 : (1 : ℝ) ≤ (2 : ℝ) ^ k := one_le_pow₀ (by norm_num)
-        linarith
-      calc (C : ℝ) * K = (C : ℝ) * K * 1 := by ring
-        _ ≤ (C : ℝ) * K * ((2 : ℝ) ^ k * 4) := mul_le_mul_of_nonneg_left h4 hCK
-    · have ht1 : (1 : ℝ) ≤ (t : ℝ) := by exact_mod_cast htpos
-      have hmax : max (t : ℝ) 1 = (t : ℝ) := max_eq_left ht1
-      have hstep : ((t : ℝ) + 1) ^ k / (t : ℝ) ^ (k + 2) ≤ (2 : ℝ) ^ k / (t : ℝ) ^ 2 :=
-        summable_bruhatMellin_of_polynomialCount_pow_add_div_pow (t : ℝ) ht1 k
-      have h4 : ((t : ℝ) ^ 2)⁻¹ ≤ 4 * (((t : ℝ) + 1) ^ 2)⁻¹ := by
-        have h1 : ((t : ℝ) + 1) ^ 2 * ((t : ℝ) ^ 2)⁻¹ ≤ 4 := by
-          rw [← div_eq_mul_inv, div_le_iff₀ (by positivity)]
-          nlinarith [sq_nonneg ((t : ℝ) - 1)]
-        have hq' : (0 : ℝ) ≤ (((t : ℝ) + 1) ^ 2)⁻¹ := by positivity
-        calc ((t : ℝ) ^ 2)⁻¹
-            = (((t : ℝ) + 1) ^ 2)⁻¹ * (((t : ℝ) + 1) ^ 2 * ((t : ℝ) ^ 2)⁻¹) := by
-              field_simp
-          _ ≤ (((t : ℝ) + 1) ^ 2)⁻¹ * 4 := mul_le_mul_of_nonneg_left h1 hq'
-          _ = 4 * (((t : ℝ) + 1) ^ 2)⁻¹ := by ring
-      have hnn' : (0 : ℝ) ≤ K / (t : ℝ) ^ (k + 2) :=
-        div_nonneg hK (by positivity)
-      calc ∑ z ∈ u, ‖g z‖ ≤ (u.card : ℝ) * (K / (max (t : ℝ) 1) ^ (k + 2)) := hsum
-        _ = (u.card : ℝ) * (K / (t : ℝ) ^ (k + 2)) := by rw [hmax]
-        _ ≤ ((C : ℝ) * ((t : ℝ) + 1) ^ k) * (K / (t : ℝ) ^ (k + 2)) :=
-            mul_le_mul_of_nonneg_right hcard' hnn'
-        _ = (C : ℝ) * K * (((t : ℝ) + 1) ^ k / (t : ℝ) ^ (k + 2)) := by ring
-        _ ≤ (C : ℝ) * K * ((2 : ℝ) ^ k / (t : ℝ) ^ 2) :=
-            mul_le_mul_of_nonneg_left hstep hCK
-        _ = (C : ℝ) * K * (2 : ℝ) ^ k * ((t : ℝ) ^ 2)⁻¹ := by
-            rw [div_eq_mul_inv]
-            ring
-        _ ≤ (C : ℝ) * K * (2 : ℝ) ^ k * (4 * (((t : ℝ) + 1) ^ 2)⁻¹) :=
-            mul_le_mul_of_nonneg_left h4 (by positivity)
-        _ = (C : ℝ) * K * (2 : ℝ) ^ k * 4 * (((t : ℝ) + 1) ^ 2)⁻¹ := by ring
-  -- assemble
-  have hbound : ∀ u : Finset ι, ∑ z ∈ u, ‖g z‖ ≤ (C : ℝ) * K * (2 : ℝ) ^ k * 8 := by
-    intro u
-    set T := u.sup S with hTdef
-    have hTu : ∀ z ∈ u, S z ≤ T := fun z hz => Finset.le_sup (f := S) hz
-    have hbox : u ⊆ (hfin T).toFinset := by
-      intro z hz
-      rw [Set.Finite.mem_toFinset]
-      exact hTu z hz
-    have hmaps : ∀ z ∈ (hfin T).toFinset, S z ∈ Finset.range (T + 1) := by
-      intro z hz
-      rw [Set.Finite.mem_toFinset] at hz
-      rw [Finset.mem_range]
-      exact Nat.lt_succ_of_le hz
-    have step1 : ∑ z ∈ u, ‖g z‖ ≤ ∑ z ∈ (hfin T).toFinset, ‖g z‖ :=
-      Finset.sum_le_sum_of_subset_of_nonneg hbox (fun _ _ _ => norm_nonneg _)
-    have step2 : ∑ z ∈ (hfin T).toFinset, ‖g z‖
-        = ∑ t ∈ Finset.range (T + 1),
-            ∑ z ∈ (hfin T).toFinset.filter (fun z => S z = t), ‖g z‖ :=
-      (Finset.sum_fiberwise_of_maps_to hmaps _).symm
-    have step3 : ∑ t ∈ Finset.range (T + 1),
-          ∑ z ∈ (hfin T).toFinset.filter (fun z => S z = t), ‖g z‖
-        ≤ ∑ t ∈ Finset.range (T + 1),
-            (C : ℝ) * K * (2 : ℝ) ^ k * 4 * (((t : ℝ) + 1) ^ 2)⁻¹ := by
-      refine Finset.sum_le_sum (fun t _ => ?_)
-      exact hshell t _ (fun z hz => (Finset.mem_filter.mp hz).2)
-    refine (step1.trans (step2.le.trans step3)).trans ?_
-    rw [← Finset.mul_sum]
-    have h0 : (0 : ℝ) ≤ (C : ℝ) * K * (2 : ℝ) ^ k * 4 := by positivity
-    calc (C : ℝ) * K * (2 : ℝ) ^ k * 4 *
-          ∑ t ∈ Finset.range (T + 1), (((t : ℝ) + 1) ^ 2)⁻¹
-        ≤ (C : ℝ) * K * (2 : ℝ) ^ k * 4 * 2 :=
-          mul_le_mul_of_nonneg_left
-            (summable_bruhatMellin_of_polynomialCount_sum_inv_sq_range (T + 1)) h0
-      _ = (C : ℝ) * K * (2 : ℝ) ^ k * 8 := by ring
-  exact Summable.of_norm (summable_of_sum_le (fun z => norm_nonneg _) hbound)
 
 section
 
