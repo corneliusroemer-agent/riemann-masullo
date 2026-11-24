@@ -14493,6 +14493,121 @@ theorem idelicExplicitFormula_infiniteMatching_realLocal_vanishing (w : Infinite
   field_simp
   ring
 
+section ExplicitFormulaLocalTestOne
+
+/-- A smooth function of the logarithm of a modulation is Bruhat smooth (copied from
+`isBruhatSmooth_logProfile`, Ch09 Sec3). -/
+private theorem explicitFormula_isBruhatSmooth_logProfile {G : Type*} [CommGroup G]
+    [TopologicalSpace G] [IsTopologicalGroup G] [LocallyCompactSpace G] [T2Space G]
+    (m : G →ₜ* ℝ≥0ˣ) {f : ℝ → ℂ} (hf : ContDiff ℝ ((⊤ : ℕ∞) : WithTop ℕ∞) f) :
+    IsBruhatSmooth (fun x ↦ (f (Real.log ((m x).val : ℝ)) : ℂ)) := by
+  let χ : QuasiCharacter G :=
+    { toFun := fun x ↦ ((m x).val : ℝ)
+      map_one' := by simp
+      map_mul' := fun x y ↦ by simp
+      continuous_toFun := Complex.continuous_ofReal.comp
+        (NNReal.continuous_coe.comp (Units.continuous_val.comp m.continuous)) }
+  intro p
+  obtain ⟨k, hk, hinv, hdesc⟩ :=
+    (mem_bruhatSmoothSubmodule_iff _).1 (quasiCharacter_mem_bruhatSmooth χ) p
+  refine ⟨k, hk, fun h x ↦ congrArg (fun z : ℂ ↦ (f (Real.log z.re) : ℂ)) (hinv h x), ?_⟩
+  intro a ha
+  obtain ⟨q, hq, hdiff⟩ := hdesc a ha
+  have hpos (y : a.quotient) : 0 < (q y).re := by
+    obtain ⟨x, rfl⟩ := QuotientGroup.mk_surjective y
+    rw [hq]
+    exact NNReal.coe_pos.mpr (Units.zero_lt _)
+  refine ⟨fun y ↦ (f (Real.log (q y).re) : ℂ),
+    fun x ↦ congrArg (fun z : ℂ ↦ (f (Real.log z.re) : ℂ)) (hq x), ?_⟩
+  intro e z b
+  exact (hf.of_le (by simp)).comp
+    ((Complex.reCLM.contDiff.comp (hdiff e z b)).log fun x ↦ (hpos _).ne')
+
+/-- Some test on `F_w^×` takes the value `1` at `1`. -/
+private theorem explicitFormula_exists_localTest_one (w : InfinitePlace F) :
+    ∃ h : 𝒟(w.Completionˣ), h.val 1 = 1 := by
+  have hi := InfinitePlace.Completion.isometry_extensionEmbedding w
+  let : ProperSpace w.Completion :=
+    LipschitzWith.properSpace hi.isClosedEmbedding.isProperMap hi.lipschitzWith
+  let m : w.Completionˣ →ₜ* ℝ≥0ˣ :=
+    ⟨(Units.map nnNormHom.toMonoidHom) ^ w.mult, continuous_infiniteLocalModule w⟩
+  have hprop : IsProperMap m := isProperMap_units_nnNorm_pow w.mult w.mult_ne_zero
+  let B : ContDiffBump (0 : ℝ) := ⟨1, 2, one_pos, one_lt_two⟩
+  let f : w.Completionˣ → ℂ := fun x ↦ ((B (Real.log ((m x).val : ℝ)) : ℝ) : ℂ)
+  have hs : IsBruhatSmooth f :=
+    explicitFormula_isBruhatSmooth_logProfile m (Complex.ofRealCLM.contDiff.comp B.contDiff)
+  -- The support lies in the preimage of a compact set of norms.
+  let l : ℝ≥0ˣ ≃ₜ ℝ := (Nonneg.unitsHomeomorphPos ℝ).trans Real.expOrderIso.symm.toHomeomorph
+  have hl (t : ℝ≥0ˣ) : l t = Real.log (t.val : ℝ) :=
+    (Real.log_of_pos (NNReal.coe_pos.mpr t.zero_lt)).symm
+  have hK : IsCompact (m ⁻¹' (l ⁻¹' Metric.closedBall 0 2)) :=
+    hprop.isCompact_preimage (l.isCompact_preimage.mpr (isCompact_closedBall 0 2))
+  have hc : HasCompactSupport f := by
+    refine HasCompactSupport.intro hK fun x hx ↦ ?_
+    simp only [mem_preimage, hl] at hx
+    change ((B (Real.log ((m x).val : ℝ)) : ℝ) : ℂ) = 0
+    rw [image_eq_zero_of_notMem_tsupport (f := (B : ℝ → ℝ)) (by simpa only [B.tsupport_eq] using hx),
+      Complex.ofReal_zero]
+  refine ⟨⟨f, (mem_bruhatSmoothSubmodule_iff _).mpr hs, hc⟩, ?_⟩
+  change ((B (Real.log ((m 1).val : ℝ)) : ℝ) : ℂ) = 1
+  rw [map_one, Units.val_one, NNReal.coe_one, Real.log_one,
+    B.one_of_mem_closedBall (by simp [B]), Complex.ofReal_one]
+
+end ExplicitFormulaLocalTestOne
+/-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a real place `w`, the
+`e^{-t}/t` regularization). For `g` of class `C¹` with `g` and `g'` bounded and
+`k(t) = e^{-t/4} / (2 (1 - e^{-t/2}))`, the function `2 e^{-t} g(0) / t - (g(t/2) + g(-t/2)) k(t)`
+is integrable on `(0, ∞)`, and the cutoff integrals `∫_{t > 2 log(1 + ε)} g(t/2) k(t) dt +
+∫_{t > -2 log(1 - ε)} g(-t/2) k(t) dt + 2 g(0) log ε` tend, as `ε → 0⁺`, to minus its integral
+minus `2 (log 2 + γ) g(0)`.
+
+Computation. `k(t) = 1/t + O(1)` near `0`, so `g(±t/2) k(t) - g(0) e^{-t}/t` is integrable on
+`(0, ∞)` and its integral over `(τ, ∞)` tends to the one over `(0, ∞)`. The rest is
+`g(0) (E₁(τ₁) + E₁(τ₂) + 2 log ε)` with `E₁(τ) = ∫_τ^∞ e^{-t}/t dt = -γ - log τ + o(1)` and
+`τ₁, τ₂ = 2ε + O(ε²)`, which tends to `-2 (γ + log 2) g(0)`. -/
+theorem idelicExplicitFormula_infiniteMatching_realLocal_regularization (g g' : ℝ → ℂ) (P : ℝ)
+    (hg : ∀ y, HasDerivAt g (g' y) y) (hgb : ∀ y, ‖g y‖ ≤ P) (hg'b : ∀ y, ‖g' y‖ ≤ P) :
+    let k : ℝ → ℂ := fun t ↦ ((Real.exp (-(t / 4)) / (2 * (1 - Real.exp (-(t / 2)))) : ℝ) : ℂ)
+    IntegrableOn (fun t : ℝ ↦ 2 * (Real.exp (-t) : ℂ) * g 0 / (t : ℂ) -
+        (g (t / 2) + g (-(t / 2))) * k t) (Ioi 0) ∧
+      Tendsto (fun ε : ℝ ↦ (∫ t in Ioi (2 * Real.log (1 + ε)), g (t / 2) * k t) +
+          (∫ t in Ioi (-(2 * Real.log (1 - ε))), g (-(t / 2)) * k t) +
+          2 * g 0 * (Real.log ε : ℂ))
+        (𝓝[>] 0)
+        (𝓝 (-(∫ t in Ioi (0 : ℝ), (2 * (Real.exp (-t) : ℂ) * g 0 / (t : ℂ) -
+            (g (t / 2) + g (-(t / 2))) * k t)) -
+          2 * ((Real.log 2 + Real.eulerMascheroniConstant : ℝ) : ℂ) * g 0)) := by
+  sorry
+
+/-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a real place `w`, the
+cutoff integral in logarithmic coordinates). For a test `f` on `F_w^× = ℝ^×` with weighted
+translate `F(x) = f(1 + x) / |1 + x|^{1/2}` and `0 < ε < 1`,
+`∫_{|x| ≥ ε} F(x) / |x| dx` is the sum of the four integrals obtained by putting
+`1 + x = ±e^{±t/2}`, `t > 0`: with `g₊(y) = f(e^y)`, `g₋(y) = f(-e^y)`,
+`k∓(t) = e^{-t/4} / (2 (1 ∓ e^{-t/2}))`, it is
+`∫_{t > 2 log(1 + ε)} g₊(t/2) k₋ + ∫_{t > -2 log(1 - ε)} g₊(-t/2) k₋ + ∫_{t > 0} g₋(t/2) k₊ +
+∫_{t > 0} g₋(-t/2) k₊`.
+
+Computation. In `u = 1 + x` the integrand is `f(u) |u|^{-1/2} / |1 - u|`; at `u = e^{t/2}` the
+condition `|u - 1| ≥ ε` is `t ≥ 2 log(1 + ε)`, at `u = e^{-t/2}` it is `t ≥ -2 log(1 - ε)`, and
+for `u < 0` it always holds since `|u - 1| > 1`. The Jacobian `e^{±t/2}/2` turns
+`|u|^{-1/2}/|1 - u|` into `k∓(t)`, as in `idelicExplicitFormula_infiniteMatching_realLocal_vanishing`. -/
+theorem idelicExplicitFormula_infiniteMatching_realLocal_cutoff (w : InfinitePlace F)
+    (hw : w.IsReal) (testI : 𝒟(w.Completionˣ)) (ε : ℝ) (_hε : 0 < ε) (_hε1 : ε < 1) :
+    let e : ℝˣ →* w.Completionˣ :=
+      Units.map (InfinitePlace.Completion.ringEquivRealOfIsReal hw).symm.toMonoidHom
+    let gp : ℝ → ℂ := fun y ↦ testI.val (e (Units.mk0 (Real.exp y) (Real.exp_pos y).ne'))
+    let gm : ℝ → ℂ := fun y ↦ testI.val (e (-Units.mk0 (Real.exp y) (Real.exp_pos y).ne'))
+    let km : ℝ → ℂ := fun t ↦ ((Real.exp (-(t / 4)) / (2 * (1 - Real.exp (-(t / 2)))) : ℝ) : ℂ)
+    let kp : ℝ → ℂ := fun t ↦ ((Real.exp (-(t / 4)) / (2 * (1 + Real.exp (-(t / 2)))) : ℝ) : ℂ)
+    ∫ x in {x : w.Completion | ε ≤ ‖x‖},
+        addTest((exists_infiniteWeilTestMap w).choose testI) x / ((‖x‖ : ℝ) : ℂ) ∂ν∞(w) =
+      (∫ t in Ioi (2 * Real.log (1 + ε)), gp (t / 2) * km t) +
+        (∫ t in Ioi (-(2 * Real.log (1 - ε))), gp (-(t / 2)) * km t) +
+        ((∫ t in Ioi (0 : ℝ), gm (t / 2) * kp t) + ∫ t in Ioi (0 : ℝ), gm (-(t / 2)) * kp t) := by
+  sorry
+
+
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a real place `w`, one
 reference test). Some test `h` on `F_w^× = ℝ^×` with `h(1) = 1` satisfies the identity of
 `idelicExplicitFormula_infiniteMatching_realLocal`.
@@ -14518,7 +14633,111 @@ theorem idelicExplicitFormula_infiniteMatching_realLocal_reference (w : Infinite
               (1 - (Real.exp (-t) : ℂ)))) -
           (Real.log Real.pi : ℂ) * h.val 1 =
         -infiniteConnesWeilPrincipalValue w h := by
-  sorry
+  obtain ⟨h, h1⟩ := explicitFormula_exists_localTest_one w
+  refine ⟨h, h1, ?_⟩
+  intro e gp gm Q
+  let km : ℝ → ℂ := fun t ↦ ((Real.exp (-(t / 4)) / (2 * (1 - Real.exp (-(t / 2)))) : ℝ) : ℂ)
+  let kp : ℝ → ℂ := fun t ↦ ((Real.exp (-(t / 4)) / (2 * (1 + Real.exp (-(t / 2)))) : ℝ) : ℂ)
+  -- Regularity of the test in logarithmic coordinates.
+  let β := explicitFormula_localRealFlow w hw
+  obtain ⟨P, hP⟩ := explicitFormula_localTest_flow w hw h
+  let m1 : w.Completionˣ := e (-1)
+  have hgp (y : ℝ) : gp y = h.val (1 * β (Multiplicative.ofAdd y)) := by
+    rw [one_mul, explicitFormula_localRealFlow_apply]
+  have hgm (y : ℝ) : gm y = h.val (m1 * β (Multiplicative.ofAdd y)) := by
+    rw [explicitFormula_localRealFlow_apply, ← map_mul, neg_one_mul]
+  let D := bruhatDirectionalDeriv β h.val
+  have dgp (y : ℝ) : HasDerivAt gp (D (1 * β (Multiplicative.ofAdd y))) y :=
+    (hP 1 y).1.congr_of_eventuallyEq (.of_forall fun z ↦ hgp z)
+  have dgm (y : ℝ) : HasDerivAt gm (D (m1 * β (Multiplicative.ofAdd y))) y :=
+    (hP m1 y).1.congr_of_eventuallyEq (.of_forall fun z ↦ hgm z)
+  have hgp0 : gp 0 = h.val 1 := by
+    simp only [gp, Real.exp_zero]
+    rw [show Units.mk0 (1 : ℝ) one_ne_zero = 1 from Units.ext rfl, map_one]
+  have hgmc : Continuous gm := continuous_iff_continuousAt.mpr fun y ↦ (dgm y).continuousAt
+  have hgpb (y : ℝ) : ‖gp y‖ ≤ P := by rw [hgp]; exact (hP _ 0).2.1
+  have hgmb (y : ℝ) : ‖gm y‖ ≤ P := by rw [hgm]; exact (hP _ 0).2.1
+  obtain ⟨iJ, hlim⟩ := idelicExplicitFormula_infiniteMatching_realLocal_regularization gp _ P dgp
+    hgpb (fun y ↦ (hP _ 0).2.2)
+  have i3 : IntegrableOn (fun t ↦ gm (t / 2) * kp t) (Ioi 0) :=
+    (explicitFormula_vanishing_plus_integrable gm P (1 / 2) hgmc hgmb).congr_fun
+      (fun t _ ↦ by simp only [kp]; rw [show 1 / 2 * t = t / 2 by ring]) measurableSet_Ioi
+  have i4 : IntegrableOn (fun t ↦ gm (-(t / 2)) * kp t) (Ioi 0) :=
+    (explicitFormula_vanishing_plus_integrable gm P (-1 / 2) hgmc hgmb).congr_fun
+      (fun t _ ↦ by simp only [kp]; rw [show -1 / 2 * t = -(t / 2) by ring]) measurableSet_Ioi
+  -- The principal value through the finite part of `𝓕 log|x|`.
+  let K : w.Completion → ℂ := logFourierIntegrand(ν∞(w), ψ∞(w), J∞(w), addTest((exists_infiniteWeilTestMap w).choose h))
+  have hPV : infiniteConnesWeilPrincipalValue w h = -(∫ y, K y ∂ν∞(w)) :=
+    ((exists_infiniteConnesPrincipalValue w).choose_spec ((exists_infiniteWeilTestMap w).choose h)).2
+  have hL : Tendsto (fun ε : ℝ ↦ (∫ x in {x : w.Completion | ε ≤ ‖x‖},
+        addTest((exists_infiniteWeilTestMap w).choose h) x / ((‖x‖ : ℝ) : ℂ) ∂ν∞(w)) +
+        2 * addTest((exists_infiniteWeilTestMap w).choose h) 0 * (Real.log ε : ℂ))
+      (𝓝[>] 0) (𝓝 (-2 * ((∫ y, K y ∂ν∞(w)) +
+        ((Real.log (2 * Real.pi) : ℂ) + (Real.eulerMascheroniConstant : ℂ)) *
+          addTest((exists_infiniteWeilTestMap w).choose h) 0))) :=
+    (realLogFourier_finitePart w hw ((exists_infiniteWeilTestMap w).choose h)).2.2
+  have h0 : addTest((exists_infiniteWeilTestMap w).choose h) 0 = h.val 1 := by
+    have hA := (exists_infiniteWeilTestMap w).choose_spec h 0
+    rw [hA]
+    change Function.extend Units.val (h.val : _ → ℂ) (fun _ ↦ 0) (1 + 0) /
+      (Real.sqrt (‖(1 : w.Completion) + 0‖ ^ w.mult) : ℂ) = _
+    rw [add_zero, ← Units.val_one, Units.val_injective.extend_apply, Units.val_one, norm_one,
+      one_pow, Real.sqrt_one, Complex.ofReal_one, div_one]
+  have hcut : (fun ε : ℝ ↦ (∫ t in Ioi (2 * Real.log (1 + ε)), gp (t / 2) * km t) +
+        (∫ t in Ioi (-(2 * Real.log (1 - ε))), gp (-(t / 2)) * km t) +
+        2 * gp 0 * (Real.log ε : ℂ) +
+        ((∫ t in Ioi (0 : ℝ), gm (t / 2) * kp t) + ∫ t in Ioi (0 : ℝ), gm (-(t / 2)) * kp t))
+      =ᶠ[𝓝[>] 0] fun ε ↦ (∫ x in {x : w.Completion | ε ≤ ‖x‖},
+        addTest((exists_infiniteWeilTestMap w).choose h) x / ((‖x‖ : ℝ) : ℂ) ∂ν∞(w)) + 2 * addTest((exists_infiniteWeilTestMap w).choose h) 0 * (Real.log ε : ℂ) := by
+    filter_upwards [Ioo_mem_nhdsGT (zero_lt_one' ℝ)] with ε hε
+    rw [idelicExplicitFormula_infiniteMatching_realLocal_cutoff w hw h ε hε.1 hε.2]
+    simp only [h0, hgp0]
+    ring
+  have huniq := tendsto_nhds_unique
+    ((hlim.add_const ((∫ t in Ioi (0 : ℝ), gm (t / 2) * kp t) +
+      ∫ t in Ioi (0 : ℝ), gm (-(t / 2)) * kp t)).congr' hcut) hL
+  -- The left side splits into the regularized integral and the two regular pieces.
+  have hsplit : (∫ t in Ioi (0 : ℝ), (1 / 2 : ℂ) * (2 * (Real.exp (-t) : ℂ) * h.val 1 / (t : ℂ) -
+      (Real.exp (-(t / 4)) : ℂ) * (Q t (t / 2) + Q t (-(t / 2))) /
+        (1 - (Real.exp (-t) : ℂ)))) =
+      (1 / 2 : ℂ) * ((∫ t in Ioi (0 : ℝ), (2 * (Real.exp (-t) : ℂ) * gp 0 / (t : ℂ) -
+        (gp (t / 2) + gp (-(t / 2))) * km t)) -
+        ((∫ t in Ioi (0 : ℝ), gm (t / 2) * kp t) + ∫ t in Ioi (0 : ℝ), gm (-(t / 2)) * kp t)) := by
+    have hs := integral_sub iJ (i3.add i4)
+    simp only [Pi.add_apply] at hs
+    rw [← integral_add i3 i4, ← hs, ← integral_const_mul]
+    refine setIntegral_congr_fun measurableSet_Ioi fun t ht ↦ ?_
+    have ht : 0 < t := ht
+    have hr0 : 0 < Real.exp (-(t / 2)) := Real.exp_pos _
+    have hr1 : Real.exp (-(t / 2)) < 1 := Real.exp_lt_one_iff.mpr (by linarith)
+    have hE1 : Real.exp (-t) = Real.exp (-(t / 2)) * Real.exp (-(t / 2)) := by
+      rw [← Real.exp_add]; ring_nf
+    simp only [Q, kp, hgp0]
+    rw [hE1]
+    generalize Real.exp (-(t / 2)) = r at hr0 hr1 ⊢
+    generalize Real.exp (-(t / 4)) = q
+    have ht0 : (t : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr ht.ne'
+    have n1 : (1 - (r : ℂ)) ≠ 0 := by
+      rw [← Complex.ofReal_one, ← Complex.ofReal_sub, Complex.ofReal_ne_zero]; linarith
+    have n2 : (1 + (r : ℂ)) ≠ 0 := by
+      rw [← Complex.ofReal_one, ← Complex.ofReal_add, Complex.ofReal_ne_zero]; linarith
+    have n3 : (1 - (r : ℂ) * (r : ℂ)) ≠ 0 := by
+      rw [show (1 - (r : ℂ) * (r : ℂ)) = (1 - (r : ℂ)) * (1 + (r : ℂ)) by ring]
+      exact mul_ne_zero n1 n2
+    have n4 : (1 - (r : ℂ) ^ 2) ≠ 0 := by rw [sq]; exact n3
+    push_cast
+    field_simp
+    ring
+  rw [hsplit, hPV, neg_neg]
+  rw [h0, ← hgp0] at huniq
+  have hlog : Real.log (2 * Real.pi) = Real.log 2 + Real.log Real.pi :=
+    Real.log_mul (by norm_num) Real.pi_ne_zero
+  rw [← hgp0]
+  have hlogc : (Real.log (2 * Real.pi) : ℂ) + (Real.eulerMascheroniConstant : ℂ) =
+      ((Real.log 2 + Real.eulerMascheroniConstant : ℝ) : ℂ) + (Real.log Real.pi : ℂ) := by
+    rw [hlog]; push_cast; ring
+  rw [hlogc] at huniq
+  linear_combination (-1 / 2 : ℂ) * huniq
 
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a real place `w`).
 For a test `f` on `F_w^× = ℝ^×`, with `g₊(y) = f(e^y)`, `g₋(y) = f(-e^y)` and `Q` as in
