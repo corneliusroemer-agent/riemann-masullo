@@ -16190,6 +16190,691 @@ theorem idelicExplicitFormula_infiniteMatching_complexLocal_vanishing (w : Infin
   simp only [_h1, mul_zero, zero_div, zero_sub, sub_zero]
   rw [integral_neg, he]
 
+section ExplicitFormulaComplexRegularization
+
+/-- `|e^{s+iφ} - 1|² = e^{2s} - 2 e^s cos φ + 1`. -/
+private theorem explicitFormula_creg_normSq (s φ : ℝ) :
+    ‖Complex.exp (s + φ * Complex.I) - 1‖ ^ 2 =
+      Real.exp s * Real.exp s - 2 * Real.exp s * Real.cos φ + 1 := by
+  rw [Complex.sq_norm, Complex.normSq_apply]
+  simp only [Complex.sub_re, Complex.sub_im, Complex.one_re, Complex.one_im, Complex.exp_re,
+    Complex.exp_im, Complex.add_re, Complex.add_im, Complex.ofReal_re, Complex.ofReal_im,
+    Complex.mul_re, Complex.mul_im, Complex.I_re, Complex.I_im]
+  simp only [mul_zero, sub_zero, mul_one, add_zero, zero_add]
+  have hs := Real.sin_sq_add_cos_sq φ
+  linear_combination (Real.exp s * Real.exp s) * hs
+
+/-- `|1 - q e^{iφ}|² = 1 - 2 q cos φ + q²`. -/
+private theorem explicitFormula_creg_normSq' (q φ : ℝ) :
+    ‖1 - (q : ℂ) * Complex.exp (φ * Complex.I)‖ ^ 2 = 1 - 2 * q * Real.cos φ + q * q := by
+  rw [Complex.sq_norm, Complex.normSq_apply]
+  simp only [Complex.sub_re, Complex.sub_im, Complex.one_re, Complex.one_im, Complex.exp_re,
+    Complex.exp_im, Complex.ofReal_re, Complex.ofReal_im,
+    Complex.mul_re, Complex.mul_im, Complex.I_re, Complex.I_im]
+  simp only [mul_zero, sub_zero, mul_one, add_zero, Real.exp_zero, zero_mul, zero_sub]
+  have hs := Real.sin_sq_add_cos_sq φ
+  linear_combination (q * q) * hs
+
+/-- For `s ≠ 0`, `∫_0^{2π} dφ / |e^{s+iφ} - 1|² = 2π / |1 - e^{2s}|`. -/
+private theorem explicitFormula_creg_angular_inv {s : ℝ} (hs : s ≠ 0) :
+    ∫ φ in (0 : ℝ)..2 * Real.pi, (((‖Complex.exp (s + φ * Complex.I) - 1‖ ^ 2 : ℝ) : ℂ))⁻¹ =
+      ((2 * Real.pi / |1 - Real.exp (2 * s)|  : ℝ) : ℂ) := by
+  rcases hs.lt_or_gt with hs | hs
+  · have hr1 : Real.exp s < 1 := Real.exp_lt_one_iff.mpr hs
+    have hpt (φ : ℝ) : ‖Complex.exp (s + φ * Complex.I) - 1‖ =
+        ‖1 - ((Real.exp s : ℝ) : ℂ) * Complex.exp (φ * Complex.I)‖ := by
+      rw [norm_sub_rev, Complex.exp_add, Complex.ofReal_exp]
+    simp_rw [hpt]
+    rw [explicitFormula_poisson_integral (Real.exp_pos _).le hr1]
+    have h2 : Real.exp (2 * s) = Real.exp s ^ 2 := by rw [← Real.exp_nat_mul]; norm_num
+    have key : 2 * Real.pi / (1 - Real.exp s ^ 2) = 2 * Real.pi / |1 - Real.exp (2 * s)| := by
+      rw [h2, abs_of_pos (by nlinarith [Real.exp_pos s])]
+    exact_mod_cast key
+  · have hr1 : Real.exp (-s) < 1 := Real.exp_lt_one_iff.mpr (by linarith)
+    have hpt (φ : ℝ) : (((‖Complex.exp (s + φ * Complex.I) - 1‖ ^ 2 : ℝ) : ℂ))⁻¹ =
+        ((Real.exp (-s) ^ 2 : ℝ) : ℂ) *
+          (((‖1 - ((Real.exp (-s) : ℝ) : ℂ) * Complex.exp (φ * Complex.I)‖ ^ 2 : ℝ) : ℂ))⁻¹ := by
+      have hX : Complex.exp (-(s : ℂ) + φ * Complex.I) =
+          ((Real.exp (-s) : ℝ) : ℂ) * Complex.exp (φ * Complex.I) := by
+        rw [Complex.exp_add, Complex.ofReal_exp, Complex.ofReal_neg]
+      rw [explicitFormula_norm_exp_sub_one_sq, hX, ← Complex.ofReal_inv, ← Complex.ofReal_inv,
+        ← Complex.ofReal_mul]
+      congr 1
+      have h1 : Real.exp (-s) * Real.exp s = 1 := by rw [← Real.exp_add]; simp
+      rw [mul_inv, mul_inv]
+      have he : (Real.exp s)⁻¹ = Real.exp (-s) := (Real.exp_neg s).symm
+      rw [he]; ring
+    simp_rw [hpt]
+    rw [intervalIntegral.integral_const_mul, explicitFormula_poisson_integral (Real.exp_pos _).le hr1]
+    have h2 : Real.exp (2 * s) = Real.exp s ^ 2 := by rw [← Real.exp_nat_mul]; norm_num
+    have h1 : Real.exp (-s) * Real.exp s = 1 := by rw [← Real.exp_add]; simp
+    have hes : 1 < Real.exp s := Real.one_lt_exp_iff.mpr hs
+    have key : Real.exp (-s) ^ 2 * (2 * Real.pi / (1 - Real.exp (-s) ^ 2)) =
+        2 * Real.pi / |1 - Real.exp (2 * s)| := by
+      rw [h2, abs_of_neg (by nlinarith), Real.exp_neg]
+      have hE : Real.exp s ≠ 0 := (Real.exp_pos s).ne'
+      have hd2 : Real.exp s ^ 2 - 1 ≠ 0 := by nlinarith
+      rw [neg_sub]
+      field_simp
+    exact_mod_cast key
+
+/-- For every `s`, `∫_0^{2π} dφ / (1 + |e^{s+iφ} - 1|²) = 2π / √(4 + e^{4s})` (a Poisson kernel
+with `q = 2r / (2 + r² + √(4 + r⁴))`, `r = e^s`). -/
+private theorem explicitFormula_creg_angular_shift (s : ℝ) :
+    ∫ φ in (0 : ℝ)..2 * Real.pi,
+        (((1 + ‖Complex.exp (s + φ * Complex.I) - 1‖ ^ 2 : ℝ) : ℂ))⁻¹ =
+      ((2 * Real.pi / Real.sqrt (4 + Real.exp (4 * s)) : ℝ) : ℂ) := by
+  set r := Real.exp s with hr
+  have hr0 : 0 < r := Real.exp_pos s
+  have h4 : Real.exp (4 * s) = r ^ 4 := by rw [hr, ← Real.exp_nat_mul]; norm_num
+  rw [h4]
+  set S := Real.sqrt (4 + r ^ 4) with hS
+  have hS2 : S ^ 2 = 4 + r ^ 4 := Real.sq_sqrt (by positivity)
+  have hS0 : 0 < S := Real.sqrt_pos.mpr (by positivity)
+  set D := 2 + r ^ 2 + S with hD
+  have hD0 : 0 < D := by positivity
+  set q := 2 * r / D with hq
+  have hq0 : 0 < q := by positivity
+  have hqD : q * D = 2 * r := by rw [hq]; field_simp
+  have hq1 : q < 1 := by
+    rw [hq, div_lt_one hD0]; nlinarith [sq_nonneg (r - 1)]
+  have hquad : r * (q * q) - (2 + r ^ 2) * q + r = 0 := by
+    have : D * D * (r * (q * q) - (2 + r ^ 2) * q + r) = 0 := by
+      have e : D * D * (r * (q * q) - (2 + r ^ 2) * q + r) =
+          r * ((q * D) * (q * D)) - (2 + r ^ 2) * D * (q * D) + r * D * D := by ring
+      rw [e, hqD, hD]
+      linear_combination r * hS2
+    rcases mul_eq_zero.mp this with h | h
+    · nlinarith
+    · exact h
+  clear_value q
+  have hpt (φ : ℝ) : (((1 + ‖Complex.exp (s + φ * Complex.I) - 1‖ ^ 2 : ℝ) : ℂ))⁻¹ =
+      ((q / r : ℝ) : ℂ) *
+        (((‖1 - (q : ℂ) * Complex.exp (φ * Complex.I)‖ ^ 2 : ℝ) : ℂ))⁻¹ := by
+    rw [explicitFormula_creg_normSq, explicitFormula_creg_normSq', ← hr]
+    have hpos : 0 < 1 - 2 * q * Real.cos φ + q * q := by
+      nlinarith [Real.neg_one_le_cos φ, Real.cos_le_one φ, mul_pos hq0 hq0,
+        sq_nonneg (q - Real.cos φ), Real.sin_sq_add_cos_sq φ, sq_nonneg (Real.sin φ)]
+    have hpos' : 0 < 1 + (r * r - 2 * r * Real.cos φ + 1) := by
+      nlinarith [Real.cos_le_one φ, sq_nonneg (r - 1)]
+    have e : 1 + (r * r - 2 * r * Real.cos φ + 1) = (r / q) * (1 - 2 * q * Real.cos φ + q * q) := by
+      field_simp
+      linear_combination -hquad
+    rw [e, ← Complex.ofReal_inv, ← Complex.ofReal_inv, ← Complex.ofReal_mul, mul_inv, inv_div]
+  simp_rw [hpt]
+  rw [intervalIntegral.integral_const_mul, explicitFormula_poisson_integral hq0.le hq1]
+  have hq2 : 1 - q ^ 2 ≠ 0 := by nlinarith
+  have key : (q / r) * (2 * Real.pi / (1 - q ^ 2)) = 2 * Real.pi / S := by
+    have h1 : r * (1 - q ^ 2) = q * S := by
+      have : q * S = q * D - (2 + r ^ 2) * q := by rw [hD]; ring
+      rw [this, hqD]; linear_combination -hquad
+    rw [div_mul_div_comm, div_eq_div_iff (mul_ne_zero hr0.ne' hq2) hS0.ne']
+    linear_combination -(2 * Real.pi) * h1
+  exact_mod_cast key
+
+/-- `∫_{√ε}^∞ 2 / (y (1 + y²)) dy = -log ε + log (1 + ε)`, with integrability. -/
+private theorem explicitFormula_creg_radial {ε : ℝ} (hε : 0 < ε) :
+    IntegrableOn (fun y : ℝ ↦ 2 / (y * (1 + y ^ 2))) (Ioi (Real.sqrt ε)) ∧
+      ∫ y in Ioi (Real.sqrt ε), 2 / (y * (1 + y ^ 2)) = -Real.log ε + Real.log (1 + ε) := by
+  set a := Real.sqrt ε with ha
+  have ha0 : 0 < a := Real.sqrt_pos.mpr hε
+  let g : ℝ → ℝ := fun y ↦ 2 * Real.log y - Real.log (1 + y ^ 2)
+  have hd : ∀ y ∈ Ioi a, HasDerivAt g (2 / (y * (1 + y ^ 2))) y := by
+    intro y hy
+    have hy0 : 0 < y := ha0.trans hy
+    have h1 := ((Real.hasDerivAt_log hy0.ne').const_mul 2).sub
+      (((hasDerivAt_pow 2 y).const_add 1).log (by positivity))
+    convert h1 using 1
+    field_simp
+    ring
+  have hpos : ∀ y ∈ Ioi a, 0 ≤ 2 / (y * (1 + y ^ 2)) := fun y hy ↦ by
+    have hy0 : 0 < y := ha0.trans hy
+    positivity
+  have hlim : Tendsto g atTop (𝓝 0) := by
+    have h1 : Tendsto (fun y : ℝ ↦ 1 - (1 + y ^ 2)⁻¹) atTop (𝓝 1) := by
+      have : Tendsto (fun y : ℝ ↦ (1 + y ^ 2)⁻¹) atTop (𝓝 0) :=
+        tendsto_inv_atTop_zero.comp (tendsto_atTop_add_const_left _ _
+          (tendsto_pow_atTop two_ne_zero))
+      simpa using (tendsto_const_nhds (x := (1 : ℝ))).sub this
+    have h2 := (Real.continuousAt_log one_ne_zero).tendsto.comp h1
+    rw [Real.log_one] at h2
+    refine h2.congr' ?_
+    filter_upwards [eventually_gt_atTop 0] with y hy
+    simp only [Function.comp_apply, g]
+    have : 1 - (1 + y ^ 2)⁻¹ = y ^ 2 / (1 + y ^ 2) := by field_simp; ring
+    rw [this, Real.log_div (by positivity) (by positivity), Real.log_pow]
+    push_cast; ring
+  have hc : ContinuousWithinAt g (Ici a) a :=
+    (((Real.continuousAt_log ha0.ne').const_mul 2).sub
+      ((by fun_prop : Continuous fun y : ℝ ↦ 1 + y ^ 2).continuousAt.log
+        (by positivity))).continuousWithinAt
+  refine ⟨integrableOn_Ioi_deriv_of_nonneg hc hd hpos hlim, ?_⟩
+  rw [integral_Ioi_of_hasDerivAt_of_nonneg hc hd hpos hlim]
+  simp only [g, ha]
+  rw [Real.log_sqrt hε.le, Real.sq_sqrt hε.le]
+  ring
+
+/-- The disc cutoff of `T(u) = 2 / (|u - 1|² (1 + |u - 1|²))`:
+`∫_{|u - 1|² ≥ ε} T = -2π log ε + 2π log (1 + ε)`. -/
+private theorem explicitFormula_creg_cut {ε : ℝ} (hε : 0 < ε) :
+    IntegrableOn (fun u : ℂ ↦ (((2 / (‖u - 1‖ ^ 2 * (1 + ‖u - 1‖ ^ 2)) : ℝ) : ℂ)))
+        {u : ℂ | ε ≤ ‖u - 1‖ ^ 2} ∧
+      ∫ u in {u : ℂ | ε ≤ ‖u - 1‖ ^ 2}, (((2 / (‖u - 1‖ ^ 2 * (1 + ‖u - 1‖ ^ 2)) : ℝ) : ℂ)) =
+        ((-(2 * Real.pi * Real.log ε) + 2 * Real.pi * Real.log (1 + ε) : ℝ) : ℂ) := by
+  obtain ⟨hi, hv⟩ := explicitFormula_creg_radial hε
+  have hmeas : MeasurableSet {u : ℂ | ε ≤ ‖u - 1‖ ^ 2} :=
+    measurableSet_le measurable_const (by fun_prop)
+  let k : ℝ → ℝ := fun y ↦ if ε ≤ y ^ 2 then 2 / (y ^ 2 * (1 + y ^ 2)) else 0
+  have hind : {u : ℂ | ε ≤ ‖u - 1‖ ^ 2}.indicator
+      (fun u : ℂ ↦ (((2 / (‖u - 1‖ ^ 2 * (1 + ‖u - 1‖ ^ 2)) : ℝ) : ℂ))) =
+      fun u ↦ ((k ‖u - 1‖ : ℝ) : ℂ) := by
+    funext u
+    simp only [indicator, mem_ofPred_eq, k]
+    split_ifs <;> simp
+  have hk : ∀ y ∈ Ioi (0 : ℝ), y ^ (2 - 1) • k y = (Ici (Real.sqrt ε)).indicator
+      (fun y : ℝ ↦ 2 / (y * (1 + y ^ 2))) y := by
+    intro y (hy : 0 < y)
+    simp only [k, indicator, mem_Ici, smul_eq_mul, show (2 - 1 : ℕ) = 1 from rfl, pow_one]
+    have : ε ≤ y ^ 2 ↔ Real.sqrt ε ≤ y := by
+      rw [Real.sqrt_le_left hy.le]
+    by_cases h : ε ≤ y ^ 2
+    · simp only [h, this.mp h, ↓reduceIte]
+      field_simp
+    · simp only [h, mt this.mpr h, ↓reduceIte, mul_zero]
+  have hki : IntegrableOn (fun y : ℝ ↦ y ^ (2 - 1) • k y) (Ioi 0) := by
+    refine IntegrableOn.congr_fun ?_ (fun y hy ↦ (hk y hy).symm) measurableSet_Ioi
+    exact (((integrableOn_Ici_iff_integrableOn_Ioi (b := Real.sqrt ε)
+      (f := fun y : ℝ ↦ 2 / (y * (1 + y ^ 2)))).mpr hi).integrable_indicator
+      measurableSet_Ici).integrableOn
+  have hkint : Integrable (fun u : ℂ ↦ k ‖u‖) := by
+    rw [integrable_fun_norm_addHaar volume, Complex.finrank_real_complex]
+    exact hki
+  have hkint' : Integrable (fun u : ℂ ↦ ((k ‖u - 1‖ : ℝ) : ℂ)) :=
+    (hkint.comp_sub_right 1).ofReal
+  refine ⟨?_, ?_⟩
+  · rw [← integrable_indicator_iff hmeas, hind]
+    exact hkint'
+  · rw [← integral_indicator hmeas, hind, integral_complex_ofReal,
+      integral_sub_right_eq_self (fun u : ℂ ↦ k ‖u‖) 1, integral_fun_norm_addHaar volume k,
+      Complex.finrank_real_complex]
+    have hball : (volume : Measure ℂ).real (Metric.ball 0 1) = Real.pi := by
+      simp [Measure.real]
+    have hs : Ioi (0 : ℝ) ∩ Ici (Real.sqrt ε) = Ici (Real.sqrt ε) :=
+      inter_eq_right.mpr (Ici_subset_Ioi.mpr (Real.sqrt_pos.mpr hε))
+    rw [hball, setIntegral_congr_fun measurableSet_Ioi hk, setIntegral_indicator measurableSet_Ici,
+      hs, integral_Ici_eq_integral_Ioi, hv]
+    congr 1
+    simp only [nsmul_eq_mul, smul_eq_mul]
+    push_cast
+    ring
+
+/-- `|log r| ≤ 2 |r - 1|` for `r ≥ 1/2`. -/
+private theorem explicitFormula_creg_abs_log_le {r : ℝ} (hr : 1 / 2 ≤ r) :
+    |Real.log r| ≤ 2 * |r - 1| := by
+  have hr0 : 0 < r := by linarith
+  have h1 := Real.log_le_sub_one_of_pos hr0
+  have h2 := Real.one_sub_inv_le_log_of_pos hr0
+  have h3 : 1 - r⁻¹ ≥ -(2 * |r - 1|) := by
+    have : r⁻¹ ≤ 2 := by rw [inv_le_comm₀ hr0 two_pos]; linarith
+    have e : 1 - r⁻¹ = (r - 1) * r⁻¹ := by field_simp
+    rw [e]
+    rcases le_or_gt r 1 with h | h
+    · rw [abs_of_nonpos (by linarith)]
+      nlinarith [inv_pos.mpr hr0]
+    · nlinarith [inv_pos.mpr hr0, abs_nonneg (r - 1)]
+  rw [abs_le]
+  constructor
+  · linarith
+  · linarith [le_abs_self (r - 1)]
+
+/-- `a ^ (-3) = (a ^ 3)⁻¹` for `a ≥ 0`. -/
+private theorem explicitFormula_creg_rpow {a : ℝ} (ha : 0 ≤ a) : a ^ (-3 : ℝ) = (a ^ 3)⁻¹ := by
+  rw [Real.rpow_neg ha]
+  norm_cast
+
+/-- The real inequality behind `explicitFormula_creg_integrable` near `u = 1`. -/
+private theorem explicitFormula_creg_near {P r x b : ℝ} (hxp : 0 < x) (hxs : x < 1 / 2)
+    (hrx : |r - 1| ≤ x) (hr2 : 1 / 2 ≤ r) (hb : b ≤ 4 * P * x) (hb0 : 0 ≤ b) :
+    2 / (r * x ^ 2) * b + |2 / (r * x ^ 2) - 2 / (x ^ 2 * (1 + x ^ 2))| ≤ (16 * P + 6) * x⁻¹ := by
+  have hrpos : 0 < r := by linarith
+  set c : ℝ := r * x ^ 2 with hc
+  have hcpos : 0 < c := by positivity
+  have hc1 : 2 / c ≤ 4 / x ^ 2 := by
+    rw [hc, div_le_div_iff₀ hcpos (by positivity)]
+    nlinarith [sq_nonneg x, pow_pos hxp 2]
+  have t1 : 2 / c * b ≤ 16 * P * x⁻¹ := by
+    calc 2 / c * b ≤ 4 / x ^ 2 * (4 * P * x) :=
+          mul_le_mul hc1 hb hb0 (by positivity)
+      _ = 16 * P * x⁻¹ := by field_simp; ring
+  have t2 : |2 / c - 2 / (x ^ 2 * (1 + x ^ 2))| ≤ 6 * x⁻¹ := by
+    have e : 2 / c - 2 / (x ^ 2 * (1 + x ^ 2)) = 2 * (1 + x ^ 2 - r) / (c * (1 + x ^ 2)) := by
+      rw [hc]; field_simp
+    rw [e, abs_div, abs_of_pos (by positivity : 0 < c * (1 + x ^ 2)), abs_mul, abs_two]
+    have hnum : |1 + x ^ 2 - r| ≤ x + x ^ 2 := by
+      rw [show 1 + x ^ 2 - r = x ^ 2 - (r - 1) by ring]
+      refine (abs_sub _ _).trans ?_
+      rw [abs_of_nonneg (by positivity)]
+      linarith
+    rw [div_le_iff₀ (by positivity), hc]
+    have e6 : 6 * x⁻¹ * (r * x ^ 2 * (1 + x ^ 2)) = 6 * r * x * (1 + x ^ 2) := by
+      field_simp
+    rw [e6]
+    have h3 : 3 * x ≤ 6 * r * x * (1 + x ^ 2) := by
+      nlinarith [mul_nonneg hxp.le (show 0 ≤ 2 * r * (1 + x ^ 2) - 1 by nlinarith)]
+    nlinarith
+  have : 16 * P * x⁻¹ + 6 * x⁻¹ = (16 * P + 6) * x⁻¹ := by ring
+  linarith
+
+/-- `2 / (x² (1 + x²)) ≤ 54 (1 + x)⁻³` for `x ≥ 1/2`. -/
+private theorem explicitFormula_creg_farT {x : ℝ} (hx : 1 / 2 ≤ x) :
+    2 / (x ^ 2 * (1 + x ^ 2)) ≤ 54 * (1 + x) ^ (-3 : ℝ) := by
+  have hxp : 0 < x := by linarith
+  have h1 : (1 + x) ^ 3 ≤ 27 * x ^ 3 := by
+    have := pow_le_pow_left₀ (by positivity) (show 1 + x ≤ 3 * x by linarith) 3
+    nlinarith
+  have h2 : x ^ 3 ≤ x ^ 2 * (1 + x ^ 2) := by
+    nlinarith [mul_nonneg (sq_nonneg x) (sq_nonneg (x - 1 / 2))]
+  rw [explicitFormula_creg_rpow (by positivity), ← div_eq_mul_inv,
+    div_le_div_iff₀ (by positivity) (by positivity)]
+  nlinarith
+
+/-- `50 P / ((1 + r)² r) ≤ 50 P (I + 2 (1 + r)⁻³)` where `I = r⁻¹` if `r < 1`. -/
+private theorem explicitFormula_creg_farF {P r I : ℝ} (hP : 0 ≤ P) (hrpos : 0 < r) (hI0 : 0 ≤ I)
+    (hI : r < 1 → I = r⁻¹) :
+    50 * P / ((1 + r) ^ 2 * r) ≤ 50 * P * (I + 2 * (1 + r) ^ (-3 : ℝ)) := by
+  have hA : 0 ≤ 50 * P * (2 * (1 + r) ^ (-3 : ℝ)) := by positivity
+  rcases lt_or_ge r 1 with hr1 | hr1
+  · rw [hI hr1]
+    have : 50 * P / ((1 + r) ^ 2 * r) ≤ 50 * P * r⁻¹ := by
+      rw [div_le_iff₀ (by positivity)]
+      have h1 : 50 * P * r⁻¹ * ((1 + r) ^ 2 * r) = 50 * P * (1 + r) ^ 2 := by field_simp
+      rw [h1]
+      nlinarith [mul_le_mul_of_nonneg_left (show (1:ℝ) ≤ (1 + r) ^ 2 by nlinarith)
+        (by positivity : 0 ≤ 50 * P)]
+    nlinarith
+  · rw [explicitFormula_creg_rpow (by positivity)]
+    have : 50 * P / ((1 + r) ^ 2 * r) ≤ 50 * P * (2 * ((1 + r) ^ 3)⁻¹) := by
+      rw [div_le_iff₀ (by positivity)]
+      have h1 : 50 * P * (2 * ((1 + r) ^ 3)⁻¹) * ((1 + r) ^ 2 * r) = 50 * P * (2 * r / (1 + r)) := by
+        field_simp
+      rw [h1]
+      have : 1 ≤ 2 * r / (1 + r) := by rw [le_div_iff₀ (by positivity)]; linarith
+      nlinarith
+    nlinarith [mul_nonneg (mul_nonneg (by norm_num : (0:ℝ) ≤ 50) hP) hI0]
+
+/-- The disc-regularized integrand minus `T(u) = 2 / (|u - 1|² (1 + |u - 1|²))` is integrable on
+`ℂ`: near `u = 1` it is `O(1 / |u - 1|)` (since `B(0) = 1`), near `0` it is `O(1 / |u|)`, and at
+infinity `O(|u|⁻³)`. -/
+private theorem explicitFormula_creg_integrable (B B' : ℝ → ℂ) (P : ℝ)
+    (hB : ∀ y, HasDerivAt B (B' y) y) (hBb : ∀ y, ‖B y‖ ≤ P) (hB'b : ∀ y, ‖B' y‖ ≤ P)
+    (hB0 : B 0 = 1) :
+    Integrable (fun u : ℂ ↦ 2 * B (2 * Real.log ‖u‖) / ((‖u‖ * ‖u - 1‖ ^ 2 : ℝ) : ℂ) -
+      (((2 / (‖u - 1‖ ^ 2 * (1 + ‖u - 1‖ ^ 2)) : ℝ) : ℂ))) := by
+  have hP : 0 ≤ P := (norm_nonneg _).trans (hBb 0)
+  have hlip (y : ℝ) : ‖B y - 1‖ ≤ P * |y| := by
+    have := Convex.norm_image_sub_le_of_norm_hasDerivWithin_le (f := B) (C := P) (s := univ)
+      (fun x _ ↦ (hB x).hasDerivWithinAt) (fun x _ ↦ hB'b x) convex_univ (mem_univ 0) (mem_univ y)
+    simpa [hB0, Real.norm_eq_abs] using this
+  have hBc : Continuous B := continuous_iff_continuousAt.mpr fun y ↦ (hB y).continuousAt
+  have hBm : Measurable B := hBc.measurable
+  have hrp := @explicitFormula_creg_rpow
+  -- the dominating function
+  let g : ℂ → ℝ := fun u ↦
+    (16 * P + 6) * (Metric.ball (0 : ℂ) (1 / 2)).indicator (fun x ↦ ‖x‖⁻¹) (u - 1) +
+      50 * P * ((Metric.ball (0 : ℂ) 1).indicator (fun x ↦ ‖x‖⁻¹) u + 2 * (1 + ‖u‖) ^ (-3 : ℝ)) +
+      54 * (1 + ‖u - 1‖) ^ (-3 : ℝ)
+  have hi3 : Integrable (fun x : ℂ ↦ (1 + ‖x‖) ^ (-3 : ℝ)) :=
+    integrable_one_add_norm (by rw [Complex.finrank_real_complex]; norm_num)
+  have hgi : Integrable g := by
+    refine ((((complexLogFourier_finitePart_inv_norm_ball (r := 1 / 2)).integrable_indicator
+      measurableSet_ball).comp_sub_right 1).const_mul _).add
+      ((((complexLogFourier_finitePart_inv_norm_ball (r := 1)).integrable_indicator
+        measurableSet_ball).add (hi3.const_mul 2)).const_mul _) |>.add ?_
+    exact (hi3.comp_sub_right 1).const_mul _
+  refine hgi.mono' ?_ (Eventually.of_forall fun u ↦ ?_)
+  · exact Measurable.aestronglyMeasurable (by fun_prop)
+  set x := ‖u - 1‖ with hx
+  set r := ‖u‖ with hr
+  have hx0 : 0 ≤ x := norm_nonneg _
+  have hr0 : 0 ≤ r := norm_nonneg _
+  have hrx : |r - 1| ≤ x := by
+    have := abs_norm_sub_norm_le u 1
+    rwa [norm_one] at this
+  have hI1 : 0 ≤ (Metric.ball (0 : ℂ) (1 / 2)).indicator (fun x ↦ ‖x‖⁻¹) (u - 1) :=
+    indicator_nonneg (fun _ _ ↦ inv_nonneg.mpr (norm_nonneg _)) _
+  have hI2 : 0 ≤ (Metric.ball (0 : ℂ) 1).indicator (fun x ↦ ‖x‖⁻¹) u :=
+    indicator_nonneg (fun _ _ ↦ inv_nonneg.mpr (norm_nonneg _)) _
+  have hA : 0 ≤ 2 * (1 + r) ^ (-3 : ℝ) := by positivity
+  have hC : 0 ≤ 54 * (1 + x) ^ (-3 : ℝ) := by positivity
+  have hg0 : 0 ≤ g u := by
+    simp only [g]
+    have : 0 ≤ 16 * P + 6 := by linarith
+    positivity
+  rcases lt_or_ge x (1 / 2) with hxs | hxl
+  · -- near `u = 1`
+    rcases hx0.eq_or_lt with hxz | hxp
+    · have hu : ‖u - 1‖ = 0 := hxz.symm
+      simp only [← hxz]
+      simp only [ne_eq, OfNat.ofNat_ne_zero, not_false_eq_true, zero_pow, mul_zero,
+        Complex.ofReal_zero, div_zero, zero_mul, sub_self, norm_zero]
+      exact hg0
+    have hr2 : 1 / 2 ≤ r := by
+      have := neg_abs_le (r - 1); linarith
+    have hrpos : 0 < r := by linarith
+    have hlog := explicitFormula_creg_abs_log_le hr2
+    have hmem : u - 1 ∈ Metric.ball (0 : ℂ) (1 / 2) := by
+      rw [mem_ball_zero_iff]; exact hxs
+    have hgu : (16 * P + 6) * x⁻¹ ≤ g u := by
+      simp only [g, indicator_of_mem hmem]
+      rw [← hx]
+      have : 0 ≤ 50 * P * ((Metric.ball (0 : ℂ) 1).indicator (fun x ↦ ‖x‖⁻¹) u +
+        2 * (1 + r) ^ (-3 : ℝ)) := by positivity
+      linarith
+    refine le_trans ?_ hgu
+    have hsplit : 2 * B (2 * Real.log r) / (((r * x ^ 2 : ℝ)) : ℂ) -
+        (((2 / (x ^ 2 * (1 + x ^ 2))) : ℝ) : ℂ) =
+        ((2 / (r * x ^ 2) : ℝ) : ℂ) * (B (2 * Real.log r) - 1) +
+          ((2 / (r * x ^ 2) - 2 / (x ^ 2 * (1 + x ^ 2)) : ℝ) : ℂ) := by
+      have : (((r * x ^ 2 : ℝ)) : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr (by positivity)
+      push_cast
+      field_simp
+      ring
+    rw [hsplit]
+    refine (norm_add_le _ _).trans ?_
+    rw [norm_mul, Complex.norm_real, Complex.norm_real, Real.norm_eq_abs, Real.norm_eq_abs,
+      abs_of_pos (by positivity : 0 < 2 / (r * x ^ 2))]
+    have hb1 : ‖B (2 * Real.log r) - 1‖ ≤ 4 * P * x := by
+      refine (hlip _).trans ?_
+      rw [abs_mul, abs_two]
+      nlinarith [hlog, hrx]
+    exact explicitFormula_creg_near hxp hxs hrx hr2 hb1 (norm_nonneg _)
+  · -- away from `u = 1`
+    have hxp : 0 < x := by linarith
+    refine (norm_sub_le _ _).trans ?_
+    rw [Complex.norm_real, Real.norm_eq_abs, abs_of_nonneg (by positivity), norm_div, norm_mul,
+      Complex.norm_real, Real.norm_eq_abs, abs_of_nonneg (by positivity), Complex.norm_ofNat]
+    have hT := explicitFormula_creg_farT hxl
+    have hF : 2 * ‖B (2 * Real.log r)‖ / (r * x ^ 2) ≤
+        50 * P * ((Metric.ball (0 : ℂ) 1).indicator (fun x ↦ ‖x‖⁻¹) u + 2 * (1 + r) ^ (-3 : ℝ)) := by
+      rcases hr0.eq_or_lt with hrz | hrpos
+      · rw [← hrz, zero_mul, div_zero]; positivity
+      have hnum : 2 * ‖B (2 * Real.log r)‖ ≤ 2 * P := by linarith [hBb (2 * Real.log r)]
+      have h5 : 1 + r ≤ 5 * x := by linarith [le_abs_self (r - 1)]
+      have h1r : (1 + r) ^ 2 ≤ 25 * x ^ 2 := by nlinarith
+      have hden : (1 + r) ^ 2 * r ≤ 25 * (r * x ^ 2) := by nlinarith
+      have step : 2 * ‖B (2 * Real.log r)‖ / (r * x ^ 2) ≤ 50 * P / ((1 + r) ^ 2 * r) := by
+        rw [div_le_div_iff₀ (by positivity) (by positivity)]
+        have := mul_le_mul hnum hden (by positivity) (by positivity)
+        linarith
+      refine step.trans (explicitFormula_creg_farF hP hrpos hI2 fun hr1 ↦ ?_)
+      have hmem : u ∈ Metric.ball (0 : ℂ) 1 := by rw [mem_ball_zero_iff]; exact hr1
+      rw [indicator_of_mem hmem]
+    simp only [g]
+    rw [← hr, ← hx]
+    have : 0 ≤ (16 * P + 6) * (Metric.ball (0 : ℂ) (1 / 2)).indicator (fun x ↦ ‖x‖⁻¹) (u - 1) := by
+      have : 0 ≤ 16 * P + 6 := by linarith
+      positivity
+    linarith
+
+/-- An antiderivative for the constant of the complex regularization: with `a = e^{-t}`,
+`Q(t) = -2 log(1 - a) + log(1 + √(1 + 4a²)) - log(a + √(4 + a²))` has derivative
+`-(1 + a)/(1 - a) + 1/√(1 + 4a²) + a/√(4 + a²)` for `t > 0`. -/
+private theorem explicitFormula_creg_Q_deriv {t : ℝ} (ht : 0 < t) :
+    HasDerivAt (fun t : ℝ ↦ -2 * Real.log (1 - Real.exp (-t)) +
+        Real.log (1 + Real.sqrt (1 + 4 * Real.exp (-t) ^ 2)) -
+        Real.log (Real.exp (-t) + Real.sqrt (4 + Real.exp (-t) ^ 2)))
+      (-(1 + Real.exp (-t)) / (1 - Real.exp (-t)) + 1 / Real.sqrt (1 + 4 * Real.exp (-t) ^ 2) +
+        Real.exp (-t) / Real.sqrt (4 + Real.exp (-t) ^ 2)) t := by
+  set a := Real.exp (-t) with ha_def
+  have ha0 : 0 < a := Real.exp_pos _
+  have ha1 : a < 1 := Real.exp_lt_one_iff.mpr (by linarith)
+  have ha : HasDerivAt (fun t : ℝ ↦ Real.exp (-t)) (-a) t := by
+    simpa using (hasDerivAt_neg t).exp
+  have hU : HasDerivAt (fun t : ℝ ↦ 1 + 4 * Real.exp (-t) ^ 2) (4 * (2 * a * -a)) t := by
+    have := ((ha.pow 2).const_mul 4).const_add 1
+    simpa using this
+  have hV : HasDerivAt (fun t : ℝ ↦ 4 + Real.exp (-t) ^ 2) (2 * a * -a) t := by
+    have := (ha.pow 2).const_add 4
+    simpa using this
+  have hU0 : (0 : ℝ) < 1 + 4 * a ^ 2 := by positivity
+  have hV0 : (0 : ℝ) < 4 + a ^ 2 := by positivity
+  set sU := Real.sqrt (1 + 4 * a ^ 2) with hsU
+  set sV := Real.sqrt (4 + a ^ 2) with hsV
+  have hsU2 : sU ^ 2 = 1 + 4 * a ^ 2 := Real.sq_sqrt hU0.le
+  have hsV2 : sV ^ 2 = 4 + a ^ 2 := Real.sq_sqrt hV0.le
+  have hsU0 : 0 < sU := Real.sqrt_pos.mpr hU0
+  have hsV0 : 0 < sV := Real.sqrt_pos.mpr hV0
+  have hd1 : 1 - a ≠ 0 := by linarith
+  have h1 : HasDerivAt (fun t : ℝ ↦ Real.log (1 - Real.exp (-t))) (a / (1 - a)) t := by
+    have := (ha.const_sub 1).log hd1
+    convert this using 1
+    ring
+  have h2 : HasDerivAt (fun t : ℝ ↦ Real.log (1 + Real.sqrt (1 + 4 * Real.exp (-t) ^ 2)))
+      (-(4 * a ^ 2) / (sU * (1 + sU))) t := by
+    have := ((hU.sqrt hU0.ne').const_add 1).log (ne_of_gt (by positivity))
+    convert this using 1
+    field_simp
+    ring
+  have h3 : HasDerivAt (fun t : ℝ ↦ Real.log (Real.exp (-t) + Real.sqrt (4 + Real.exp (-t) ^ 2)))
+      (-a / sV) t := by
+    have h3' : HasDerivAt (fun t : ℝ ↦ Real.exp (-t) + Real.sqrt (4 + Real.exp (-t) ^ 2))
+        (-a + 2 * a * -a / (2 * Real.sqrt (4 + Real.exp (-t) ^ 2))) t :=
+      ha.add (hV.sqrt hV0.ne')
+    have := h3'.log (ne_of_gt (by positivity))
+    convert this using 1
+    have : a + sV ≠ 0 := by positivity
+    field_simp
+    ring
+  convert ((h1.const_mul (-2)).add h2).sub h3 using 1
+  field_simp
+  linear_combination (a - 1) * sV * hsU2
+
+/-- The constant of the complex regularization: with `a = e^{-t}`,
+`∫_0^∞ (2a/t - (1 + a)/(1 - a) + 1/√(1 + 4a²) + a/√(4 + a²)) dt = -2γ`
+(the integrand minus `2e^{-t}/t` has the antiderivative of `explicitFormula_creg_Q_deriv`). -/
+private theorem explicitFormula_creg_constant
+    (hc : IntegrableOn (fun t : ℝ ↦ 2 * Real.exp (-t) / t -
+        (1 + Real.exp (-t)) / (1 - Real.exp (-t)) + 1 / Real.sqrt (1 + 4 * Real.exp (-t) ^ 2) +
+        Real.exp (-t) / Real.sqrt (4 + Real.exp (-t) ^ 2)) (Ioi 0)) :
+    ∫ t in Ioi (0 : ℝ), (2 * Real.exp (-t) / t -
+        (1 + Real.exp (-t)) / (1 - Real.exp (-t)) + 1 / Real.sqrt (1 + 4 * Real.exp (-t) ^ 2) +
+        Real.exp (-t) / Real.sqrt (4 + Real.exp (-t) ^ 2)) = -2 * Real.eulerMascheroniConstant := by
+  set c : ℝ → ℝ := fun t ↦ 2 * Real.exp (-t) / t -
+        (1 + Real.exp (-t)) / (1 - Real.exp (-t)) + 1 / Real.sqrt (1 + 4 * Real.exp (-t) ^ 2) +
+        Real.exp (-t) / Real.sqrt (4 + Real.exp (-t) ^ 2) with hc_def
+  set d : ℝ → ℝ := fun t ↦ -(1 + Real.exp (-t)) / (1 - Real.exp (-t)) +
+    1 / Real.sqrt (1 + 4 * Real.exp (-t) ^ 2) + Real.exp (-t) / Real.sqrt (4 + Real.exp (-t) ^ 2)
+    with hd_def
+  set Q : ℝ → ℝ := fun t ↦ -2 * Real.log (1 - Real.exp (-t)) +
+        Real.log (1 + Real.sqrt (1 + 4 * Real.exp (-t) ^ 2)) -
+        Real.log (Real.exp (-t) + Real.sqrt (4 + Real.exp (-t) ^ 2)) with hQ_def
+  have hcd (t : ℝ) : c t = 2 * (Real.exp (-t) / t) + d t := by
+    simp only [hc_def, hd_def]; ring
+  have hQd (t : ℝ) (ht : 0 < t) : HasDerivAt Q (d t) t := explicitFormula_creg_Q_deriv ht
+  -- `Q → 0` at infinity
+  have hQlim : Tendsto Q atTop (𝓝 0) := by
+    have ha : Tendsto (fun t : ℝ ↦ Real.exp (-t)) atTop (𝓝 0) :=
+      Real.tendsto_exp_atBot.comp tendsto_neg_atTop_atBot
+    have hR : ContinuousAt (fun a : ℝ ↦ -2 * Real.log (1 - a) +
+        Real.log (1 + Real.sqrt (1 + 4 * a ^ 2)) - Real.log (a + Real.sqrt (4 + a ^ 2))) 0 := by
+      refine ((continuousAt_const.mul ((continuousAt_const.sub continuousAt_id).log
+        (by norm_num))).add ((continuousAt_const.add (by fun_prop : Continuous fun a : ℝ ↦
+          Real.sqrt (1 + 4 * a ^ 2)).continuousAt).log
+            (ne_of_gt (add_pos_of_pos_of_nonneg one_pos (Real.sqrt_nonneg _))))).sub
+        ((continuousAt_id.add (by fun_prop : Continuous fun a : ℝ ↦
+          Real.sqrt (4 + a ^ 2)).continuousAt).log
+            (ne_of_gt (add_pos_of_nonneg_of_pos le_rfl (Real.sqrt_pos.mpr (by norm_num)))))
+    have h := hR.tendsto.comp ha
+    have h0 : -2 * Real.log (1 - 0) + Real.log (1 + Real.sqrt (1 + 4 * 0 ^ 2)) -
+        Real.log (0 + Real.sqrt (4 + 0 ^ 2)) = 0 := by
+      have : Real.sqrt 4 = 2 := by
+        rw [show (4 : ℝ) = 2 ^ 2 by norm_num, Real.sqrt_sq (by norm_num)]
+      norm_num [this]
+    rw [h0] at h
+    exact h
+  -- the cutoff integrals
+  have hcut (τ : ℝ) (hτ : 0 < τ) :
+      ∫ t in Ioi τ, c t = 2 * (∫ t in Ioi τ, Real.exp (-t) / t) + (0 - Q τ) := by
+    have he := explicitFormula_integrableOn_exp_div τ hτ
+    have hcτ : IntegrableOn c (Ioi τ) := hc.mono_set (Ioi_subset_Ioi hτ.le)
+    have hdi : IntegrableOn d (Ioi τ) :=
+      (hcτ.sub (he.const_mul 2)).congr_fun (fun t _ ↦ by simp only [Pi.sub_apply, hcd]; ring)
+        measurableSet_Ioi
+    have hdQ := integral_Ioi_of_hasDerivAt_of_tendsto (hQd τ hτ).continuousAt.continuousWithinAt
+      (fun t ht ↦ hQd t (hτ.trans ht)) hdi hQlim
+    rw [setIntegral_congr_fun measurableSet_Ioi (fun t _ ↦ hcd t), integral_add (he.const_mul 2) hdi,
+      integral_const_mul, hdQ]
+  -- the limit of the cutoff expressions
+  have hslope : Tendsto (fun τ : ℝ ↦ Real.log ((1 - Real.exp (-τ)) / τ)) (𝓝[>] 0) (𝓝 0) := by
+    have hd0 : HasDerivAt (fun t : ℝ ↦ 1 - Real.exp (-t)) 1 0 := by
+      have := ((hasDerivAt_neg (0 : ℝ)).exp).const_sub 1
+      simpa using this
+    have h1 := hd0.tendsto_slope_zero_right
+    simp only [zero_add, neg_zero, Real.exp_zero, sub_self, sub_zero, smul_eq_mul] at h1
+    have h2 := (Real.continuousAt_log one_ne_zero).tendsto.comp h1
+    rw [Real.log_one] at h2
+    refine h2.congr' ?_
+    filter_upwards [self_mem_nhdsWithin] with τ hτ
+    simp only [Function.comp_apply]
+    rw [div_eq_inv_mul]
+  have hR0 : Tendsto (fun τ : ℝ ↦ Real.log (1 + Real.sqrt (1 + 4 * Real.exp (-τ) ^ 2)) -
+      Real.log (Real.exp (-τ) + Real.sqrt (4 + Real.exp (-τ) ^ 2))) (𝓝[>] 0) (𝓝 0) := by
+    have hR : ContinuousAt (fun τ : ℝ ↦ Real.log (1 + Real.sqrt (1 + 4 * Real.exp (-τ) ^ 2)) -
+        Real.log (Real.exp (-τ) + Real.sqrt (4 + Real.exp (-τ) ^ 2))) 0 :=
+      ((by fun_prop : Continuous fun τ : ℝ ↦ 1 + Real.sqrt (1 + 4 * Real.exp (-τ) ^ 2)
+        ).continuousAt.log (by positivity)).sub ((by fun_prop : Continuous fun τ : ℝ ↦
+          Real.exp (-τ) + Real.sqrt (4 + Real.exp (-τ) ^ 2)).continuousAt.log (by positivity))
+    have h := hR.tendsto.mono_left (nhdsWithin_le_nhds (s := Ioi 0))
+    have h0 : Real.log (1 + Real.sqrt (1 + 4 * Real.exp (-0) ^ 2)) -
+        Real.log (Real.exp (-0) + Real.sqrt (4 + Real.exp (-0) ^ 2)) = 0 := by
+      norm_num
+    rwa [h0] at h
+  have hlim : Tendsto (fun τ : ℝ ↦ 2 * ((∫ t in Ioi τ, Real.exp (-t) / t) + Real.log τ) +
+      (2 * Real.log ((1 - Real.exp (-τ)) / τ) -
+        (Real.log (1 + Real.sqrt (1 + 4 * Real.exp (-τ) ^ 2)) -
+          Real.log (Real.exp (-τ) + Real.sqrt (4 + Real.exp (-τ) ^ 2)))))
+      (𝓝[>] 0) (𝓝 (2 * -Real.eulerMascheroniConstant + (2 * 0 - 0))) :=
+    (explicitFormula_tendsto_expIntegral_add_log.const_mul 2).add
+      ((hslope.const_mul 2).sub hR0)
+  have hlim' := explicitFormula_tendsto_setIntegral_Ioi c hc
+  refine (tendsto_nhds_unique hlim' (hlim.congr' ?_)).trans (by ring)
+  filter_upwards [self_mem_nhdsWithin] with τ (hτ : 0 < τ)
+  rw [hcut τ hτ]
+  have hpos : 0 < 1 - Real.exp (-τ) := by
+    have := Real.exp_lt_one_iff.mpr (show -τ < 0 by linarith); linarith
+  rw [Real.log_div hpos.ne' hτ.ne']
+  simp only [hQ_def]
+  ring
+
+/-- The polar-logarithmic angular average of the regularized integrand: for `s ≠ 0`,
+`∫_0^{2π} e^{2s} E(e^{s+iφ}) dφ = (2 B(2s) e^s - 2 e^{2s}) 2π / |1 - e^{2s}| + 2 e^{2s} 2π / √(4 + e^{4s})`
+where `E(u) = 2 B(2 log |u|) / (|u| |u - 1|²) - 2 / (|u - 1|² (1 + |u - 1|²))`. -/
+private theorem explicitFormula_creg_average (B : ℝ → ℂ) {s : ℝ} (hs : s ≠ 0) :
+    ∫ φ in (0 : ℝ)..2 * Real.pi, (Real.exp (2 * s) : ℂ) *
+      (2 * B (2 * Real.log ‖Complex.exp (s + φ * Complex.I)‖) /
+          ((‖Complex.exp (s + φ * Complex.I)‖ * ‖Complex.exp (s + φ * Complex.I) - 1‖ ^ 2 : ℝ) : ℂ) -
+        (((2 / (‖Complex.exp (s + φ * Complex.I) - 1‖ ^ 2 *
+          (1 + ‖Complex.exp (s + φ * Complex.I) - 1‖ ^ 2)) : ℝ) : ℂ))) =
+      (2 * B (2 * s) * (Real.exp s : ℂ) - 2 * (Real.exp (2 * s) : ℂ)) *
+          ((2 * Real.pi / |1 - Real.exp (2 * s)| : ℝ) : ℂ) +
+        2 * (Real.exp (2 * s) : ℂ) * ((2 * Real.pi / Real.sqrt (4 + Real.exp (4 * s)) : ℝ) : ℂ) := by
+  have hn (φ : ℝ) : ‖Complex.exp (s + φ * Complex.I)‖ = Real.exp s := by
+    rw [Complex.norm_exp]; simp
+  have hX (φ : ℝ) : 0 < ‖Complex.exp (s + φ * Complex.I) - 1‖ ^ 2 := by
+    refine pow_pos (norm_pos_iff.mpr (sub_ne_zero.mpr fun h ↦ hs ?_)) 2
+    have := hn φ
+    rw [h, norm_one] at this
+    exact (Real.exp_eq_one_iff s).mp this.symm
+  have hcX : Continuous fun φ : ℝ ↦ ‖Complex.exp (s + φ * Complex.I) - 1‖ ^ 2 := by fun_prop
+  have hpt (φ : ℝ) : (Real.exp (2 * s) : ℂ) *
+      (2 * B (2 * Real.log ‖Complex.exp (s + φ * Complex.I)‖) /
+          ((‖Complex.exp (s + φ * Complex.I)‖ * ‖Complex.exp (s + φ * Complex.I) - 1‖ ^ 2 : ℝ) : ℂ) -
+        (((2 / (‖Complex.exp (s + φ * Complex.I) - 1‖ ^ 2 *
+          (1 + ‖Complex.exp (s + φ * Complex.I) - 1‖ ^ 2)) : ℝ) : ℂ))) =
+      (2 * B (2 * s) * (Real.exp s : ℂ) - 2 * (Real.exp (2 * s) : ℂ)) *
+          (((‖Complex.exp (s + φ * Complex.I) - 1‖ ^ 2 : ℝ) : ℂ))⁻¹ +
+        2 * (Real.exp (2 * s) : ℂ) *
+          (((1 + ‖Complex.exp (s + φ * Complex.I) - 1‖ ^ 2 : ℝ) : ℂ))⁻¹ := by
+    rw [hn, Real.log_exp]
+    set X := ‖Complex.exp (s + φ * Complex.I) - 1‖ ^ 2 with hXd
+    have hX0 : (X : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr (hX φ).ne'
+    have hX1 : ((1 + X : ℝ) : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr (by linarith [hX φ])
+    have he : (Real.exp s : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr (Real.exp_pos s).ne'
+    have h2 : (Real.exp (2 * s) : ℂ) = (Real.exp s : ℂ) * (Real.exp s : ℂ) := by
+      rw [← Complex.ofReal_mul, ← Real.exp_add]; ring_nf
+    rw [h2]
+    push_cast at hX1 ⊢
+    field_simp
+    ring
+  have i1 : IntervalIntegrable (fun φ : ℝ ↦
+      (((‖Complex.exp (s + φ * Complex.I) - 1‖ ^ 2 : ℝ) : ℂ))⁻¹) volume 0 (2 * Real.pi) :=
+    ((Complex.continuous_ofReal.comp hcX).inv₀ fun φ ↦
+      Complex.ofReal_ne_zero.mpr (hX φ).ne').intervalIntegrable _ _
+  have i2 : IntervalIntegrable (fun φ : ℝ ↦
+      (((1 + ‖Complex.exp (s + φ * Complex.I) - 1‖ ^ 2 : ℝ) : ℂ))⁻¹) volume 0 (2 * Real.pi) :=
+    ((Complex.continuous_ofReal.comp (continuous_const.add hcX)).inv₀ fun φ ↦
+      Complex.ofReal_ne_zero.mpr (ne_of_gt (add_pos one_pos (hX φ)))).intervalIntegrable _ _
+  simp_rw [hpt]
+  rw [intervalIntegral.integral_add (i1.const_mul _) (i2.const_mul _),
+    intervalIntegral.integral_const_mul, intervalIntegral.integral_const_mul,
+    explicitFormula_creg_angular_inv hs, explicitFormula_creg_angular_shift]
+
+/-- The two polar-logarithmic averages at `s = ±t/2` combine into `2π (c(t) - J(t))`, where `J` is
+the regularized radial Poisson average of the statement and `c` the constant integrand of
+`explicitFormula_creg_constant`. -/
+private theorem explicitFormula_creg_pair (B : ℝ → ℂ) {t : ℝ} (ht : 0 < t) :
+    ((2 * B (2 * (t / 2)) * (Real.exp (t / 2) : ℂ) - 2 * (Real.exp (2 * (t / 2)) : ℂ)) *
+          ((2 * Real.pi / |1 - Real.exp (2 * (t / 2))| : ℝ) : ℂ) +
+        2 * (Real.exp (2 * (t / 2)) : ℂ) *
+          ((2 * Real.pi / Real.sqrt (4 + Real.exp (4 * (t / 2))) : ℝ) : ℂ) +
+      ((2 * B (2 * -(t / 2)) * (Real.exp (-(t / 2)) : ℂ) - 2 * (Real.exp (2 * -(t / 2)) : ℂ)) *
+          ((2 * Real.pi / |1 - Real.exp (2 * -(t / 2))| : ℝ) : ℂ) +
+        2 * (Real.exp (2 * -(t / 2)) : ℂ) *
+          ((2 * Real.pi / Real.sqrt (4 + Real.exp (4 * -(t / 2))) : ℝ) : ℂ))) / 2 =
+      2 * Real.pi * (((2 * Real.exp (-t) / t - (1 + Real.exp (-t)) / (1 - Real.exp (-t)) +
+          1 / Real.sqrt (1 + 4 * Real.exp (-t) ^ 2) +
+          Real.exp (-t) / Real.sqrt (4 + Real.exp (-t) ^ 2) : ℝ) : ℂ)) -
+        2 * Real.pi * (2 * (Real.exp (-t) : ℂ) / (t : ℂ) -
+          (Real.exp (-(t / 2)) : ℂ) * (B t + B (-t)) / (1 - (Real.exp (-t) : ℂ))) := by
+  set b := Real.exp (-(t / 2)) with hb
+  have hb0 : 0 < b := Real.exp_pos _
+  have hb1 : b < 1 := Real.exp_lt_one_iff.mpr (by linarith)
+  have hb2 : b ^ 2 < 1 := by nlinarith
+  have e1 : Real.exp (t / 2) = b⁻¹ := by rw [hb, Real.exp_neg, inv_inv]
+  have e2 : Real.exp (2 * (t / 2)) = (b ^ 2)⁻¹ := by
+    rw [← inv_pow, ← e1, ← Real.exp_nat_mul]; norm_num
+  have e3 : Real.exp (-t) = b ^ 2 := by
+    rw [hb, ← Real.exp_nat_mul]; ring_nf
+  have e4 : Real.exp (2 * -(t / 2)) = b ^ 2 := by rw [← e3]; ring_nf
+  have e5 : Real.exp (4 * (t / 2)) = ((b ^ 2) ^ 2)⁻¹ := by
+    rw [← inv_pow, ← e2, ← Real.exp_nat_mul]; ring_nf
+  have e6 : Real.exp (4 * -(t / 2)) = (b ^ 2) ^ 2 := by
+    rw [← e4, ← Real.exp_nat_mul]; ring_nf
+  have a1 : |1 - (b ^ 2)⁻¹| = (1 - b ^ 2) / b ^ 2 := by
+    have : 1 - (b ^ 2)⁻¹ = -((1 - b ^ 2) / b ^ 2) := by field_simp; ring
+    rw [this, abs_neg, abs_of_pos (by positivity)]
+  have a2 : |1 - b ^ 2| = 1 - b ^ 2 := abs_of_pos (by linarith)
+  have s1 : Real.sqrt (4 + ((b ^ 2) ^ 2)⁻¹) = Real.sqrt (1 + 4 * (b ^ 2) ^ 2) / b ^ 2 := by
+    rw [show 4 + ((b ^ 2) ^ 2)⁻¹ = (1 + 4 * (b ^ 2) ^ 2) / (b ^ 2) ^ 2 by field_simp; ring,
+      Real.sqrt_div' _ (by positivity), Real.sqrt_sq (by positivity)]
+  have hB1 : 2 * (t / 2) = t := by ring
+  have hB2 : 2 * -(t / 2) = -t := by ring
+  rw [e1, e2, e3, e4, e5, e6, a1, a2, s1, hB1, hB2]
+  have hS1 : 0 < Real.sqrt (1 + 4 * (b ^ 2) ^ 2) := Real.sqrt_pos.mpr (by positivity)
+  have hS2 : 0 < Real.sqrt (4 + (b ^ 2) ^ 2) := Real.sqrt_pos.mpr (by positivity)
+  have hd : 1 - b ^ 2 ≠ 0 := by linarith
+  have hdc : (1 : ℂ) - ((b ^ 2 : ℝ) : ℂ) ≠ 0 := by
+    rw [← Complex.ofReal_one, ← Complex.ofReal_sub, Complex.ofReal_ne_zero]; exact hd
+  have ht0 : (t : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr ht.ne'
+  have hbc : (b : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr hb0.ne'
+  have hS1c : (Real.sqrt (1 + 4 * (b ^ 2) ^ 2) : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr hS1.ne'
+  have hS2c : (Real.sqrt (4 + (b ^ 2) ^ 2) : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr hS2.ne'
+  push_cast at hdc ⊢
+  field_simp
+  ring
+
+end ExplicitFormulaComplexRegularization
+
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a complex place,
 regularization). For a `C¹` function `B` with compact support, bounded derivative and `B(0) = 1`,
 the disc-regularized integral of `2 B(2 log |u|) / (|u| |1 - u|²)` over `ℂ` (the cutoff
@@ -16198,16 +16883,17 @@ has the limit `-2π (∫_0^∞ J(t) dt + 2γ)`, where
 `J(t) = 2 e^{-t} / t - e^{-t/2} (B(t) + B(-t)) / (1 - e^{-t})` is the regularized radial Poisson
 average (`J` is integrable by `explicitFormula_complexLocal_radialIntegrable`).
 
-Why it holds. In polar coordinates around `u = 1`, with `M(ρ)` the mean of `h(u)/|u|` over the
-circle `|u - 1| = ρ` (`M(0) = 2π`), the left side is `∫_{√ε}^∞ 2 (M(ρ) - 2π 1_{ρ<1}) / ρ dρ`;
-in polar-logarithmic coordinates `u = e^{±t/2 + iφ}` the same function regularized on the
-annuli `|log |u|| < τ/2` instead gives `∫ J` (with `∫_τ^∞ e^{-t}/t = -γ - log τ + o(1)` for the
-`e^{-t}/t` term). The two cutoffs differ, up to `o(1)`, by the integral of `2 / |1 - u|²` over
-the symmetric difference of the excluded disc and annulus, whose asymptotics as `ε, τ → 0`
-supply the constant. Checked numerically to 20 digits for
-`B(y) = e^{-y²}` (`L = -3.88129099784908760…` on both sides). This is the complex counterpart
-of `idelicExplicitFormula_infiniteMatching_realLocal_regularization`; what is missing for a
-proof is the asymptotics of the strip-minus-disc integral. -/
+Proof. Subtract `T(u) = 2 / (|u - 1|² (1 + |u - 1|²))`. The difference `E` is integrable on `ℂ`
+(`B(0) = 1` makes it `O(1/|u - 1|)` near `u = 1`), and `T` is radial around `u = 1` with
+`∫_{|u-1|² ≥ ε} T = -2π log ε + 2π log(1 + ε)`, so the left side tends to `∫ E`. In
+polar-logarithmic coordinates `u = e^{s+iφ}` the angular averages are Poisson integrals
+(`2π/|1 - e^{2s}|` for `|u - 1|⁻²`, `2π/√(4 + e^{4s})` for `(1 + |u - 1|²)⁻¹`); folding `s = ±t/2`
+gives `∫ E = 2π ∫_0^∞ (c(t) - J(t)) dt`, where, with `a = e^{-t}`,
+`c(t) = 2a/t - (1 + a)/(1 - a) + 1/√(1 + 4a²) + a/√(4 + a²)` has `∫_0^∞ c = -2γ`
+(`c - 2e^{-t}/t` has the elementary antiderivative `-2 log(1 - a) + log(1 + √(1 + 4a²)) -
+log(a + √(4 + a²))`, and `∫_τ^∞ e^{-t}/t = -γ - log τ + o(1)`). Checked numerically to 20 digits
+for `B(y) = e^{-y²}` (`L = -3.88129099784908760…` on both sides). This is the complex counterpart
+of `idelicExplicitFormula_infiniteMatching_realLocal_regularization`. -/
 theorem idelicExplicitFormula_infiniteMatching_complexLocal_regularization (B B' : ℝ → ℂ) (P : ℝ)
     (hB : ∀ y, HasDerivAt B (B' y) y) (hBb : ∀ y, ‖B y‖ ≤ P) (hB'b : ∀ y, ‖B' y‖ ≤ P)
     (hB0 : B 0 = 1) (hBc : HasCompactSupport B) :
@@ -16218,7 +16904,115 @@ theorem idelicExplicitFormula_infiniteMatching_complexLocal_regularization (B B'
       (𝓝 (-(2 * Real.pi : ℂ) * ((∫ t in Ioi (0 : ℝ), (2 * (Real.exp (-t) : ℂ) / (t : ℂ) -
           (Real.exp (-(t / 2)) : ℂ) * (B t + B (-t)) / (1 - (Real.exp (-t) : ℂ)))) +
           2 * Real.eulerMascheroniConstant))) := by
-  sorry
+  have _hBc := hBc
+  set E : ℂ → ℂ := fun u ↦ 2 * B (2 * Real.log ‖u‖) / ((‖u‖ * ‖u - 1‖ ^ 2 : ℝ) : ℂ) -
+      (((2 / (‖u - 1‖ ^ 2 * (1 + ‖u - 1‖ ^ 2)) : ℝ) : ℂ)) with hEdef
+  have hE : Integrable E := explicitFormula_creg_integrable B B' P hB hBb hB'b hB0
+  have hmeas (ε : ℝ) : MeasurableSet {u : ℂ | ε ≤ ‖u - 1‖ ^ 2} :=
+    measurableSet_le measurable_const (by fun_prop)
+  -- the disc cutoff of `T` carries the logarithm
+  have hsplit (ε : ℝ) (hε : 0 < ε) :
+      (∫ u in {u : ℂ | ε ≤ ‖u - 1‖ ^ 2}, 2 * B (2 * Real.log ‖u‖) / ((‖u‖ * ‖u - 1‖ ^ 2 : ℝ) : ℂ)) +
+        2 * Real.pi * (Real.log ε : ℂ) =
+      (∫ u in {u : ℂ | ε ≤ ‖u - 1‖ ^ 2}, E u) + ((2 * Real.pi * Real.log (1 + ε) : ℝ) : ℂ) := by
+    obtain ⟨hTi, hTv⟩ := explicitFormula_creg_cut hε
+    have h : (fun u : ℂ ↦ 2 * B (2 * Real.log ‖u‖) / ((‖u‖ * ‖u - 1‖ ^ 2 : ℝ) : ℂ)) =
+        fun u ↦ E u + (((2 / (‖u - 1‖ ^ 2 * (1 + ‖u - 1‖ ^ 2)) : ℝ) : ℂ)) := by
+      funext u; simp only [hEdef]; ring
+    rw [h, integral_add hE.integrableOn hTi, hTv]
+    push_cast; ring
+  have hE1 : E 1 = 0 := by simp [hEdef]
+  have hlimE : Tendsto (fun ε : ℝ ↦ ∫ u in {u : ℂ | ε ≤ ‖u - 1‖ ^ 2}, E u) (𝓝[>] 0)
+      (𝓝 (∫ u, E u)) := by
+    simp_rw [← integral_indicator (hmeas _)]
+    refine tendsto_integral_filter_of_dominated_convergence (fun u ↦ ‖E u‖)
+      (Eventually.of_forall fun ε ↦ hE.aestronglyMeasurable.indicator (hmeas ε))
+      (Eventually.of_forall fun ε ↦ Eventually.of_forall fun u ↦ norm_indicator_le_norm_self _ _)
+      hE.norm (Eventually.of_forall fun u ↦ ?_)
+    rcases eq_or_ne u 1 with rfl | hu
+    · simp [Set.indicator_apply, hE1]
+    · refine tendsto_const_nhds.congr' ?_
+      filter_upwards [nhdsWithin_le_nhds (eventually_lt_nhds
+        (pow_pos (norm_pos_iff.mpr (sub_ne_zero.mpr hu)) 2))] with ε hε
+      rw [indicator_of_mem (show ε ≤ ‖u - 1‖ ^ 2 from hε.le)]
+  have hlog1 : Tendsto (fun ε : ℝ ↦ ((2 * Real.pi * Real.log (1 + ε) : ℝ) : ℂ)) (𝓝[>] 0)
+      (𝓝 0) := by
+    have hc : ContinuousAt (fun ε : ℝ ↦ ((2 * Real.pi * Real.log (1 + ε) : ℝ) : ℂ)) 0 :=
+      Complex.continuous_ofReal.continuousAt.comp (continuousAt_const.mul
+        ((continuousAt_const.add continuousAt_id).log (by norm_num)))
+    have h := hc.tendsto.mono_left (nhdsWithin_le_nhds (s := Ioi 0))
+    simpa using h
+  have hlim := (hlimE.add hlog1).congr' (by
+    filter_upwards [self_mem_nhdsWithin] with ε (hε : 0 < ε)
+    exact (hsplit ε hε).symm)
+  rw [add_zero] at hlim
+  refine hlim.trans (le_of_eq (congrArg 𝓝 ?_))
+  -- the value of `∫ E` in polar-logarithmic coordinates
+  obtain ⟨hGi, hGeq⟩ := explicitFormula_polarLog_integral hE
+  set G : ℝ → ℂ := fun s ↦ ∫ φ in (0 : ℝ)..2 * Real.pi,
+      (Real.exp (2 * s) : ℂ) * E (Complex.exp (s + φ * Complex.I)) with hGdef
+  have hb : (0 : ℝ) < 2⁻¹ := by norm_num
+  have hG1 : IntegrableOn (fun t ↦ G (t / 2)) (Ioi 0) := by
+    have := (integrableOn_Ioi_comp_mul_left_iff G 0 hb).mpr hGi.integrableOn
+    simpa only [div_eq_inv_mul] using this
+  have hGn : Integrable (fun x ↦ G (-x)) := hGi.comp_neg
+  have hG2 : IntegrableOn (fun t ↦ G (-(t / 2))) (Ioi 0) := by
+    have := (integrableOn_Ioi_comp_mul_left_iff (fun x ↦ G (-x)) 0 hb).mpr hGn.integrableOn
+    simpa only [div_eq_inv_mul] using this
+  have j1 : ∫ t in Ioi (0 : ℝ), G (t / 2) = 2 * ∫ t in Ioi (0 : ℝ), G t := by
+    have := integral_comp_mul_left_Ioi G 0 hb
+    simp only [mul_zero, inv_inv] at this
+    simp only [div_eq_inv_mul]
+    rw [this, Complex.real_smul]
+    push_cast; ring
+  have j2 : ∫ t in Ioi (0 : ℝ), G (-(t / 2)) = 2 * ∫ t in Iic (0 : ℝ), G t := by
+    have := integral_comp_mul_left_Ioi (fun x ↦ G (-x)) 0 hb
+    simp only [mul_zero, inv_inv, integral_comp_neg_Ioi, neg_zero] at this
+    simp only [div_eq_inv_mul]
+    rw [this, Complex.real_smul]
+    push_cast; ring
+  set J : ℝ → ℂ := fun t ↦ 2 * (Real.exp (-t) : ℂ) / (t : ℂ) -
+      (Real.exp (-(t / 2)) : ℂ) * (B t + B (-t)) / (1 - (Real.exp (-t) : ℂ)) with hJdef
+  set c : ℝ → ℝ := fun t ↦ 2 * Real.exp (-t) / t - (1 + Real.exp (-t)) / (1 - Real.exp (-t)) +
+      1 / Real.sqrt (1 + 4 * Real.exp (-t) ^ 2) + Real.exp (-t) / Real.sqrt (4 + Real.exp (-t) ^ 2)
+    with hcdef
+  have hJi : IntegrableOn J (Ioi 0) := by
+    refine (explicitFormula_complexLocal_radialIntegrable B B' P hB hBb hB'b hB0).congr_fun
+      (fun t _ ↦ ?_) measurableSet_Ioi
+    simp only [hJdef, mul_one]
+  have hpair (t : ℝ) (ht : 0 < t) :
+      (G (t / 2) + G (-(t / 2))) / 2 = 2 * Real.pi * ((c t : ℝ) : ℂ) - 2 * Real.pi * J t := by
+    have h1 : G (t / 2) = _ := explicitFormula_creg_average B (s := t / 2) (by positivity)
+    have h2 : G (-(t / 2)) = _ := explicitFormula_creg_average B (s := -(t / 2)) (by
+      have : 0 < t / 2 := by positivity
+      linarith)
+    rw [h1, h2]
+    exact explicitFormula_creg_pair B ht
+  have hci : IntegrableOn (fun t ↦ ((c t : ℝ) : ℂ)) (Ioi 0) := by
+    refine IntegrableOn.congr_fun ((((hG1.add hG2).div_const 2).add
+      (hJi.const_mul (2 * Real.pi))).div_const (2 * Real.pi)) (fun t (ht : 0 < t) ↦ ?_)
+      measurableSet_Ioi
+    have hπ : (2 * Real.pi : ℂ) ≠ 0 := by
+      have := Real.pi_pos
+      exact_mod_cast (by positivity : (2 * Real.pi : ℝ) ≠ 0)
+    simp only [Pi.add_apply]
+    rw [hpair t ht]
+    field_simp
+    ring
+  have hcr : IntegrableOn c (Ioi 0) := by
+    have := hci.re
+    simpa using this
+  have hcv := explicitFormula_creg_constant hcr
+  rw [hGeq, ← intervalIntegral.integral_Iic_add_Ioi hGi.integrableOn hGi.integrableOn]
+  have hsum : (∫ t in Iic (0 : ℝ), G t) + (∫ t in Ioi (0 : ℝ), G t) =
+      ∫ t in Ioi (0 : ℝ), (G (t / 2) + G (-(t / 2))) / 2 := by
+    rw [integral_div, integral_add hG1 hG2, j1, j2]
+    ring
+  rw [hsum, setIntegral_congr_fun measurableSet_Ioi hpair,
+    integral_sub (hci.const_mul _) (hJi.const_mul _), integral_const_mul, integral_const_mul,
+    integral_complex_ofReal, hcv]
+  push_cast
+  ring
 
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a complex place `w`,
 one reference test). Some test `h` on `F_w^× = ℂ^×` with `h(1) = 1` satisfies the identity of
