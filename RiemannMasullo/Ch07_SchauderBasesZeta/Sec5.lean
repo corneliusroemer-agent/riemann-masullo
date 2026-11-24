@@ -4,15 +4,15 @@ public import RiemannMasullo.Ch05_ThetaZSpaces.Sec2b
 public import RiemannMasullo.Ch07_SchauderBasesZeta.Sec4
 import RiemannMasullo.Ch04_PeriodicSchauderBases.Sec2
 import RiemannMasullo.Ch04_PeriodicSchauderBases.Sec4
-import all RiemannMasullo.Ch04_PeriodicSchauderBases.Sec6
+import RiemannMasullo.Ch04_PeriodicSchauderBases.Sec6
 import Mathlib.Topology.Algebra.Module.Equiv.Submodule
 
 import RiemannMasullo.AppA_AlgebraicNT.Sec3
 
 import all RiemannMasullo.Ch03_IdelicZeta.Sec2
 
-import all RiemannMasullo.Ch05_ThetaZSpaces.Sec3a
-import all RiemannMasullo.Ch05_ThetaZSpaces.Sec5
+import RiemannMasullo.Ch05_ThetaZSpaces.Sec3a
+import RiemannMasullo.Ch05_ThetaZSpaces.Sec5
 
 import Mathlib.Analysis.Calculus.DSlope
 import RiemannMasullo.Ch05_ThetaZSpaces.Sec1
@@ -24,6 +24,9 @@ import RiemannMasullo.ForMathlib.Topology.Maps.Strict.Module
 import RiemannMasullo.ForMathlib.Analysis.LocallyConvex.Barrelled
 import RiemannMasullo.Ch09_HardySobolev.Sec2
 public import RiemannMasullo.Ch07_SchauderBasesZeta.Sec3b_PWLevels
+import RiemannMasullo.ForMathlib.Topology.Algebra.Module.OpenMapping
+import RiemannMasullo.ForMathlib.Analysis.LocallyConvex.SeparatingDual
+import RiemannMasullo.ForMathlib.Analysis.LocallyConvex.StrongDual
 
 /-! # §7.5 Strong co-primality -/
 
