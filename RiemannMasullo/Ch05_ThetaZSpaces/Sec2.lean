@@ -1756,14 +1756,16 @@ theorem existsUnique_sLocalThetaAction :
     N θ Tt t htt hc r hr h
   with_reducible exact result
 
-private theorem insert_mem_larger (hST : S ⊆ T) (u : (integralAdelesOutside F S)ˣ) :
+/-- An integral idele inserted at `S` lies in the range of the insertion at a larger `T`. -/
+theorem integralIdeleInsertion_mem_range_of_subset (hST : S ⊆ T) (u : (integralAdelesOutside F S)ˣ) :
     integralIdeleInsertion F S u ∈ Set.range (integralIdeleInsertion F T) := by
   let g := integralIdeleInsertion F S u
   have hg : g ∈ Set.range (integralIdeleInsertion F S) := ⟨u, rfl⟩
   exact (mem_range_integralIdeleInsertion F T g).mpr fun v hv ↦
     (mem_range_integralIdeleInsertion F S g).mp hg v (fun h ↦ hv (hST h))
 
-private theorem testTransition_translate_eq (hST : S ⊆ T)
+/-- The transition from `S` to `T` commutes with translation by an inserted integral idele. -/
+theorem testTransition_translate_eq (hST : S ⊆ T)
     (u : (integralAdelesOutside F S)ˣ) (f : ℬₛ(S)) :
     let g := integralIdeleInsertion F S u
     let gS := Units.map (adeleProjection F S).toMonoidHom g
@@ -1775,7 +1777,7 @@ private theorem testTransition_translate_eq (hST : S ⊆ T)
   let gT := Units.map (adeleProjection F T).toMonoidHom g
   have hTS (k : ℬₛ(S)) : sAdeleSchwartzToGlobal F T (sAdeleSchwartzTransition F hST k) =
       sAdeleSchwartzToGlobal F S k := DFunLike.congr_fun (sAdeleSchwartzToGlobal_comp F hST) k
-  have hT := insert_translate_of_mem_range (insert_mem_larger hST u) (sAdeleSchwartzTransition F hST f)
+  have hT := insert_translate_of_mem_range (integralIdeleInsertion_mem_range_of_subset hST u) (sAdeleSchwartzTransition F hST f)
   exact (sAdeleSchwartzToGlobal_isEmbedding F T).injective
     ((hTS _).trans ((insert_translate_eq u f).trans
         ((congrArg (schwartzBruhatUnitTranslate g) (hTS f).symm).trans hT.symm)))
@@ -2856,7 +2858,8 @@ section GlobalTopology
 
 open Set TopologicalSpace
 
-private theorem frechet_of_closed_embedding {X Y : Type*} [AddCommGroup X] [Module ℂ X]
+/-- A space with a closed continuous linear embedding into a Fréchet space is Fréchet. -/
+theorem isFrechetTVS_of_isClosedEmbedding {X Y : Type*} [AddCommGroup X] [Module ℂ X]
     [TopologicalSpace X] [IsTopologicalAddGroup X] [AddCommGroup Y] [Module ℂ Y]
     [TopologicalSpace Y] (i : X →L[ℂ] Y) (hi : IsClosedEmbedding i) (hY : IsFrechetTVS Y) :
     IsFrechetTVS X := by
@@ -2886,7 +2889,7 @@ private theorem embedded_frechet_range {X E : Type*} [AddCommGroup X] [Module �
   let L : X ≃L[ℂ] i.toLinearMap.range := ⟨e, h.continuous, h.continuous_symm⟩
   exact ⟨(AddMonoidHom.isUniformInducing_of_isInducing (f := i.toLinearMap.toAddMonoidHom)
       hi.isInducing).isComplete_range.isClosed,
-    frechet_of_closed_embedding L.symm.toContinuousLinearMap L.symm.toHomeomorph.isClosedEmbedding ⟨a,p,m,c⟩⟩
+    isFrechetTVS_of_isClosedEmbedding L.symm.toContinuousLinearMap L.symm.toHomeomorph.isClosedEmbedding ⟨a,p,m,c⟩⟩
 
 private theorem frechet_range_in_cover {ι X E : Type*} [Countable ι] [AddCommGroup X] [Module ℂ X]
     [TopologicalSpace X] [AddCommGroup E] [Module ℂ E] [TopologicalSpace E]
@@ -2929,7 +2932,7 @@ private theorem strictLF_of_countable_frechet_cover {ι E : Type*} [Countable ι
     have hr : range l = Subtype.val ⁻¹' (S k : Set E) := by
       ext x
       exact ⟨fun ⟨y,hy⟩ ↦ hy ▸ y.property, fun hx ↦ ⟨⟨x.val, hx⟩, rfl⟩⟩
-    exact frechet_of_closed_embedding ⟨l, he.continuous⟩
+    exact isFrechetTVS_of_isClosedEmbedding ⟨l, he.continuous⟩
       ⟨he, hr ▸ (R k).isClosed_topologicalClosure.preimage continuous_subtype_val⟩ (hD t)
   refine ⟨h₂, S, monotone_nat_of_le_succ (fun k ↦ ?_), hS, fun x ↦ ?_, ?_⟩
   · apply closure_mono

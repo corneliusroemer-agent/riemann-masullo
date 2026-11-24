@@ -2559,7 +2559,7 @@ private theorem sLocalThetaOnClasses_unitTranslate_apply (u : Aₛˣ) (f : ℬ(A
 
 /-- The homogeneous S-local theta transform multiplies by `ω g` under a unit translate
 representing `g`. -/
-private theorem sLocalHomogeneousTheta_unitTranslate (ω : PontryaginDual (mₛ).ker)
+theorem sLocalHomogeneousTheta_unitTranslate (ω : PontryaginDual (mₛ).ker)
     (g : (mₛ).ker) (u : Aₛˣ) (hu : QuotientGroup.mk u = g.val) (f : ℬ(Aₛ)) :
     sLocalHomogeneousAdelicThetaLinearMap F S ω (schwartzBruhatUnitTranslate u f) =
       (ω g : ℂ) • sLocalHomogeneousAdelicThetaLinearMap F S ω f := by

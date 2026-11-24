@@ -370,7 +370,7 @@ private theorem sLocalTraceCutoffKernel_eq_comp_fubini
 
 /-- Local copy of the frozen `AppA_AlgebraicNT/Sec3` private helper: the archimedean
 additive Tamagawa factors are Haar measures by transport from the real and complex lines. -/
-private theorem infiniteLocalAdditiveTamagawaMeasure_haar (F : Type*) [Field F]
+private theorem infiniteLocalAdditiveTamagawaMeasure_isAddHaarMeasure (F : Type*) [Field F]
     (v : InfinitePlace F) :
     letI : MeasurableSpace v.Completion := borel _
     (infiniteLocalAdditiveTamagawaMeasure F v).IsAddHaarMeasure := by
@@ -414,7 +414,7 @@ theorem sLocalTraceCutoffKernel_eq_comp (f : BruhatCompactSupport Iₛ)
     let (w : InfinitePlace F) : BorelSpace w.Completion := ⟨rfl⟩
     let (v : S) : BorelSpace (v.val.adicCompletion F) := ⟨rfl⟩
     let (w : InfinitePlace F) : (infiniteLocalAdditiveTamagawaMeasure F w).IsAddHaarMeasure :=
-      infiniteLocalAdditiveTamagawaMeasure_haar F w
+      infiniteLocalAdditiveTamagawaMeasure_isAddHaarMeasure F w
     let (v : S) : (finiteLocalAdditiveTamagawaMeasure F v.val).IsAddHaarMeasure :=
       finiteLocalAdditiveTamagawaMeasure_isAddHaar F v.val
     let : (Measure.pi (infiniteLocalAdditiveTamagawaMeasure F)).IsAddHaarMeasure :=
@@ -550,7 +550,7 @@ theorem sLocalTrace_measure_density :
   let (v : S) : (finiteLocalMultiplicativeTamagawaMeasure F v.val).IsHaarMeasure :=
     finiteLocalMultiplicativeTamagawaMeasure_isHaarMeasure v.val
   let (w : InfinitePlace F) : (infiniteLocalAdditiveTamagawaMeasure F w).IsAddHaarMeasure :=
-    infiniteLocalAdditiveTamagawaMeasure_haar F w
+    infiniteLocalAdditiveTamagawaMeasure_isAddHaarMeasure F w
   let (v : S) : (finiteLocalAdditiveTamagawaMeasure F v.val).IsAddHaarMeasure :=
     finiteLocalAdditiveTamagawaMeasure_isAddHaar F v.val
   let ρI (w : InfinitePlace F) (x : w.Completion) : ℝ≥0∞ := (↑(‖x‖₊ ^ w.mult) : ℝ≥0∞)⁻¹
@@ -715,7 +715,7 @@ private theorem sLocalTrace_additiveHaar : (νₛ).IsAddHaarMeasure := by
   let (w : InfinitePlace F) : BorelSpace w.Completion := ⟨rfl⟩
   let (v : S) : BorelSpace (v.val.adicCompletion F) := ⟨rfl⟩
   let (w : InfinitePlace F) : (infiniteLocalAdditiveTamagawaMeasure F w).IsAddHaarMeasure :=
-    infiniteLocalAdditiveTamagawaMeasure_haar F w
+    infiniteLocalAdditiveTamagawaMeasure_isAddHaarMeasure F w
   let (v : S) : (finiteLocalAdditiveTamagawaMeasure F v.val).IsAddHaarMeasure :=
     finiteLocalAdditiveTamagawaMeasure_isAddHaar F v.val
   let : (Measure.pi (infiniteLocalAdditiveTamagawaMeasure F)).IsAddHaarMeasure :=
@@ -1561,7 +1561,7 @@ private theorem sLocalTrace_nonunits_null :
   let (w : InfinitePlace F) : BorelSpace w.Completion := ⟨rfl⟩
   let (v : S) : BorelSpace (v.val.adicCompletion F) := ⟨rfl⟩
   let (w : InfinitePlace F) : (infiniteLocalAdditiveTamagawaMeasure F w).IsAddHaarMeasure :=
-    infiniteLocalAdditiveTamagawaMeasure_haar F w
+    infiniteLocalAdditiveTamagawaMeasure_isAddHaarMeasure F w
   let (v : S) : (finiteLocalAdditiveTamagawaMeasure F v.val).IsAddHaarMeasure :=
     finiteLocalAdditiveTamagawaMeasure_isAddHaar F v.val
   let (w : InfinitePlace F) : (𝓝[≠] (0 : w.Completion)).NeBot := sLocalTrace_infinite_neBot w
@@ -2246,7 +2246,7 @@ private theorem sLocalTrace_fourier_log_integrable (f : BruhatCompactSupport I�
   let (w : InfinitePlace F) : BorelSpace w.Completion := ⟨rfl⟩
   let (v : S) : BorelSpace (v.val.adicCompletion F) := ⟨rfl⟩
   let (w : InfinitePlace F) : (infiniteLocalAdditiveTamagawaMeasure F w).IsAddHaarMeasure :=
-    infiniteLocalAdditiveTamagawaMeasure_haar F w
+    infiniteLocalAdditiveTamagawaMeasure_isAddHaarMeasure F w
   let (v : S) : (finiteLocalAdditiveTamagawaMeasure F v.val).IsAddHaarMeasure :=
     finiteLocalAdditiveTamagawaMeasure_isAddHaar F v.val
   let : BorelSpace Aₛ := sAdeleRing_borelSpace

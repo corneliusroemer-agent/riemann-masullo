@@ -1321,7 +1321,7 @@ private theorem strongCoprimality_mem_differenceRange_iff_thetaPrincipalValue (�
   rw [he, hy]
 
 /-- A Schwartz–Bergman function lies in the divisible subspace of an entire function exactly
-when it is that function times an entire function. It repeats the private `specDenom_mem_div`
+when it is that function times an entire function. It repeats the private `mem_schwartzBergmanDivisible_iff`
 of `Ch07_SchauderBasesZeta/Sec4.lean`. -/
 private theorem strongCoprimality_mem_differenceRange_iff_divisible
     (g : entireContinuousMapSubalgebra) (φ : B) :

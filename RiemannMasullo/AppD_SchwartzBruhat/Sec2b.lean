@@ -218,7 +218,7 @@ omit hm hμ₁ [T2Space G] [LocallyCompactSpace G] [SecondCountableTopology G]
   [MeasurableSpace G] [BorelSpace G] in
 /-- Schwartz–Bruhat functions are continuous because every elementary stage realization is
 continuous. -/
-private theorem continuous_schwartzBruhat (f : S) : Continuous (fun x ↦ f x) := by
+theorem continuous_schwartzBruhat (f : S) : Continuous (fun x ↦ f x) := by
   classical
   let C := (ContinuousMap.coeFnLinearMap ℂ (α := G) (M := ℂ)).range
   suffices hle : schwartzBruhatSubmodule G ≤ C by

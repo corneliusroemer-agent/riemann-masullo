@@ -180,7 +180,7 @@ private theorem exists_unitary_normTwist [IsTopologicalGroup G] [T2Space G] [Loc
     neg_add_cancel, Complex.cpow_zero, mul_one]
 
 /-- Changing the center of the norm coordinate translates its complex argument. -/
-private theorem normTwist_normTwist (hm : Continuous m) (c : QuasiCharacter G) (s z : ℂ) :
+theorem normTwist_normTwist (hm : Continuous m) (c : QuasiCharacter G) (s z : ℂ) :
     quasiCharacterNormTwist m hm (quasiCharacterNormTwist m hm c s) z =
       quasiCharacterNormTwist m hm c (z + s) := by
   ext1 g
@@ -492,7 +492,8 @@ local notation "sLocalMeromorphic" =>
 local notation "unitaryₛ(" χ ")" => normChartₛ
   ((⟨Circle.coeHom, continuous_subtype_val⟩ : Circle →ₜ* ℂ).comp χ)
 
-private theorem exists_sLocalNormTwist (c : Xₛ) :
+/-- Every S-local quasi-character is the norm twist `unitaryₛ(χ) s` of a unitary character. -/
+theorem exists_sLocalNormTwist (c : Xₛ) :
     ∃ (χ : PontryaginDual Jₛ) (s : ℂ), unitaryₛ(χ) s = c := by
   let : LocallyCompactSpace (SAdeleRing F S)ˣ := (sIdeleGroup_description F S).2.2.1
   have := isClosed_sProjectedDiagonal (F := F) (S := S)

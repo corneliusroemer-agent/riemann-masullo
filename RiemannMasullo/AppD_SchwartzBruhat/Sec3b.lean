@@ -1215,7 +1215,7 @@ private theorem bruhatSmooth_fixed_quotient {f : G → ℂ} (hf : IsBruhatSmooth
   simp_rw [heq]
   exact hgd d z' t'
 /-- Every smooth compactly supported function is the realization of an elementary Schwartz stage. -/
-private theorem bruhatCompactSupport_mem_schwartz {f : G → ℂ} (hf : f ∈ bruhatCompactSupportSubmodule G) :
+theorem bruhatCompactSupport_mem_schwartz {f : G → ℂ} (hf : f ∈ bruhatCompactSupportSubmodule G) :
     f ∈ schwartzBruhatSubmodule G := by
   classical
   have h := (mem_bruhatSmoothSubmodule_iff f).mp hf.1

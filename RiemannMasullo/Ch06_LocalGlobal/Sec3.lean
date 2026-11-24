@@ -340,7 +340,7 @@ private theorem heckeEulerProductOutside_eq_finite_local_factor (S : Finset V) (
   exact sLocalHeckeL_eq_partialEulerProduct η χ hχ hη s
 
 /-- Meromorphic functions equal on a right half-plane have the same normal form. -/
-private theorem heckeEulerProductOutside_eq_finite_nf_eq (f g : ℂ → ℂ) (hf : MeromorphicOn f univ)
+theorem heckeEulerProductOutside_eq_finite_nf_eq (f g : ℂ → ℂ) (hf : MeromorphicOn f univ)
     (hg : MeromorphicOn g univ) (hfg : ∀ z : ℂ, 1 < z.re → f z = g z) :
     toMeromorphicNFOn f univ = toMeromorphicNFOn g univ := by
   have hAtTwo : meromorphicOrderAt (f - g) (2 : ℂ) = ⊤ := by
