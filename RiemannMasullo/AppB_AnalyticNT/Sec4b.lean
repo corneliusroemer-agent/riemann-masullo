@@ -14842,7 +14842,6 @@ theorem idelicExplicitFormula_infiniteMatching_realLocal_cutoff (w : InfinitePla
     setIntegral_congr_fun measurableSet_Ioi r1, setIntegral_congr_fun measurableSet_Ioi r2,
     setIntegral_congr_fun measurableSet_Ioi r3, setIntegral_congr_fun measurableSet_Ioi r4, e1, e2]
 
-
 /-- Paper: Theorem B.4.4.7, pp. 625–626, footnote 27 (local identity at a real place `w`, one
 reference test). Some test `h` on `F_w^× = ℝ^×` with `h(1) = 1` satisfies the identity of
 `idelicExplicitFormula_infiniteMatching_realLocal`.
@@ -14853,7 +14852,10 @@ and `realLogFourier_finitePart` (`𝓕 log|x| = -½ Pf(1/|x|) - (γ + log 2π) �
 `idelicExplicitFormula_infiniteMatching_realLocal_vanishing` regularized by `2 F(0) log ε` at
 `x = 0`; the left side is the same integral regularized by `e^{-t}/t`. The two
 regularizations differ by `(γ + log 2π - log π) F(0)` and the constants cancel (checked
-numerically to 30 digits on four tests with `h(1) ≠ 0`, ninth round). -/
+numerically to 30 digits on four tests with `h(1) ≠ 0`, ninth round). The proof takes
+`h(u) = B(log |u|)` for a bump `B` with `B(0) = 1`; the cutoff integral is rewritten in
+logarithmic coordinates by `idelicExplicitFormula_infiniteMatching_realLocal_cutoff` and its limit
+computed by `idelicExplicitFormula_infiniteMatching_realLocal_regularization`. -/
 theorem idelicExplicitFormula_infiniteMatching_realLocal_reference (w : InfinitePlace F)
     (hw : w.IsReal) :
     ∃ h : 𝒟(w.Completionˣ), h.val 1 = 1 ∧
