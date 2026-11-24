@@ -15,7 +15,7 @@ import RiemannMasullo.ForMathlib.Analysis.SpecialFunctions.Gamma.DigammaIntegral
 import Mathlib.Analysis.Calculus.BumpFunction.Normed
 import Mathlib.Analysis.Calculus.ContDiff.Convolution
 
-import all RiemannMasullo.Ch07_SchauderBasesZeta.Sec5
+import RiemannMasullo.Ch07_SchauderBasesZeta.Sec5
 import all RiemannMasullo.Ch03_IdelicZeta.Sec2
 import all RiemannMasullo.AppD_SchwartzBruhat.Sec3b
 import Mathlib.Analysis.Normed.Group.Tannery
